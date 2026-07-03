@@ -114,6 +114,11 @@ input[type=checkbox]{accent-color:var(--acc);}
 .xlImg:hover{border-color:var(--acc);}
 .xlImg img{width:100%;height:100px;object-fit:contain;}
 .xlImg div{font-size:10.5px;color:var(--txt2);text-align:center;overflow:hidden;text-overflow:ellipsis;}
+.xlSel{display:flex;align-items:center;gap:6px;padding:2px 2px 0;}
+.xlSel label{font-size:11px;color:#20242b;display:flex;align-items:center;gap:4px;cursor:pointer;}
+.xlSel input{accent-color:var(--acc);}
+.xlShapePrev{width:100%;height:100px;display:flex;align-items:center;justify-content:center;background:#fff;}
+.xlShapePrev svg{width:96%;height:92px;}
 .modalFoot{padding:10px 16px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px;}
 /* toast */
 #toast{position:fixed;bottom:44px;left:50%;transform:translateX(-50%);
@@ -522,6 +527,124 @@ function xlColor(xml) {
   return m ? '#' + m[1] : null;
 }
 
+function parseNodeXfrm(xml) {
+  const xfrm = xml.match(/<a:xfrm[^>]*>([\s\S]*?)<\/a:xfrm>/)?.[1];
+  if (!xfrm) return null;
+  const off = xfrm.match(/<a:off\s+x="(-?\d+)"\s+y="(-?\d+)"/);
+  const ext = xfrm.match(/<a:ext\s+cx="(-?\d+)"\s+cy="(-?\d+)"/);
+  const chOff = xfrm.match(/<a:chOff\s+x="(-?\d+)"\s+y="(-?\d+)"/);
+  const chExt = xfrm.match(/<a:chExt\s+cx="(-?\d+)"\s+cy="(-?\d+)"/);
+  return {
+    offX: off ? +off[1] : 0, offY: off ? +off[2] : 0,
+    extX: ext ? +ext[1] : 0, extY: ext ? +ext[2] : 0,
+    chOffX: chOff ? +chOff[1] : 0, chOffY: chOff ? +chOff[2] : 0,
+    chExtX: chExt ? +chExt[1] : 0, chExtY: chExt ? +chExt[2] : 0
+  };
+}
+function parseShapeNode(nodeXml, box) {
+  const prstM = nodeXml.match(/<a:prstGeom\s+prst="([^"]+)"/);
+  const prst = prstM ? prstM[1] : 'rect';
+  let fill = '#ffffff', noFill = false;
+  const spFillM = nodeXml.match(/<a:solidFill>([\s\S]*?)<\/a:solidFill>/);
+  if (/<a:noFill/.test(nodeXml.match(/<a:spPr[^>]*>([\s\S]*?)<\/a:spPr>/)?.[1] || '')) {
+    noFill = true; fill = 'none';
+  } else if (spFillM) {
+    const c = xlColor(spFillM[1]); if (c) fill = c;
+  }
+  let stroke = '#111827', noStroke = false, sw = 1.5;
+  const lnM = nodeXml.match(/<a:ln(?:\s[^>]*)?>[\s\S]*?<\/a:ln>/);
+  if (lnM) {
+    const lnStr = lnM[0];
+    if (/<a:noFill/.test(lnStr)) noStroke = true;
+    const wm = lnStr.match(/\bw="(\d+)"/);
+    if (wm) sw = Math.max(0.5, Math.round(+wm[1] / 12700 * 10) / 10);
+    const lc = xlColor(lnStr); if (lc) stroke = lc;
+  } else noStroke = true;
+  let text = '', fs = 14, tc = '#111827', bold = false;
+  const txM = nodeXml.match(/<xdr:txBody>([\s\S]*?)<\/xdr:txBody>/);
+  if (txM) {
+    const parts = [];
+    for (const tm of txM[1].matchAll(/<a:t>([^<]*)<\/a:t>/g)) parts.push(tm[1]);
+    text = parts.join('');
+    const rPrM = txM[1].match(/<a:rPr\s([^>]+)/);
+    if (rPrM) {
+      const szM = rPrM[1].match(/\bsz="(\d+)"/);
+      if (szM) fs = Math.max(6, Math.round(+szM[1] / 100));
+      bold = /\bb="1"/.test(rPrM[1]);
+      const tcM = txM[1].match(/<a:rPr[^>]*>([\s\S]*?)<\/a:rPr>/);
+      if (tcM) { const tcc = xlColor(tcM[1]); if (tcc) tc = tcc; }
+    }
+  }
+  const polyPrests = {
+    ellipse: null, triangle: 'triangle', rtTriangle: 'rtTriangle', diamond: 'diamond',
+    pentagon: 'pentagon', hexagon: 'hexagon', heptagon: 'heptagon', octagon: 'octagon',
+    star4: 'star4', star5: 'star5', star6: 'star6', plus: 'cross', irregularSeal1: 'star5',
+    irregularSeal2: 'star6', rightArrow: 'rightArrow', leftArrow: 'leftArrow',
+    parallelogram: 'parallelogram', trapezoid: 'trapezoid', chevron: 'chevron', homePlate: 'chevron'
+  };
+  const s = {
+    id: uid(), type: 'rect', x: box.x, y: box.y, w: box.w, h: box.h,
+    fill, noFill, stroke, noStroke, sw, dash: 'solid', text, fs, tc, bold, font: 'Calibri'
+  };
+  if (prst === 'ellipse') s.type = 'ellipse';
+  else if (prst === 'roundRect') { s.type = 'roundRect'; s.rx = 8; }
+  else if (polyPrests[prst]) { s.type = 'poly'; s.preset = polyPrests[prst]; }
+  return s;
+}
+function parseConnectorNode(nodeXml, box) {
+  let stroke = '#111827', sw = 1.5;
+  const lnM = nodeXml.match(/<a:ln(?:\s[^>]*)?>[\s\S]*?<\/a:ln>/);
+  if (lnM) {
+    const wm = lnM[0].match(/\bw="(\d+)"/);
+    if (wm) sw = Math.max(0.5, Math.round(+wm[1] / 12700 * 10) / 10);
+    const lc = xlColor(lnM[0]); if (lc) stroke = lc;
+  }
+  const flipH = /<a:xfrm[^>]*\bflipH="1"/.test(nodeXml);
+  const flipV = /<a:xfrm[^>]*\bflipV="1"/.test(nodeXml);
+  const ae = /<a:tailEnd[^>]*(?:type="arrow"|type="triangle")/.test(nodeXml) ||
+             /<a:headEnd[^>]*(?:type="arrow"|type="triangle")/.test(nodeXml);
+  return {
+    id: uid(), type: 'line',
+    x1: flipH ? box.x + box.w : box.x, y1: flipV ? box.y + box.h : box.y,
+    x2: flipH ? box.x : box.x + box.w, y2: flipV ? box.y : box.y + box.h,
+    stroke, sw, dash: 'solid', as: false, ae
+  };
+}
+function parseGroupedShapes(aXml, anchorBox) {
+  const out = [];
+  const groupId = 'G' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+  const grpXml = aXml.match(/<xdr:grpSp[\s>][\s\S]*?<\/xdr:grpSp>/)?.[0];
+  if (!grpXml) return out;
+  const gx = parseNodeXfrm(grpXml);
+  const chW = gx?.chExtX || gx?.extX || 1;
+  const chH = gx?.chExtY || gx?.extY || 1;
+  const chOX = gx?.chOffX || 0;
+  const chOY = gx?.chOffY || 0;
+  const mapBox = (xf) => {
+    const lx = xf?.offX || 0, ly = xf?.offY || 0, lw = xf?.extX || chW, lh = xf?.extY || chH;
+    return {
+      x: Math.round(anchorBox.x + ((lx - chOX) / chW) * anchorBox.w),
+      y: Math.round(anchorBox.y + ((ly - chOY) / chH) * anchorBox.h),
+      w: Math.max(2, Math.round((lw / chW) * anchorBox.w)),
+      h: Math.max(2, Math.round((lh / chH) * anchorBox.h))
+    };
+  };
+  for (const sm of grpXml.matchAll(/<xdr:sp[\s>][\s\S]*?<\/xdr:sp>/g)) {
+    const spXml = sm[0];
+    const box = mapBox(parseNodeXfrm(spXml));
+    const s = parseShapeNode(spXml, box);
+    s.g = groupId;
+    out.push(s);
+  }
+  for (const cm of grpXml.matchAll(/<xdr:cxnSp[\s>][\s\S]*?<\/xdr:cxnSp>/g)) {
+    const cXml = cm[0];
+    const box = mapBox(parseNodeXfrm(cXml));
+    const s = parseConnectorNode(cXml, box);
+    s.g = groupId;
+    out.push(s);
+  }
+  return out;
+}
 function parseDrawingShapes(xml, dims) {
   const shapes = [];
   const EPX = 9525;
@@ -540,15 +663,14 @@ function parseDrawingShapes(xml, dims) {
         const fm = aXml.match(/<xdr:from>([\s\S]*?)<\/xdr:from>/);
         const tm = aXml.match(/<xdr:to>([\s\S]*?)<\/xdr:to>/);
         if (!fm || !tm) continue;
-        const fi = fm[1], ti = tm[1];
-        const g = s => parseInt(s || '0');
+        const fi = fm[1], ti = tm[1], g = s => parseInt(s || '0');
         const fc = g(fi.match(/<xdr:col>(\d+)/)?.[1]), fco = g(fi.match(/<xdr:colOff>(\d+)/)?.[1]);
         const fr = g(fi.match(/<xdr:row>(\d+)/)?.[1]), fro = g(fi.match(/<xdr:rowOff>(\d+)/)?.[1]);
         const tc = g(ti.match(/<xdr:col>(\d+)/)?.[1]), tco = g(ti.match(/<xdr:colOff>(\d+)/)?.[1]);
         const tr = g(ti.match(/<xdr:row>(\d+)/)?.[1]), tro = g(ti.match(/<xdr:rowOff>(\d+)/)?.[1]);
         const fp = cellPx(fc, fco, fr, fro, dims), tp = cellPx(tc, tco, tr, tro, dims);
         x = fp.x; y = fp.y; w = tp.x - fp.x; h = tp.y - fp.y;
-      } else if (aType === 'oneCellAnchor') {
+      } else {
         const fm = aXml.match(/<xdr:from>([\s\S]*?)<\/xdr:from>/);
         const em = aXml.match(/<xdr:ext\s+cx="(\d+)"\s+cy="(\d+)"/);
         if (!fm || !em) continue;
@@ -560,73 +682,17 @@ function parseDrawingShapes(xml, dims) {
       }
     } catch (e) { continue; }
     if (!w || !h || w < 2 || h < 2) continue;
-    x = Math.round(x); y = Math.round(y); w = Math.round(w); h = Math.round(h);
-
+    const box = { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) };
+    if (/<xdr:grpSp[\s>]/.test(aXml)) {
+      const gShapes = parseGroupedShapes(aXml, box);
+      if (gShapes.length) { shapes.push(...gShapes); continue; }
+    }
     if (/<xdr:sp[\s>]/.test(aXml)) {
-      const prstM = aXml.match(/<a:prstGeom\s+prst="([^"]+)"/);
-      const prst = prstM ? prstM[1] : 'rect';
-      let fill = '#ffffff', noFill = false;
-      const spFillM = aXml.match(/<a:solidFill>([\s\S]*?)<\/a:solidFill>/);
-      if (/<a:noFill/.test(aXml.match(/<a:spPr[^>]*>([\s\S]*?)<\/a:spPr>/)?.[1] || '')) {
-        noFill = true; fill = 'none';
-      } else if (spFillM) {
-        const c = xlColor(spFillM[1]); if (c) fill = c;
-      }
-      let stroke = '#111827', noStroke = false, sw = 1.5;
-      const lnM = aXml.match(/<a:ln(?:\s[^>]*)?>[\s\S]*?<\/a:ln>/);
-      if (lnM) {
-        const lnStr = lnM[0];
-        if (/<a:noFill/.test(lnStr)) noStroke = true;
-        const wm = lnStr.match(/\bw="(\d+)"/);
-        if (wm) sw = Math.max(0.5, Math.round(+wm[1] / 12700 * 10) / 10);
-        const lc = xlColor(lnStr); if (lc) stroke = lc;
-      } else { noStroke = true; }
-      let text = '', fs = 14, tc = '#111827', bold = false;
-      const txM = aXml.match(/<xdr:txBody>([\s\S]*?)<\/xdr:txBody>/);
-      if (txM) {
-        const parts = [];
-        for (const tm of txM[1].matchAll(/<a:t>([^<]*)<\/a:t>/g)) parts.push(tm[1]);
-        text = parts.join('');
-        const rPrM = txM[1].match(/<a:rPr\s([^>]+)/);
-        if (rPrM) {
-          const szM = rPrM[1].match(/\bsz="(\d+)"/);
-          if (szM) fs = Math.max(6, Math.round(+szM[1] / 100));
-          bold = /\bb="1"/.test(rPrM[1]);
-          const tcM = txM[1].match(/<a:rPr[^>]*>([\s\S]*?)<\/a:rPr>/);
-          if (tcM) { const tcc = xlColor(tcM[1]); if (tcc) tc = tcc; }
-        }
-      }
-      let type = 'rect';
-      const polyPrests = {
-        'ellipse': null, 'triangle': 'triangle', 'rtTriangle': 'rtTriangle', 'diamond': 'diamond',
-        'pentagon': 'pentagon', 'hexagon': 'hexagon', 'heptagon': 'heptagon', 'octagon': 'octagon',
-        'star4': 'star4', 'star5': 'star5', 'star6': 'star6', 'plus': 'cross', 'irregularSeal1': 'star5',
-        'irregularSeal2': 'star6', 'rightArrow': 'rightArrow', 'leftArrow': 'leftArrow',
-        'parallelogram': 'parallelogram', 'trapezoid': 'trapezoid', 'chevron': 'chevron',
-        'homePlate': 'chevron', 'pentagon': 'pentagon'
-      };
-      const s = { id: uid(), type, x, y, w, h, fill, noFill, stroke, noStroke, sw, dash: 'solid',
-        text, fs, tc, bold, font: 'Calibri' };
-      if (prst === 'ellipse') { s.type = 'ellipse'; }
-      else if (prst === 'roundRect') { s.type = 'roundRect'; s.rx = 8; }
-      else if (polyPrests[prst]) { s.type = 'poly'; s.preset = polyPrests[prst]; }
-      shapes.push(s);
+      const spXml = aXml.match(/<xdr:sp[\s>][\s\S]*?<\/xdr:sp>/)?.[0];
+      if (spXml) shapes.push(parseShapeNode(spXml, box));
     } else if (/<xdr:cxnSp[\s>]/.test(aXml)) {
-      let stroke = '#111827', sw = 1.5;
-      const lnM = aXml.match(/<a:ln(?:\s[^>]*)?>[\s\S]*?<\/a:ln>/);
-      if (lnM) {
-        const wm = lnM[0].match(/\bw="(\d+)"/);
-        if (wm) sw = Math.max(0.5, Math.round(+wm[1] / 12700 * 10) / 10);
-        const lc = xlColor(lnM[0]); if (lc) stroke = lc;
-      }
-      const flipH = /<a:xfrm[^>]*\bflipH="1"/.test(aXml);
-      const flipV = /<a:xfrm[^>]*\bflipV="1"/.test(aXml);
-      const ae = /<a:tailEnd[^>]*(?:type="arrow"|type="triangle")/.test(aXml) ||
-                 /<a:headEnd[^>]*(?:type="arrow"|type="triangle")/.test(aXml);
-      shapes.push({ id: uid(), type: 'line',
-        x1: flipH ? x + w : x, y1: flipV ? y + h : y,
-        x2: flipH ? x : x + w, y2: flipV ? y : y + h,
-        stroke, sw, dash: 'solid', as: false, ae });
+      const cxnXml = aXml.match(/<xdr:cxnSp[\s>][\s\S]*?<\/xdr:cxnSp>/)?.[0];
+      if (cxnXml) shapes.push(parseConnectorNode(cxnXml, box));
     }
   }
   return shapes;
@@ -941,6 +1007,8 @@ function snapMove(dx, dy, b0, excludeIds) {
    INTERAKCJE MYSZY
    ===================================================================== */
 let drag = null;
+let xlsxImportItems = [];
+let lastShapeClick = { id: null, t: 0 };
 function newShapeDefaults(type, p) {
   const base = { id: uid(), stroke: '#111827', sw: 2, dash: 'solid' };
   if (type === 'rect') return { ...base, type, x: p.x, y: p.y, w: 0, h: 0,
@@ -1157,7 +1225,13 @@ cv.addEventListener('pointerup', e => {
     } else setTool('select');
     render(); renderProps(); autosave(); return;
   }
-  if (d.mode === 'move' && !d.moved) undoStack.pop(); /* klik bez ruchu */
+  if (d.mode === 'move' && !d.moved) {
+    undoStack.pop(); /* klik bez ruchu */
+    if (sel.size === 1) maybeOpenTextEditByClick([...sel][0]);
+    else lastShapeClick = { id: null, t: 0 };
+  } else if (d.mode !== 'pan') {
+    lastShapeClick = { id: null, t: 0 };
+  }
   render(); renderProps(); autosave();
 });
 /* zoom kółkiem — wokół kursora */
@@ -1176,6 +1250,26 @@ cwrap.addEventListener('wheel', e => {
    EDYCJA TEKSTU (2x klik)
    ===================================================================== */
 let editShape = null;
+function isTextShapeType(t) { return ['rect', 'ellipse', 'text', 'poly', 'roundRect'].includes(t); }
+function resolveTextEditableShape(id) {
+  if (!id) return null;
+  const s = state.shapes.find(a => a.id === id);
+  return s && isTextShapeType(s.type) ? s : null;
+}
+function maybeOpenTextEditByClick(id) {
+  const now = performance.now();
+  if (lastShapeClick.id === id && now - lastShapeClick.t < 360) {
+    const s = resolveTextEditableShape(id);
+    if (s) {
+      setSelection([s.id]);
+      startEdit(s);
+    }
+    lastShapeClick = { id: null, t: 0 };
+    return true;
+  }
+  lastShapeClick = { id, t: now };
+  return false;
+}
 cv.addEventListener('dblclick', e => {
   const el = e.target.closest('[data-id]');
   let s = el ? state.shapes.find(a => a.id === el.dataset.id) : null;
@@ -1184,10 +1278,10 @@ cv.addEventListener('dblclick', e => {
   if (!s) {
     for (const id of sel) {
       const c = state.shapes.find(a => a.id === id);
-      if (c && ['rect', 'ellipse', 'text', 'poly', 'roundRect'].includes(c.type)) { s = c; break; }
+      if (c && isTextShapeType(c.type)) { s = c; break; }
     }
   }
-  if (s && ['rect', 'ellipse', 'text', 'poly', 'roundRect'].includes(s.type)) {
+  if (s && isTextShapeType(s.type)) {
     setSelection([s.id]);
     startEdit(s);
   }
@@ -1287,7 +1381,12 @@ function renderProps() {
       </select></div>
       <div class="row"><label>Rozmiar</label><input class="in" type="number" id="pFs" min="4" value="${s.fs ?? 14}">
         <input class="in" type="color" id="pTc" value="${s.tc || '#111827'}">
-        <label style="min-width:0"><input type="checkbox" id="pBold" ${s.bold ? 'checked' : ''}> gruby</label></div></div>`;
+        <label style="min-width:0"><input type="checkbox" id="pBold" ${s.bold ? 'checked' : ''}> gruby</label></div>`;
+    if (one && isTextShapeType(s.type)) {
+      h += `<div class="row"><label style="align-self:flex-start;padding-top:4px">Treść</label>
+        <textarea class="in wide" id="pText" rows="4" style="width:100%;min-height:78px;resize:vertical;font-family:${escXml(s.font || 'Calibri')},Arial,sans-serif">${escXml(s.text || '')}</textarea></div>`;
+    }
+    h += `</div>`;
   }
   if (hasLine) {
     h += `<div class="grp"><h4>Groty strzałek</h4>
@@ -1337,6 +1436,12 @@ function renderProps() {
   on('pFs', 'change', () => applyAll(a => { if (a.fs !== undefined) a.fs = Math.max(4, num('pFs')); }));
   on('pTc', 'input', () => applyAll(a => { if (a.tc !== undefined) a.tc = $('#pTc').value; }));
   on('pBold', 'change', () => applyAll(a => { if ('fs' in a) a.bold = $('#pBold').checked; }));
+  on('pText', 'focus', () => pushUndo());
+  on('pText', 'input', () => {
+    const v = $('#pText').value;
+    selShapes().forEach(a => { if (a.text !== undefined) a.text = v; });
+    render(); autosave();
+  });
   on('pAs', 'change', () => applyAll(a => { if (a.type === 'line') a.as = $('#pAs').checked; }));
   on('pAe', 'change', () => applyAll(a => { if (a.type === 'line') a.ae = $('#pAe').checked; }));
   $$('#tab-props [data-al]').forEach(b => b.addEventListener('click', () => alignSel(b.dataset.al)));
@@ -1800,6 +1905,25 @@ function insertImageURL(url) {
   img.onerror = () => toast('Nie udało się wczytać obrazu');
   img.src = url;
 }
+function buildImageShapeFromURL(url, offset = 0) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 480;
+      const k = img.naturalWidth > maxW ? maxW / img.naturalWidth : 1;
+      const r = cv.getBoundingClientRect();
+      const c = { x: (r.width / 2 - view.x) / view.z, y: (r.height / 2 - view.y) / view.z };
+      res({
+        id: uid(), type: 'image', href: url,
+        x: c.x - img.naturalWidth * k / 2 + offset,
+        y: c.y - img.naturalHeight * k / 2 + offset,
+        w: img.naturalWidth * k, h: img.naturalHeight * k
+      });
+    };
+    img.onerror = () => rej(new Error('Image load failed'));
+    img.src = url;
+  });
+}
 function fileToDataURL(file) {
   return new Promise((res, rej) => {
     const r = new FileReader();
@@ -1840,7 +1964,92 @@ function pasteClip() {
   state.shapes.push(...copies);
   setSelection(copies.map(c => c.id)); autosave();
 }
-/* import XLSX/XLSM — obrazy + kształty */
+function closeXlsxModal() {
+  $('#xlModal').classList.remove('on');
+  for (const it of xlsxImportItems) if (it.kind === 'image' && it.url) URL.revokeObjectURL(it.url);
+  xlsxImportItems = [];
+}
+function renderXlsxImportPicker(skippedEMF = 0) {
+  const body = $('#xlBody'); body.innerHTML = '';
+  const ctl = document.createElement('div');
+  ctl.style.cssText = 'grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;';
+  const allCb = document.createElement('input');
+  allCb.type = 'checkbox';
+  allCb.checked = xlsxImportItems.every(i => i.selected);
+  const allLbl = document.createElement('label');
+  allLbl.className = 'hint';
+  allLbl.style.cssText = 'display:flex;align-items:center;gap:6px;cursor:pointer;';
+  allLbl.appendChild(allCb);
+  allLbl.appendChild(document.createTextNode('Select all'));
+  const importBtn = document.createElement('button');
+  importBtn.className = 'btn primary';
+  importBtn.textContent = 'Import selected';
+  importBtn.addEventListener('click', applySelectedXlsxItems);
+  ctl.appendChild(allLbl);
+  ctl.appendChild(importBtn);
+  body.appendChild(ctl);
+  allCb.addEventListener('change', () => {
+    xlsxImportItems.forEach(i => i.selected = allCb.checked);
+    renderXlsxImportPicker(skippedEMF);
+  });
+  xlsxImportItems.forEach((it, idx) => {
+    const d = document.createElement('div');
+    d.className = 'xlImg';
+    const checked = it.selected ? 'checked' : '';
+    if (it.kind === 'image') {
+      d.innerHTML = `<div class="xlSel"><label><input type="checkbox" data-xlpick="${idx}" ${checked}> Image</label></div><img src="${it.url}"><div>${escXml(it.name)}</div>`;
+    } else {
+      d.innerHTML = `<div class="xlSel"><label><input type="checkbox" data-xlpick="${idx}" ${checked}> Shape</label></div><div class="xlShapePrev"><svg viewBox="0 0 120 90">${shapeSVG(it.shape, null, false)}</svg></div><div>${escXml(it.name)}</div>`;
+    }
+    body.appendChild(d);
+  });
+  $$('#xlBody [data-xlpick]').forEach(cb => cb.addEventListener('change', e => {
+    const i = +e.target.dataset.xlpick;
+    xlsxImportItems[i].selected = e.target.checked;
+  }));
+  if (skippedEMF) {
+    const w = document.createElement('div');
+    w.className = 'hint'; w.style.gridColumn = '1/-1';
+    w.textContent = `Skipped ${skippedEMF} EMF/WMF images (Excel vector format — not supported in browser).`;
+    body.appendChild(w);
+  }
+}
+function cloneShapesWithFreshIds(shapes) {
+  const gMap = {};
+  return shapes.map(s => {
+    const n = JSON.parse(JSON.stringify(s));
+    n.id = uid();
+    if (n.g) { gMap[n.g] = gMap[n.g] || ('G' + uid()); n.g = gMap[n.g]; }
+    return n;
+  });
+}
+async function applySelectedXlsxItems() {
+  const selected = xlsxImportItems.filter(i => i.selected);
+  if (!selected.length) return toast('Nothing selected');
+  state.page = { mode: 'off' };
+  syncPageUI();
+  pushUndo();
+  const add = [];
+  let imageN = 0, shapeN = 0;
+  for (const it of selected) {
+    if (it.kind === 'shape') {
+      add.push(...cloneShapesWithFreshIds([it.shape]));
+      shapeN++;
+    } else {
+      try {
+        add.push(await buildImageShapeFromURL(it.url, imageN * 18));
+        imageN++;
+      } catch (e) {}
+    }
+  }
+  if (!add.length) return toast('Import failed');
+  state.shapes.push(...add);
+  setSelection(add.map(a => a.id));
+  render(); renderProps(); autosave();
+  closeXlsxModal();
+  toast(`Imported ${imageN} images + ${shapeN} shapes`);
+}
+/* import XLSX/XLSM — selective images + shapes */
 async function importXlsx(file) {
   try {
     if (typeof DecompressionStream === 'undefined')
@@ -1854,79 +2063,28 @@ async function importXlsx(file) {
     const sheetXml = sheetFile ? td.decode(sheetFile.data) : '';
     const dims = parseSheetDims(sheetXml);
     const drawingFiles = allFiles.filter(f => /^xl\/drawings\/drawing\d+\.xml$/i.test(f.name));
-    let importedShapes = [];
-    for (const df of drawingFiles) {
-      const dxml = td.decode(df.data);
-      importedShapes.push(...parseDrawingShapes(dxml, dims));
-    }
+    const importedShapes = [];
+    for (const df of drawingFiles) importedShapes.push(...parseDrawingShapes(td.decode(df.data), dims));
     const skippedEMF = allFiles.filter(f => /^xl\/media\//i.test(f.name) && /\.(emf|wmf)$/i.test(f.name)).length;
     if (!mediaFiles.length && !importedShapes.length)
       return toast('No supported images or shapes found in file' + (skippedEMF ? ` (${skippedEMF} EMF/WMF skipped)` : ''));
-    const body = $('#xlBody'); body.innerHTML = '';
-    const imgEntries = [];
+    closeXlsxModal();
+    xlsxImportItems = [];
     for (const m of mediaFiles) {
       const ext = m.name.split('.').pop().toLowerCase();
       const mime = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : ext === 'bmp' ? 'image/bmp' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-      const url = URL.createObjectURL(new Blob([m.data], { type: mime }));
-      imgEntries.push({ url, name: m.name.replace('xl/media/', '') });
-    }
-    const hasShapes = importedShapes.length > 0;
-    const hasImages = imgEntries.length > 0;
-    let titleStr = 'XLSX Import — ';
-    if (hasImages && hasShapes) titleStr += `${imgEntries.length} images, ${importedShapes.length} shapes`;
-    else if (hasImages) titleStr += `${imgEntries.length} images found — click to insert`;
-    else titleStr += `${importedShapes.length} shapes found`;
-    $('#xlModal').querySelector('h3').textContent = titleStr;
-    if (hasImages || hasShapes) {
-      const allBtn = document.createElement('div');
-      allBtn.style.cssText = 'grid-column:1/-1;margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap;';
-      if (hasImages) {
-        const b1 = document.createElement('button');
-        b1.className = 'btn primary';
-        b1.textContent = `Import all images (${imgEntries.length})`;
-        b1.addEventListener('click', () => {
-          state.page = { mode: 'off' };
-          syncPageUI(); render();
-          imgEntries.forEach(e => insertImageURL(e.url));
-          if (hasShapes) { state.shapes.push(...importedShapes.map(s => ({ ...s, id: uid() }))); render(); autosave(); }
-          $('#xlModal').classList.remove('on');
-          toast(`Imported ${imgEntries.length} images${hasShapes ? ' + ' + importedShapes.length + ' shapes' : ''}`);
-        });
-        allBtn.appendChild(b1);
-      }
-      if (hasShapes) {
-        const b2 = document.createElement('button');
-        b2.className = 'btn';
-        b2.textContent = `Import shapes only (${importedShapes.length})`;
-        b2.addEventListener('click', () => {
-          state.page = { mode: 'off' };
-          syncPageUI();
-          pushUndo();
-          state.shapes.push(...importedShapes.map(s => ({ ...s, id: uid() })));
-          render(); autosave();
-          $('#xlModal').classList.remove('on');
-          toast(`Imported ${importedShapes.length} shapes`);
-        });
-        allBtn.appendChild(b2);
-      }
-      body.appendChild(allBtn);
-    }
-    for (const { url, name } of imgEntries) {
-      const d = document.createElement('div'); d.className = 'xlImg';
-      d.innerHTML = `<img src="${url}"><div>${escXml(name)}</div>`;
-      d.addEventListener('click', () => {
-        state.page = { mode: 'off' }; syncPageUI(); render();
-        insertImageURL(url);
-        $('#xlModal').classList.remove('on');
-        toast('Inserted image from XLSX');
+      xlsxImportItems.push({
+        kind: 'image',
+        name: m.name.replace('xl/media/', ''),
+        url: URL.createObjectURL(new Blob([m.data], { type: mime })),
+        selected: true
       });
-      body.appendChild(d);
     }
-    if (skippedEMF) {
-      const w = document.createElement('div'); w.className = 'hint'; w.style.gridColumn = '1/-1';
-      w.textContent = `Skipped ${skippedEMF} EMF/WMF images (Excel vector format — not supported in browser).`;
-      body.appendChild(w);
-    }
+    importedShapes.forEach((s, i) => xlsxImportItems.push({ kind: 'shape', name: `${s.type}_${i + 1}`, shape: s, selected: true }));
+    const imgN = xlsxImportItems.filter(i => i.kind === 'image').length;
+    const shapeN = xlsxImportItems.length - imgN;
+    $('#xlModal').querySelector('h3').textContent = `XLSX Import — ${imgN} images + ${shapeN} shapes`;
+    renderXlsxImportPicker(skippedEMF);
     $('#xlModal').classList.add('on');
   } catch (err) { toast('Import error: ' + err.message); }
 }
@@ -2083,7 +2241,7 @@ $('#fImg').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (f) insertImageURL(await fileToDataURL(f));
 });
-$('#xlClose').addEventListener('click', () => $('#xlModal').classList.remove('on'));
+$('#xlClose').addEventListener('click', closeXlsxModal);
 $('#shapeClose').addEventListener('click', () => $('#shapeModal').classList.remove('on'));
 $('#bZoomOut').addEventListener('click', () => zoomAtCenter(1 / 1.25));
 $('#bZoomIn').addEventListener('click', () => zoomAtCenter(1.25));
