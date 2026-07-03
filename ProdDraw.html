@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ProdRys — edytor instrukcji produkcyjnych</title>
+<title>ProdDraw — Production Drawing Editor</title>
 <style>
 :root{
   --bg:#1b1e23; --panel:#22262c; --panel2:#282d34; --line:#343a43;
@@ -23,9 +23,8 @@ body{
 /* ---------- top bar ---------- */
 .tb{grid-area:tb; display:flex; align-items:center; gap:8px; padding:0 10px;
   background:var(--panel); border-bottom:1px solid var(--line);}
-.logo{width:28px;height:28px;border:2px solid var(--acc);color:var(--acc);
-  display:flex;align-items:center;justify-content:center;font-weight:700;
-  font-family:ui-monospace,Consolas,monospace;font-size:11px;letter-spacing:-.5px;}
+.logo{width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:var(--acc);}
+.logo svg{display:block;width:28px;height:28px;}
 #projName{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
   padding:5px 9px;border-radius:3px;width:230px;font-family:ui-monospace,Consolas,monospace;}
 #projName:focus{outline:none;border-color:var(--acc);}
@@ -77,8 +76,8 @@ body{
 input[type=color].in{padding:1px;width:34px;height:26px;cursor:pointer;}
 input[type=checkbox]{accent-color:var(--acc);}
 .miniBtn{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
-  width:30px;height:28px;border-radius:3px;cursor:pointer;display:inline-flex;
-  align-items:center;justify-content:center;}
+  min-width:28px;width:30px;height:28px;border-radius:3px;cursor:pointer;display:inline-flex;
+  align-items:center;justify-content:center;padding:0 6px;}
 .miniBtn:hover{border-color:var(--acc);color:#fff;}
 .miniBtn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;}
 .hint{font-size:11.5px;color:var(--txt2);line-height:1.45;}
@@ -128,7 +127,13 @@ input[type=checkbox]{accent-color:var(--acc);}
 
 <!-- ======= TOP BAR ======= -->
 <div class="tb">
-  <div class="logo">PR</div>
+  <div class="logo" title="ProdDraw">
+    <svg viewBox="0 0 28 28" width="28" height="28" fill="none">
+      <rect x="2" y="3" width="17" height="22" rx="2" fill="#ffb020" opacity=".15" stroke="#ffb020" stroke-width="1.5"/>
+      <rect x="9" y="6" width="17" height="22" rx="2" fill="#1b1e23" stroke="#ffb020" stroke-width="1.5"/>
+      <path d="M13 12h8M13 16h8M13 20h5" stroke="#ffb020" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  </div>
   <input id="projName" value="Instrukcja_01" spellcheck="false" title="Nazwa projektu — użyta w nazwach plików">
   <div class="sep"></div>
   <button class="btn" id="bNew">Nowy</button>
@@ -137,10 +142,10 @@ input[type=checkbox]{accent-color:var(--acc);}
   <button class="btn" id="bXlsx">Import XLSX</button>
   <div class="sep"></div>
   <button class="btn" id="bTmpl" title="Zapisz bieżący projekt jako domyślny szablon nowych projektów">Szablon ↓</button>
-  <button class="btn" id="bExpSet" title="Eksportuj bibliotekę i szablon do pliku (przeniesienie między przeglądarkami)">Ustaw. ↓</button>
-  <button class="btn" id="bImpSet" title="Importuj bibliotekę i szablon z pliku">Ustaw. ↑</button>
+  <button class="btn" id="bExpSet" title="Library and template are auto-saved to browser localStorage — use this to export for another browser/device">Save Settings ↓</button>
+  <button class="btn" id="bImpSet" title="Import library/template exported from another browser/device">Load Settings ↑</button>
   <div class="sep"></div>
-  <button class="btn primary" id="bPng">Eksport PNG</button>
+  <button class="btn primary" id="bJpg">Export JPG</button>
   <div class="spacer"></div>
   <button class="btn" id="bUndo" title="Cofnij (Ctrl+Z)">&#x21B6;</button>
   <button class="btn" id="bRedo" title="Ponów (Ctrl+Y)">&#x21B7;</button>
@@ -154,6 +159,7 @@ input[type=checkbox]{accent-color:var(--acc);}
   <button class="tool" data-tool="line" title="Linia (L)"><svg viewBox="0 0 24 24"><path d="M4 20L20 4"/></svg></button>
   <button class="tool" data-tool="arrow" title="Strzałka (A)"><svg viewBox="0 0 24 24"><path d="M4 20L18 6M18 6h-6M18 6v6"/></svg></button>
   <button class="tool" data-tool="text" title="Tekst (T)"><svg viewBox="0 0 24 24"><path d="M5 6h14M12 6v13"/></svg></button>
+  <button class="tool" data-tool="shapes" title="Kształty dodatkowe (S)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><polygon points="12,3 22,21 2,21"/></svg></button>
   <button class="tool" data-tool="image" title="Wstaw obraz PNG/JPG (I)"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14"/><path d="M4 15l5-5 4 4 3-3 4 4"/><circle cx="9" cy="9" r="1.4"/></svg></button>
 </div>
 
@@ -193,8 +199,10 @@ input[type=checkbox]{accent-color:var(--acc);}
   <label>Siatka <input class="in" type="number" id="gridSize" value="10" min="1" max="200"> px</label>
   <label><input type="checkbox" id="snapO" checked> Przyciągaj do obiektów</label>
   <div class="spacer"></div>
+  <button class="miniBtn" id="bZoomOut" title="Zoom out (-)">-</button>
   <span id="zoomLbl">100%</span>
-  <span>Kółko = zoom &nbsp;|&nbsp; Spacja/środkowy = przesuwanie &nbsp;|&nbsp; 2×klik = tekst</span>
+  <button class="miniBtn" id="bZoomIn" title="Zoom in (+)">+</button>
+  <span>Space/Middle = pan &nbsp;|&nbsp; Dbl-click = text</span>
 </div>
 
 <!-- ======= MODAL: XLSX ======= -->
@@ -206,8 +214,17 @@ input[type=checkbox]{accent-color:var(--acc);}
   </div>
 </div>
 
+<!-- MODAL: SHAPES -->
+<div class="modalBg" id="shapeModal">
+  <div class="modal" style="width:520px">
+    <h3>Kształty dodatkowe — kliknij, aby dodać</h3>
+    <div class="modalBody" id="shapeBody"></div>
+    <div class="modalFoot"><button class="btn" id="shapeClose">Zamknij</button></div>
+  </div>
+</div>
+
 <div id="toast"></div>
-<input type="file" id="fOpen" accept=".json,.prodrys" hidden>
+<input type="file" id="fOpen" accept=".pdraw,.json,.prodrys" hidden>
 <input type="file" id="fXlsx" accept=".xlsx,.xlsm" hidden>
 <input type="file" id="fImg" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" hidden>
 <input type="file" id="fSettings" accept=".json" hidden>
@@ -215,7 +232,7 @@ input[type=checkbox]{accent-color:var(--acc);}
 <script>
 "use strict";
 /* =====================================================================
-   ProdRys — jednoplikowy edytor wektorowy do instrukcji produkcyjnych
+   ProdDraw — jednoplikowy edytor wektorowy do instrukcji produkcyjnych
    ===================================================================== */
 const $ = q => document.querySelector(q);
 const $$ = q => [...document.querySelectorAll(q)];
@@ -275,6 +292,7 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const escXml = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
   .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const sanitizeFile = s => (s || 'projekt').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'projekt';
+const isProjectApp = app => app === 'prodrys' || app === 'proddraw';
 
 function worldPt(e) {
   const r = cv.getBoundingClientRect();
@@ -380,6 +398,240 @@ async function readZipMedia(buf) { // wyciąga xl/media/* z xlsx
   }
   return out;
 }
+async function readZipAll(buf) {
+  const u8 = new Uint8Array(buf), dv = new DataView(buf);
+  let eocd = -1;
+  for (let i = u8.length - 22; i >= Math.max(0, u8.length - 70000); i--)
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error('Invalid ZIP/XLSX');
+  const count = dv.getUint16(eocd + 10, true), cdOff = dv.getUint32(eocd + 16, true);
+  const td = new TextDecoder(); const out = []; let p = cdOff;
+  for (let n = 0; n < count; n++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+    const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true);
+    const lo = dv.getUint32(p + 42, true);
+    const name = td.decode(u8.subarray(p + 46, p + 46 + nl));
+    const lnl = dv.getUint16(lo + 26, true), lel = dv.getUint16(lo + 28, true);
+    const start = lo + 30 + lnl + lel;
+    const comp = u8.slice(start, start + csize);
+    let data = null;
+    try {
+      if (method === 0) data = comp;
+      else if (method === 8) data = await inflateRaw(comp);
+    } catch (e) {}
+    if (data) out.push({ name, data });
+    p += 46 + nl + el + cl;
+  }
+  return out;
+}
+
+function getXmlText(entry) {
+  return new TextDecoder().decode(entry.data);
+}
+
+function polyPoints(preset, x, y, w, h) {
+  const cx = x + w / 2, cy = y + h / 2, r = w / 2, ry = h / 2;
+  const nPts = (n, outerRx, outerRy, innerRx, innerRy, startAngle) => {
+    const pts = [];
+    for (let i = 0; i < n * 2; i++) {
+      const angle = startAngle + (i * Math.PI / n);
+      const rx = i % 2 === 0 ? outerRx : innerRx;
+      const ry2 = i % 2 === 0 ? outerRy : innerRy;
+      pts.push([cx + rx * Math.cos(angle), cy + ry2 * Math.sin(angle)]);
+    }
+    return pts;
+  };
+  const regPoly = (n, startAngle = -Math.PI / 2) => Array.from({ length: n }, (_, i) => {
+    const a = startAngle + i * 2 * Math.PI / n;
+    return [cx + r * Math.cos(a), cy + ry * Math.sin(a)];
+  });
+  switch (preset) {
+    case 'triangle': return [[cx, y], [x + w, y + h], [x, y + h]];
+    case 'rtTriangle': return [[x, y], [x + w, y + h], [x, y + h]];
+    case 'diamond': return [[cx, y], [x + w, cy], [cx, y + h], [x, cy]];
+    case 'pentagon': return regPoly(5);
+    case 'hexagon': return regPoly(6, 0);
+    case 'heptagon': return regPoly(7);
+    case 'octagon': return regPoly(8, -Math.PI / 8);
+    case 'star4': return nPts(4, r, ry, r * 0.4, ry * 0.4, -Math.PI / 2);
+    case 'star5': return nPts(5, r, ry, r * 0.38, ry * 0.38, -Math.PI / 2);
+    case 'star6': return nPts(6, r, ry, r * 0.5, ry * 0.5, -Math.PI / 2);
+    case 'cross': {
+      const t = w * 0.3, t2 = h * 0.3;
+      return [[cx - t / 2, y], [cx + t / 2, y], [cx + t / 2, cy - t2 / 2], [x + w, cy - t2 / 2],
+        [x + w, cy + t2 / 2], [cx + t / 2, cy + t2 / 2], [cx + t / 2, y + h], [cx - t / 2, y + h],
+        [cx - t / 2, cy + t2 / 2], [x, cy + t2 / 2], [x, cy - t2 / 2], [cx - t / 2, cy - t2 / 2]];
+    }
+    case 'parallelogram': {
+      const s2 = w * 0.2;
+      return [[x + s2, y], [x + w, y], [x + w - s2, y + h], [x, y + h]];
+    }
+    case 'trapezoid': {
+      const s2 = w * 0.15;
+      return [[x + s2, y], [x + w - s2, y], [x + w, y + h], [x, y + h]];
+    }
+    case 'chevron': {
+      const p = w * 0.25;
+      return [[x, y], [x + w - p, y], [x + w, cy], [x + w - p, y + h], [x, y + h], [x + p, cy]];
+    }
+    case 'rightArrow': {
+      const aw = w * 0.4, ah = h * 0.35;
+      return [[x, cy - ah], [x + w - aw, cy - ah], [x + w - aw, y], [x + w, cy], [x + w - aw, y + h], [x + w - aw, cy + ah], [x, cy + ah]];
+    }
+    case 'leftArrow': {
+      const aw = w * 0.4, ah = h * 0.35;
+      return [[x, cy], [x + aw, y], [x + aw, cy - ah], [x + w, cy - ah], [x + w, cy + ah], [x + aw, cy + ah], [x + aw, y + h]];
+    }
+    case 'roundRect': return null;
+    default: return [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+  }
+}
+
+function parseSheetDims(xml) {
+  const DEFAULT_COL = 64, DEFAULT_ROW = 20;
+  const colWidths = new Array(1024).fill(DEFAULT_COL);
+  const rowHeights = new Array(65536).fill(DEFAULT_ROW);
+  for (const m of xml.matchAll(/<col\s[^>]+>/g)) {
+    const s = m[0];
+    const minM = s.match(/\bmin="(\d+)"/), maxM = s.match(/\bmax="(\d+)"/);
+    const wM = s.match(/\bwidth="([\d.]+)"/);
+    if (minM && maxM && wM) {
+      const px = Math.max(4, Math.round(parseFloat(wM[1]) * 7 + 5));
+      for (let c = +minM[1] - 1; c <= +maxM[1] - 1 && c < 1024; c++) colWidths[c] = px;
+    }
+  }
+  for (const m of xml.matchAll(/<row\s[^>]+>/g)) {
+    const s = m[0];
+    const rM = s.match(/\br="(\d+)"/), htM = s.match(/\bht="([\d.]+)"/);
+    if (rM && htM) rowHeights[+rM[1] - 1] = Math.max(4, Math.round(parseFloat(htM[1]) * 96 / 72));
+  }
+  return { colWidths, rowHeights };
+}
+
+function cellPx(col, colOff, row, rowOff, dims) {
+  const EPX = 9525;
+  let x = colOff / EPX, y = rowOff / EPX;
+  for (let c = 0; c < col && c < dims.colWidths.length; c++) x += dims.colWidths[c];
+  for (let r = 0; r < row && r < dims.rowHeights.length; r++) y += dims.rowHeights[r];
+  return { x, y };
+}
+
+function xlColor(xml) {
+  const m = xml.match(/<a:srgbClr\s+val="([0-9a-fA-F]{6})"/);
+  return m ? '#' + m[1] : null;
+}
+
+function parseDrawingShapes(xml, dims) {
+  const shapes = [];
+  const EPX = 9525;
+  const anchorRe = /<xdr:(absoluteAnchor|twoCellAnchor|oneCellAnchor)>([\s\S]*?)<\/xdr:\1>/g;
+  let am;
+  while ((am = anchorRe.exec(xml)) !== null) {
+    const aType = am[1], aXml = am[2];
+    let x, y, w, h;
+    try {
+      if (aType === 'absoluteAnchor') {
+        const pm = aXml.match(/<xdr:pos\s+x="(\d+)"\s+y="(\d+)"/);
+        const em = aXml.match(/<xdr:ext\s+cx="(\d+)"\s+cy="(\d+)"/);
+        if (!pm || !em) continue;
+        x = +pm[1] / EPX; y = +pm[2] / EPX; w = +em[1] / EPX; h = +em[2] / EPX;
+      } else if (aType === 'twoCellAnchor') {
+        const fm = aXml.match(/<xdr:from>([\s\S]*?)<\/xdr:from>/);
+        const tm = aXml.match(/<xdr:to>([\s\S]*?)<\/xdr:to>/);
+        if (!fm || !tm) continue;
+        const fi = fm[1], ti = tm[1];
+        const g = s => parseInt(s || '0');
+        const fc = g(fi.match(/<xdr:col>(\d+)/)?.[1]), fco = g(fi.match(/<xdr:colOff>(\d+)/)?.[1]);
+        const fr = g(fi.match(/<xdr:row>(\d+)/)?.[1]), fro = g(fi.match(/<xdr:rowOff>(\d+)/)?.[1]);
+        const tc = g(ti.match(/<xdr:col>(\d+)/)?.[1]), tco = g(ti.match(/<xdr:colOff>(\d+)/)?.[1]);
+        const tr = g(ti.match(/<xdr:row>(\d+)/)?.[1]), tro = g(ti.match(/<xdr:rowOff>(\d+)/)?.[1]);
+        const fp = cellPx(fc, fco, fr, fro, dims), tp = cellPx(tc, tco, tr, tro, dims);
+        x = fp.x; y = fp.y; w = tp.x - fp.x; h = tp.y - fp.y;
+      } else if (aType === 'oneCellAnchor') {
+        const fm = aXml.match(/<xdr:from>([\s\S]*?)<\/xdr:from>/);
+        const em = aXml.match(/<xdr:ext\s+cx="(\d+)"\s+cy="(\d+)"/);
+        if (!fm || !em) continue;
+        const fi = fm[1], g = s => parseInt(s || '0');
+        const fc = g(fi.match(/<xdr:col>(\d+)/)?.[1]), fco = g(fi.match(/<xdr:colOff>(\d+)/)?.[1]);
+        const fr = g(fi.match(/<xdr:row>(\d+)/)?.[1]), fro = g(fi.match(/<xdr:rowOff>(\d+)/)?.[1]);
+        const fp = cellPx(fc, fco, fr, fro, dims);
+        x = fp.x; y = fp.y; w = +em[1] / EPX; h = +em[2] / EPX;
+      }
+    } catch (e) { continue; }
+    if (!w || !h || w < 2 || h < 2) continue;
+    x = Math.round(x); y = Math.round(y); w = Math.round(w); h = Math.round(h);
+
+    if (/<xdr:sp[\s>]/.test(aXml)) {
+      const prstM = aXml.match(/<a:prstGeom\s+prst="([^"]+)"/);
+      const prst = prstM ? prstM[1] : 'rect';
+      let fill = '#ffffff', noFill = false;
+      const spFillM = aXml.match(/<a:solidFill>([\s\S]*?)<\/a:solidFill>/);
+      if (/<a:noFill/.test(aXml.match(/<a:spPr[^>]*>([\s\S]*?)<\/a:spPr>/)?.[1] || '')) {
+        noFill = true; fill = 'none';
+      } else if (spFillM) {
+        const c = xlColor(spFillM[1]); if (c) fill = c;
+      }
+      let stroke = '#111827', noStroke = false, sw = 1.5;
+      const lnM = aXml.match(/<a:ln(?:\s[^>]*)?>[\s\S]*?<\/a:ln>/);
+      if (lnM) {
+        const lnStr = lnM[0];
+        if (/<a:noFill/.test(lnStr)) noStroke = true;
+        const wm = lnStr.match(/\bw="(\d+)"/);
+        if (wm) sw = Math.max(0.5, Math.round(+wm[1] / 12700 * 10) / 10);
+        const lc = xlColor(lnStr); if (lc) stroke = lc;
+      } else { noStroke = true; }
+      let text = '', fs = 14, tc = '#111827', bold = false;
+      const txM = aXml.match(/<xdr:txBody>([\s\S]*?)<\/xdr:txBody>/);
+      if (txM) {
+        const parts = [];
+        for (const tm of txM[1].matchAll(/<a:t>([^<]*)<\/a:t>/g)) parts.push(tm[1]);
+        text = parts.join('');
+        const rPrM = txM[1].match(/<a:rPr\s([^>]+)/);
+        if (rPrM) {
+          const szM = rPrM[1].match(/\bsz="(\d+)"/);
+          if (szM) fs = Math.max(6, Math.round(+szM[1] / 100));
+          bold = /\bb="1"/.test(rPrM[1]);
+          const tcM = txM[1].match(/<a:rPr[^>]*>([\s\S]*?)<\/a:rPr>/);
+          if (tcM) { const tcc = xlColor(tcM[1]); if (tcc) tc = tcc; }
+        }
+      }
+      let type = 'rect';
+      const polyPrests = {
+        'ellipse': null, 'triangle': 'triangle', 'rtTriangle': 'rtTriangle', 'diamond': 'diamond',
+        'pentagon': 'pentagon', 'hexagon': 'hexagon', 'heptagon': 'heptagon', 'octagon': 'octagon',
+        'star4': 'star4', 'star5': 'star5', 'star6': 'star6', 'plus': 'cross', 'irregularSeal1': 'star5',
+        'irregularSeal2': 'star6', 'rightArrow': 'rightArrow', 'leftArrow': 'leftArrow',
+        'parallelogram': 'parallelogram', 'trapezoid': 'trapezoid', 'chevron': 'chevron',
+        'homePlate': 'chevron', 'pentagon': 'pentagon'
+      };
+      const s = { id: uid(), type, x, y, w, h, fill, noFill, stroke, noStroke, sw, dash: 'solid',
+        text, fs, tc, bold, font: 'Calibri' };
+      if (prst === 'ellipse') { s.type = 'ellipse'; }
+      else if (prst === 'roundRect') { s.type = 'roundRect'; s.rx = 8; }
+      else if (polyPrests[prst]) { s.type = 'poly'; s.preset = polyPrests[prst]; }
+      shapes.push(s);
+    } else if (/<xdr:cxnSp[\s>]/.test(aXml)) {
+      let stroke = '#111827', sw = 1.5;
+      const lnM = aXml.match(/<a:ln(?:\s[^>]*)?>[\s\S]*?<\/a:ln>/);
+      if (lnM) {
+        const wm = lnM[0].match(/\bw="(\d+)"/);
+        if (wm) sw = Math.max(0.5, Math.round(+wm[1] / 12700 * 10) / 10);
+        const lc = xlColor(lnM[0]); if (lc) stroke = lc;
+      }
+      const flipH = /<a:xfrm[^>]*\bflipH="1"/.test(aXml);
+      const flipV = /<a:xfrm[^>]*\bflipV="1"/.test(aXml);
+      const ae = /<a:tailEnd[^>]*(?:type="arrow"|type="triangle")/.test(aXml) ||
+                 /<a:headEnd[^>]*(?:type="arrow"|type="triangle")/.test(aXml);
+      shapes.push({ id: uid(), type: 'line',
+        x1: flipH ? x + w : x, y1: flipV ? y + h : y,
+        x2: flipH ? x : x + w, y2: flipV ? y : y + h,
+        stroke, sw, dash: 'solid', as: false, ae });
+    }
+  }
+  return shapes;
+}
+
 function downloadBlob(blob, name) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = name;
@@ -405,14 +657,14 @@ function subst(text, vals) {
   return String(text ?? '').replace(/\{([^}]+)\}/g, (m, k) =>
     (k in vals) ? vals[k] : m);
 }
-function textBlockSVG(cx, cy, text, fs, color, bold, vals) {
+function textBlockSVG(cx, cy, text, fs, color, bold, vals, font = 'Calibri') {
   const lines = subst(text, vals).split('\n');
   if (!lines.join('')) return '';
   const lh = fs * 1.25;
   const y0 = cy - (lines.length - 1) * lh / 2;
   const ts = lines.map((l, i) =>
     `<tspan x="${cx}" y="${y0 + i * lh}">${escXml(l)}</tspan>`).join('');
-  return `<text text-anchor="middle" dominant-baseline="middle" font-family="Arial,Helvetica,sans-serif" font-size="${fs}" ${bold ? 'font-weight="bold"' : ''} fill="${color}">${ts}</text>`;
+  return `<text text-anchor="middle" dominant-baseline="middle" font-family="${escXml(font || 'Calibri')},Arial,sans-serif" font-size="${fs}" ${bold ? 'font-weight="bold"' : ''} fill="${color}">${ts}</text>`;
 }
 function arrowHeadSVG(fromX, fromY, tipX, tipY, sw, color) {
   const a = Math.atan2(tipY - fromY, tipX - fromX);
@@ -432,7 +684,7 @@ function shapeSVG(s, vals, live) {
       `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fill}" stroke="${stroke}" stroke-width="${s.sw}"${dash}/>`;
     if (fill === 'none' && live)
       out += `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="transparent" stroke="none"/>`;
-    out += textBlockSVG(s.x + s.w / 2, s.y + s.h / 2, s.text, s.fs, s.tc, s.bold, vals) + '</g>';
+    out += textBlockSVG(s.x + s.w / 2, s.y + s.h / 2, s.text, s.fs, s.tc, s.bold, vals, s.font) + '</g>';
     return out;
   }
   if (s.type === 'ellipse') {
@@ -441,7 +693,7 @@ function shapeSVG(s, vals, live) {
       `<ellipse cx="${cx}" cy="${cy}" rx="${s.w / 2}" ry="${s.h / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${s.sw}"${dash}/>`;
     if (fill === 'none' && live)
       out += `<ellipse cx="${cx}" cy="${cy}" rx="${s.w / 2}" ry="${s.h / 2}" fill="transparent" stroke="none"/>`;
-    out += textBlockSVG(cx, cy, s.text, s.fs, s.tc, s.bold, vals) + '</g>';
+    out += textBlockSVG(cx, cy, s.text, s.fs, s.tc, s.bold, vals, s.font) + '</g>';
     return out;
   }
   if (s.type === 'line') {
@@ -466,7 +718,7 @@ function shapeSVG(s, vals, live) {
     const lh = s.fs * 1.25;
     const ts = lines.map((l, i) =>
       `<tspan x="${s.x}" y="${s.y + s.fs + i * lh}">${escXml(l)}</tspan>`).join('');
-    let out = `<g${did}><text font-family="Arial,Helvetica,sans-serif" font-size="${s.fs}" ${s.bold ? 'font-weight="bold"' : ''} fill="${s.tc}">${ts}</text>`;
+    let out = `<g${did}><text font-family="${escXml(s.font || 'Calibri')},Arial,sans-serif" font-size="${s.fs}" ${s.bold ? 'font-weight="bold"' : ''} fill="${s.tc}">${ts}</text>`;
     if (live) { const b = bboxOf(s);
       out += `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="transparent"/>`; }
     return out + '</g>';
@@ -474,12 +726,38 @@ function shapeSVG(s, vals, live) {
   if (s.type === 'image') {
     return `<g${did}><image x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" href="${s.href}" preserveAspectRatio="none"/></g>`;
   }
+  if (s.type === 'roundRect') {
+    const rx = Math.min(s.rx || 8, s.w / 2, s.h / 2);
+    let out = `<g${did}><rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" rx="${rx}" ry="${rx}" fill="${fill}" stroke="${stroke}" stroke-width="${s.sw}"${dash}/>`;
+    if (fill === 'none' && live)
+      out += `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" rx="${rx}" ry="${rx}" fill="transparent" stroke="none"/>`;
+    out += textBlockSVG(s.x + s.w / 2, s.y + s.h / 2, s.text || '', s.fs || 14, s.tc || '#111827', s.bold, vals, s.font) + '</g>';
+    return out;
+  }
+  if (s.type === 'poly') {
+    const pts = polyPoints(s.preset, s.x, s.y, s.w, s.h);
+    const ptStr = pts.map(p => `${p[0]},${p[1]}`).join(' ');
+    let out = `<g${did}><polygon points="${ptStr}" fill="${fill}" stroke="${stroke}" stroke-width="${s.sw}"${dash}/>`;
+    out += textBlockSVG(s.x + s.w / 2, s.y + s.h / 2, s.text || '', s.fs || 14, s.tc || '#111827', s.bold, vals, s.font);
+    if (fill === 'none' && live)
+      out += `<polygon points="${ptStr}" fill="transparent" stroke="none"/>`;
+    return out + '</g>';
+  }
   return '';
 }
 function currentVals() {
   return previewRow >= 0 && state.vars.rows[previewRow]
     ? state.vars.rows[previewRow].vals : null;
 }
+function zoomAtCenter(k) {
+  const r = cv.getBoundingClientRect();
+  const mx = r.width / 2, my = r.height / 2;
+  const z2 = clamp(view.z * k, 0.08, 12);
+  view.x = mx - (mx - view.x) * (z2 / view.z);
+  view.y = my - (my - view.y) * (z2 / view.z);
+  view.z = z2; render();
+}
+
 function render() {
   const z = view.z, vals = currentVals();
   const gs = +$('#gridSize').value || 10;
@@ -579,7 +857,7 @@ function buildSVG(shapes, vals, pad = 16, region = null) {
     `<rect x="${vb.x}" y="${vb.y}" width="${vb.w}" height="${vb.h}" fill="#ffffff"/>` + body + '</svg>';
   return { svg, w: vb.w, h: vb.h };
 }
-function svgToPngBlob(svgStr, w, h, scale = 2) {
+function svgToPngBlob(svgStr, w, h, scale = 2, type = 'image/png', quality) {
   return new Promise((res, rej) => {
     const img = new Image();
     const url = URL.createObjectURL(new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' }));
@@ -591,7 +869,7 @@ function svgToPngBlob(svgStr, w, h, scale = 2) {
       g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
       g.drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(url);
-      c.toBlob(b => b ? res(b) : rej(new Error('Błąd PNG')), 'image/png');
+      c.toBlob(b => b ? res(b) : rej(new Error('Błąd eksportu obrazu')), type, quality);
     };
     img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Błąd renderowania SVG')); };
     img.src = url;
@@ -666,13 +944,13 @@ let drag = null;
 function newShapeDefaults(type, p) {
   const base = { id: uid(), stroke: '#111827', sw: 2, dash: 'solid' };
   if (type === 'rect') return { ...base, type, x: p.x, y: p.y, w: 0, h: 0,
-    fill: '#ffffff', noFill: false, noStroke: false, text: '', fs: 14, tc: '#111827', bold: false };
+    fill: '#ffffff', noFill: false, noStroke: false, text: '', fs: 14, tc: '#111827', bold: false, font: 'Calibri' };
   if (type === 'ellipse') return { ...base, type, x: p.x, y: p.y, w: 0, h: 0,
-    fill: '#ffffff', noFill: true, noStroke: false, text: '', fs: 14, tc: '#111827', bold: false };
+    fill: '#ffffff', noFill: true, noStroke: false, text: '', fs: 14, tc: '#111827', bold: false, font: 'Calibri' };
   if (type === 'line' || type === 'arrow') return { ...base, type: 'line',
     x1: p.x, y1: p.y, x2: p.x, y2: p.y, as: false, ae: type === 'arrow' };
   if (type === 'text') return { id: uid(), type: 'text', x: p.x, y: p.y,
-    text: 'Tekst', fs: 16, tc: '#111827', bold: false };
+    text: 'Tekst', fs: 16, tc: '#111827', bold: true, font: 'Calibri' };
   return null;
 }
 function setSelection(ids) {
@@ -906,10 +1184,10 @@ cv.addEventListener('dblclick', e => {
   if (!s) {
     for (const id of sel) {
       const c = state.shapes.find(a => a.id === id);
-      if (c && (c.type === 'rect' || c.type === 'ellipse' || c.type === 'text')) { s = c; break; }
+      if (c && ['rect', 'ellipse', 'text', 'poly', 'roundRect'].includes(c.type)) { s = c; break; }
     }
   }
-  if (s && (s.type === 'rect' || s.type === 'ellipse' || s.type === 'text')) {
+  if (s && ['rect', 'ellipse', 'text', 'poly', 'roundRect'].includes(s.type)) {
     setSelection([s.id]);
     startEdit(s);
   }
@@ -927,6 +1205,7 @@ function startEdit(s) {
   txtEd.style.height = Math.max(30, b.h * z) + 'px';
   txtEd.style.fontSize = (s.fs * z) + 'px';
   txtEd.style.fontWeight = s.bold ? 'bold' : 'normal';
+  txtEd.style.fontFamily = (s.font || 'Calibri') + ',Arial,sans-serif';
   txtEd.style.textAlign = s.type === 'text' ? 'left' : 'center';
   txtEd.value = s.text || '';
   txtEd.focus(); txtEd.select();
@@ -970,8 +1249,8 @@ function renderProps() {
   const one = ss.length === 1;
   const types = new Set(ss.map(a => a.type));
   const hasStroke = [...types].some(t => t !== 'text' && t !== 'image');
-  const hasFill = types.has('rect') || types.has('ellipse');
-  const hasText = types.has('rect') || types.has('ellipse') || types.has('text');
+  const hasFill = ['rect', 'ellipse', 'poly', 'roundRect'].some(t => types.has(t));
+  const hasText = ['rect', 'ellipse', 'text', 'poly', 'roundRect'].some(t => types.has(t));
   const hasLine = types.has('line');
   let h = `<div class="grp"><h4>Zaznaczone: ${ss.length}</h4></div>`;
 
@@ -1003,6 +1282,9 @@ function renderProps() {
   }
   if (hasText) {
     h += `<div class="grp"><h4>Tekst <span style="text-transform:none;font-weight:400">(2×klik na kształcie, aby edytować)</span></h4>
+      <div class="row"><label>Czcionka</label><select class="in" id="pFont" style="width:130px">
+        ${['Calibri','Arial','Helvetica','Times New Roman','Georgia','Verdana','Courier New','Trebuchet MS','Impact'].map(f => `<option value="${f}" ${(s.font || 'Calibri') === f ? 'selected' : ''}>${f}</option>`).join('')}
+      </select></div>
       <div class="row"><label>Rozmiar</label><input class="in" type="number" id="pFs" min="4" value="${s.fs ?? 14}">
         <input class="in" type="color" id="pTc" value="${s.tc || '#111827'}">
         <label style="min-width:0"><input type="checkbox" id="pBold" ${s.bold ? 'checked' : ''}> gruby</label></div></div>`;
@@ -1051,6 +1333,7 @@ function renderProps() {
   on('pDash', 'change', () => applyAll(a => { if (a.dash !== undefined) a.dash = $('#pDash').value; }));
   on('pFill', 'input', () => applyAll(a => { if (a.fill !== undefined) { a.fill = $('#pFill').value; a.noFill = false; } }));
   on('pNoFill', 'change', () => applyAll(a => { if (a.fill !== undefined) a.noFill = $('#pNoFill').checked; }));
+  on('pFont', 'change', () => applyAll(a => { if ('font' in a || a.fs !== undefined) a.font = $('#pFont').value; }));
   on('pFs', 'change', () => applyAll(a => { if (a.fs !== undefined) a.fs = Math.max(4, num('pFs')); }));
   on('pTc', 'input', () => applyAll(a => { if (a.tc !== undefined) a.tc = $('#pTc').value; }));
   on('pBold', 'change', () => applyAll(a => { if ('fs' in a) a.bold = $('#pBold').checked; }));
@@ -1307,6 +1590,61 @@ function defaultLibItems() {
 }
 function seedLib() { lib = defaultLibItems(); saveLib(); }
 
+const EXTRA_SHAPES = [
+  { preset: 'triangle', label: 'Trójkąt' },
+  { preset: 'rtTriangle', label: 'Trójkąt prostokątny' },
+  { preset: 'diamond', label: 'Romb' },
+  { preset: 'pentagon', label: 'Pięciokąt' },
+  { preset: 'hexagon', label: 'Sześciokąt' },
+  { preset: 'octagon', label: 'Ośmiokąt' },
+  { preset: 'star4', label: 'Gwiazda 4' },
+  { preset: 'star5', label: 'Gwiazda 5' },
+  { preset: 'star6', label: 'Gwiazda 6' },
+  { preset: 'cross', label: 'Krzyż' },
+  { preset: 'parallelogram', label: 'Równoległobok' },
+  { preset: 'trapezoid', label: 'Trapez' },
+  { preset: 'chevron', label: 'Chevron' },
+  { preset: 'rightArrow', label: 'Strzałka →' },
+  { preset: 'leftArrow', label: 'Strzałka ←' },
+  { preset: 'roundRect', label: 'Zaokrąglony prostokąt', type: 'roundRect' },
+];
+
+function openShapeModal() {
+  const body = $('#shapeBody'); body.innerHTML = '';
+  for (const item of EXTRA_SHAPES) {
+    const div = document.createElement('div');
+    div.className = 'xlImg';
+    const type = item.type || 'poly';
+    const previewShape = {
+      id: 'prev', type, preset: item.preset, rx: 8,
+      x: 4, y: 4, w: 92, h: 72,
+      fill: '#d1e7ff', noFill: false, stroke: '#1d5fa0', noStroke: false,
+      sw: 2, dash: 'solid', text: '', fs: 12, tc: '#111827', bold: false, font: 'Calibri'
+    };
+    const svgContent = shapeSVG(previewShape, null, false);
+    div.innerHTML = `<div style="background:#fff;height:80px;display:flex;align-items:center;justify-content:center;overflow:hidden">
+      <svg viewBox="0 0 100 80" width="100" height="80">${svgContent}</svg>
+    </div><div>${escXml(item.label)}</div>`;
+    div.addEventListener('click', () => {
+      pushUndo();
+      const r = cv.getBoundingClientRect();
+      const c = { x: (r.width / 2 - view.x) / view.z, y: (r.height / 2 - view.y) / view.z };
+      const s = {
+        id: uid(), type: item.type || 'poly', preset: item.preset, rx: 8,
+        x: c.x - 60, y: c.y - 40, w: 120, h: 80,
+        fill: '#ffffff', noFill: false, stroke: '#111827', noStroke: false,
+        sw: 2, dash: 'solid', text: '', fs: 14, tc: '#111827', bold: false, font: 'Calibri'
+      };
+      state.shapes.push(s);
+      setSelection([s.id]); setTool('select'); autosave();
+      $('#shapeModal').classList.remove('on');
+      toast('Dodano: ' + item.label);
+    });
+    body.appendChild(div);
+  }
+  $('#shapeModal').classList.add('on');
+}
+
 /* =====================================================================
    WARIANTY — macierz zmiennych, generowanie zestawu PNG
    ===================================================================== */
@@ -1316,7 +1654,7 @@ function renderVars() {
   let h = `<div class="hint" style="margin-bottom:10px">
     W tekstach kształtów wpisz <b>{NAZWA}</b> — np. <b>{A}</b>.
     Każdy wiersz tabeli to jeden wariant. „Generuj" tworzy ZIP z plikiem PNG dla każdego wiersza:
-    <i>nazwa-projektu_nazwa-wariantu.png</i>.</div>`;
+    <i>nazwa-projektu_nazwa-wariantu.png</i>. Warianty są zapisywane w pliku projektu (.pdraw).</div>`;
   h += `<div class="row"><button class="btn" id="vAddCol">+ Zmienna</button>
     <button class="btn" id="vAddRow">+ Wariant</button></div>`;
   if (V.cols.length || V.rows.length) {
@@ -1394,18 +1732,18 @@ async function generateVariants() {
    PROJEKT: zapis / odczyt / autozapis / eksport PNG
    ===================================================================== */
 function projectJSON() {
-  return JSON.stringify({ app: 'prodrys', version: 2,
+  return JSON.stringify({ app: 'proddraw', version: 2,
     name: $('#projName').value, shapes: state.shapes, vars: state.vars,
     page: state.page, lib }, null, 1);
 }
 function saveProject() {
   const name = sanitizeFile($('#projName').value);
-  downloadBlob(new Blob([projectJSON()], { type: 'application/json' }), name + '.json');
-  toast('Zapisano projekt: ' + name + '.json');
+  downloadBlob(new Blob([projectJSON()], { type: 'application/json' }), name + '.pdraw');
+  toast('Zapisano projekt: ' + name + '.pdraw');
 }
 function loadProject(obj) {
-  if (!obj || obj.app !== 'prodrys' || !Array.isArray(obj.shapes))
-    return toast('To nie jest plik projektu ProdRys');
+  if (!obj || !isProjectApp(obj.app) || !Array.isArray(obj.shapes))
+    return toast('To nie jest plik projektu ProdDraw');
   pushUndo();
   state.name = obj.name || 'Projekt';
   $('#projName').value = state.name;
@@ -1430,16 +1768,16 @@ function autosave() {
     try { localStorage.setItem('prodrys_auto', projectJSON()); } catch (e) {}
   }, 400);
 }
-async function exportPNG() {
+async function exportJPG() {
   const region = pageRegion();
   if (!state.shapes.length && !region) return toast('Płótno jest puste');
   const b = buildSVG(state.shapes, currentVals(), 16, region);
-  const png = await svgToPngBlob(b.svg, b.w, b.h, 2);
+  const jpg = await svgToPngBlob(b.svg, b.w, b.h, 2, 'image/jpeg', 0.92);
   let name = sanitizeFile($('#projName').value);
   if (previewRow >= 0 && state.vars.rows[previewRow])
     name += '_' + sanitizeFile(state.vars.rows[previewRow].name);
-  downloadBlob(png, name + '.png');
-  toast('Wyeksportowano: ' + name + '.png');
+  downloadBlob(jpg, name + '.jpg');
+  toast('Wyeksportowano: ' + name + '.jpg');
 }
 
 /* =====================================================================
@@ -1502,43 +1840,95 @@ function pasteClip() {
   state.shapes.push(...copies);
   setSelection(copies.map(c => c.id)); autosave();
 }
-/* import XLSX/XLSM — tylko osadzone obrazy (bez „śmieciowych" kształtów) */
+/* import XLSX/XLSM — obrazy + kształty */
 async function importXlsx(file) {
   try {
     if (typeof DecompressionStream === 'undefined')
-      return toast('Przeglądarka nie wspiera dekompresji — użyj Chrome/Edge');
-    toast('Odczytywanie pliku…');
-    const media = await readZipMedia(await file.arrayBuffer());
-    const imgs = media.filter(m => /\.(png|jpe?g|gif|bmp|webp)$/i.test(m.name));
-    const skipped = media.length - imgs.length;
-    if (!imgs.length)
-      return toast('Brak obrazów PNG/JPG w pliku' + (skipped ? ` (${skipped} w formacie EMF/WMF — niewspierane)` : ''));
+      return toast('Browser does not support decompression — use Chrome/Edge');
+    toast('Reading file…');
+    const buf = await file.arrayBuffer();
+    const allFiles = await readZipAll(buf);
+    const td = new TextDecoder();
+    const mediaFiles = allFiles.filter(f => /^xl\/media\//i.test(f.name) && /\.(png|jpe?g|gif|bmp|webp)$/i.test(f.name));
+    const sheetFile = allFiles.find(f => /^xl\/worksheets\/sheet\d+\.xml$/i.test(f.name));
+    const sheetXml = sheetFile ? td.decode(sheetFile.data) : '';
+    const dims = parseSheetDims(sheetXml);
+    const drawingFiles = allFiles.filter(f => /^xl\/drawings\/drawing\d+\.xml$/i.test(f.name));
+    let importedShapes = [];
+    for (const df of drawingFiles) {
+      const dxml = td.decode(df.data);
+      importedShapes.push(...parseDrawingShapes(dxml, dims));
+    }
+    const skippedEMF = allFiles.filter(f => /^xl\/media\//i.test(f.name) && /\.(emf|wmf)$/i.test(f.name)).length;
+    if (!mediaFiles.length && !importedShapes.length)
+      return toast('No supported images or shapes found in file' + (skippedEMF ? ` (${skippedEMF} EMF/WMF skipped)` : ''));
     const body = $('#xlBody'); body.innerHTML = '';
-    for (const m of imgs) {
+    const imgEntries = [];
+    for (const m of mediaFiles) {
       const ext = m.name.split('.').pop().toLowerCase();
-      const mime = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif'
-        : ext === 'bmp' ? 'image/bmp' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-      const url = await fileToDataURL(new Blob([m.data], { type: mime }));
-      const d = document.createElement('div');
-      d.className = 'xlImg';
-      d.innerHTML = `<img src="${url}"><div>${escXml(m.name.replace('xl/media/', ''))}</div>`;
+      const mime = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : ext === 'bmp' ? 'image/bmp' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+      const url = URL.createObjectURL(new Blob([m.data], { type: mime }));
+      imgEntries.push({ url, name: m.name.replace('xl/media/', '') });
+    }
+    const hasShapes = importedShapes.length > 0;
+    const hasImages = imgEntries.length > 0;
+    let titleStr = 'XLSX Import — ';
+    if (hasImages && hasShapes) titleStr += `${imgEntries.length} images, ${importedShapes.length} shapes`;
+    else if (hasImages) titleStr += `${imgEntries.length} images found — click to insert`;
+    else titleStr += `${importedShapes.length} shapes found`;
+    $('#xlModal').querySelector('h3').textContent = titleStr;
+    if (hasImages || hasShapes) {
+      const allBtn = document.createElement('div');
+      allBtn.style.cssText = 'grid-column:1/-1;margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap;';
+      if (hasImages) {
+        const b1 = document.createElement('button');
+        b1.className = 'btn primary';
+        b1.textContent = `Import all images (${imgEntries.length})`;
+        b1.addEventListener('click', () => {
+          state.page = { mode: 'off' };
+          syncPageUI(); render();
+          imgEntries.forEach(e => insertImageURL(e.url));
+          if (hasShapes) { state.shapes.push(...importedShapes.map(s => ({ ...s, id: uid() }))); render(); autosave(); }
+          $('#xlModal').classList.remove('on');
+          toast(`Imported ${imgEntries.length} images${hasShapes ? ' + ' + importedShapes.length + ' shapes' : ''}`);
+        });
+        allBtn.appendChild(b1);
+      }
+      if (hasShapes) {
+        const b2 = document.createElement('button');
+        b2.className = 'btn';
+        b2.textContent = `Import shapes only (${importedShapes.length})`;
+        b2.addEventListener('click', () => {
+          state.page = { mode: 'off' };
+          syncPageUI();
+          pushUndo();
+          state.shapes.push(...importedShapes.map(s => ({ ...s, id: uid() })));
+          render(); autosave();
+          $('#xlModal').classList.remove('on');
+          toast(`Imported ${importedShapes.length} shapes`);
+        });
+        allBtn.appendChild(b2);
+      }
+      body.appendChild(allBtn);
+    }
+    for (const { url, name } of imgEntries) {
+      const d = document.createElement('div'); d.className = 'xlImg';
+      d.innerHTML = `<img src="${url}"><div>${escXml(name)}</div>`;
       d.addEventListener('click', () => {
+        state.page = { mode: 'off' }; syncPageUI(); render();
         insertImageURL(url);
         $('#xlModal').classList.remove('on');
-        toast('Wstawiono obraz z XLSX');
+        toast('Inserted image from XLSX');
       });
       body.appendChild(d);
     }
-    if (skipped) {
-      const w = document.createElement('div');
-      w.className = 'hint'; w.style.gridColumn = '1/-1';
-      w.textContent = `Pominięto ${skipped} obrazów EMF/WMF (format wektorowy Excela — niewspierany w przeglądarce). W CATII/Excelu wklejaj zrzuty jako bitmapę.`;
+    if (skippedEMF) {
+      const w = document.createElement('div'); w.className = 'hint'; w.style.gridColumn = '1/-1';
+      w.textContent = `Skipped ${skippedEMF} EMF/WMF images (Excel vector format — not supported in browser).`;
       body.appendChild(w);
     }
     $('#xlModal').classList.add('on');
-  } catch (err) {
-    toast('Błąd importu: ' + err.message);
-  }
+  } catch (err) { toast('Import error: ' + err.message); }
 }
 
 /* =====================================================================
@@ -1551,6 +1941,7 @@ function setTool(t) {
 }
 $$('.tool').forEach(b => b.addEventListener('click', () => {
   if (b.dataset.tool === 'image') { $('#fImg').click(); return; }
+  if (b.dataset.tool === 'shapes') { openShapeModal(); return; }
   setTool(b.dataset.tool);
 }));
 $$('.tab').forEach(b => b.addEventListener('click', () => {
@@ -1593,7 +1984,7 @@ function newFromTemplate() {
     const tmpl = localStorage.getItem('prodrys_template');
     if (tmpl) {
       const obj = JSON.parse(tmpl);
-      if (obj.app === 'prodrys' && Array.isArray(obj.shapes)) {
+      if (isProjectApp(obj.app) && Array.isArray(obj.shapes)) {
         state = {
           name: 'Instrukcja_01',
           shapes: JSON.parse(JSON.stringify(obj.shapes)),
@@ -1620,7 +2011,7 @@ function newFromTemplate() {
 function saveAsTemplate() {
   if (!confirm('Zapisać bieżący projekt jako domyślny szablon dla nowych projektów?')) return;
   try {
-    const tmpl = { app: 'prodrys', version: 2,
+    const tmpl = { app: 'proddraw', version: 2,
       shapes: JSON.parse(JSON.stringify(state.shapes)),
       vars: JSON.parse(JSON.stringify(state.vars)),
       page: JSON.parse(JSON.stringify(state.page)) };
@@ -1629,13 +2020,13 @@ function saveAsTemplate() {
   } catch (e) { toast('Błąd zapisu szablonu'); }
 }
 function exportSettings() {
-  const settings = { app: 'prodrys-settings', version: 1, lib: JSON.parse(JSON.stringify(lib)) };
+  const settings = { app: 'proddraw-settings', version: 1, lib: JSON.parse(JSON.stringify(lib)) };
   try { const t = localStorage.getItem('prodrys_template'); if (t) settings.template = JSON.parse(t); } catch (e) {}
-  downloadBlob(new Blob([JSON.stringify(settings, null, 1)], { type: 'application/json' }), 'prodrys_ustawienia.json');
+  downloadBlob(new Blob([JSON.stringify(settings, null, 1)], { type: 'application/json' }), 'proddraw_ustawienia.json');
   toast('Wyeksportowano ustawienia (biblioteka + szablon)');
 }
 function importSettings(obj) {
-  if (!obj || obj.app !== 'prodrys-settings') return toast('Nieprawidłowy plik ustawień');
+  if (!obj || !['prodrys-settings', 'proddraw-settings'].includes(obj.app)) return toast('Nieprawidłowy plik ustawień');
   let added = 0;
   if (Array.isArray(obj.lib)) {
     for (const it of obj.lib) if (!lib.some(l => l.name === it.name)) { lib.push(it); added++; }
@@ -1693,7 +2084,10 @@ $('#fImg').addEventListener('change', async e => {
   if (f) insertImageURL(await fileToDataURL(f));
 });
 $('#xlClose').addEventListener('click', () => $('#xlModal').classList.remove('on'));
-$('#bPng').addEventListener('click', exportPNG);
+$('#shapeClose').addEventListener('click', () => $('#shapeModal').classList.remove('on'));
+$('#bZoomOut').addEventListener('click', () => zoomAtCenter(1 / 1.25));
+$('#bZoomIn').addEventListener('click', () => zoomAtCenter(1.25));
+$('#bJpg').addEventListener('click', exportJPG);
 $('#bUndo').addEventListener('click', undo);
 $('#bRedo').addEventListener('click', redo);
 $('#projName').addEventListener('change', autosave);
@@ -1723,7 +2117,10 @@ document.addEventListener('keydown', e => {
   else if (K === 'l') setTool('line');
   else if (K === 'a') setTool('arrow');
   else if (K === 't') setTool('text');
+  else if (K === 's') openShapeModal();
   else if (K === 'i') $('#fImg').click();
+  else if (e.key === '=' || e.key === '+' || K === '+') { e.preventDefault(); zoomAtCenter(1.25); }
+  else if (e.key === '-' || K === '-') { e.preventDefault(); zoomAtCenter(1 / 1.25); }
   else if (e.key.startsWith('Arrow') && sel.size) {
     e.preventDefault(); pushUndo();
     const d = e.shiftKey ? 10 : 1;
@@ -1759,7 +2156,7 @@ window.addEventListener('beforeunload', () => {
     const a = localStorage.getItem('prodrys_auto');
     if (a) {
       const obj = JSON.parse(a);
-      if (obj.app === 'prodrys' && Array.isArray(obj.shapes) && obj.shapes.length) {
+      if (isProjectApp(obj.app) && Array.isArray(obj.shapes) && obj.shapes.length) {
         state.name = obj.name || state.name;
         $('#projName').value = state.name;
         state.shapes = obj.shapes;
