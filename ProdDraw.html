@@ -115,6 +115,11 @@ input[type=checkbox]{accent-color:var(--acc);}
 .xlImg:hover{border-color:var(--acc);}
 .xlImg img{width:100%;height:100px;object-fit:contain;}
 .xlImg div{font-size:10.5px;color:var(--txt2);text-align:center;overflow:hidden;text-overflow:ellipsis;}
+.xlSel{display:flex;align-items:center;gap:6px;padding:2px 2px 0;}
+.xlSel label{font-size:11px;color:#20242b;display:flex;align-items:center;gap:4px;cursor:pointer;}
+.xlSel input{accent-color:var(--acc);}
+.xlShapePrev{width:100%;height:100px;display:flex;align-items:center;justify-content:center;background:#fff;}
+.xlShapePrev svg{width:96%;height:92px;}
 .modalFoot{padding:10px 16px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px;}
 /* toast */
 #toast{position:fixed;bottom:44px;left:50%;transform:translateX(-50%);
@@ -122,6 +127,37 @@ input[type=checkbox]{accent-color:var(--acc);}
   opacity:0;transition:opacity .25s;pointer-events:none;z-index:60;border:1px solid var(--acc);}
 #toast.on{opacity:1;}
 ::-webkit-scrollbar{width:9px;height:9px;} ::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px;}
+/* ---------- dropdown menus ---------- */
+.menu{position:relative;}
+.menu>.btn{display:flex;align-items:center;gap:5px;}
+.menu>.btn .caret{font-size:9px;opacity:.7;}
+.menuPop{position:absolute;top:calc(100% + 4px);left:0;min-width:190px;background:var(--panel2);
+  border:1px solid var(--line);border-radius:5px;box-shadow:0 6px 20px rgba(0,0,0,.4);
+  padding:4px;z-index:70;display:none;flex-direction:column;gap:1px;}
+.menu.open .menuPop{display:flex;}
+.menuItem{background:none;border:none;color:var(--txt);text-align:left;padding:7px 10px;border-radius:3px;
+  cursor:pointer;font-size:13px;white-space:nowrap;display:flex;align-items:center;justify-content:space-between;gap:16px;}
+.menuItem:hover{background:var(--acc);color:#1b1e23;}
+.menuItem .sc{font-size:11px;opacity:.6;font-family:ui-monospace,monospace;}
+.menuItem:hover .sc{opacity:.85;}
+.menuSep{height:1px;background:var(--line);margin:4px 2px;}
+/* ---------- resizable side panel ---------- */
+body{grid-template-columns:46px 1fr var(--sideW,272px);}
+.sideResizer{grid-area:side;justify-self:start;width:6px;margin-left:-3px;cursor:ew-resize;z-index:5;
+  background:transparent;position:relative;}
+.sideResizer:hover{background:var(--acc);opacity:.5;}
+/* ---------- settings tab ---------- */
+.setRow{margin-bottom:12px;}
+.setRow label.big{display:block;font-size:12px;color:var(--txt2);margin-bottom:4px;}
+/* ---------- template picker ---------- */
+.tmplCard{border:1px solid var(--line);border-radius:5px;background:#fff;cursor:pointer;
+  padding:6px;display:flex;flex-direction:column;gap:5px;position:relative;}
+.tmplCard:hover{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc);}
+.tmplCard svg{width:100%;height:110px;}
+.tmplCard .cap{font-size:11.5px;color:#333;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tmplCard .tdel{position:absolute;top:3px;right:3px;background:rgba(255,255,255,.85);border:1px solid var(--line);
+  color:#c00;border-radius:3px;cursor:pointer;font-size:11px;line-height:1;padding:2px 5px;}
+.tmplCard.blank svg{background:#f6f7f9;}
 </style>
 </head>
 <body>
@@ -129,32 +165,58 @@ input[type=checkbox]{accent-color:var(--acc);}
 <!-- ======= TOP BAR ======= -->
 <div class="tb">
   <div class="logo">PR</div>
-  <input id="projName" value="Instrukcja_01" spellcheck="false" title="Nazwa projektu — użyta w nazwach plików">
+  <input id="projName" value="Instrukcja_01" spellcheck="false" data-i18n-title="tt.projName">
   <div class="sep"></div>
-  <button class="btn" id="bNew">Nowy</button>
-  <button class="btn" id="bOpen">Otwórz</button>
-  <button class="btn" id="bSave">Zapisz projekt</button>
-  <button class="btn" id="bXlsx">Import XLSX</button>
+
+  <div class="menu" id="mFile">
+    <button class="btn" data-menu><span data-i18n="menu.file">Plik</span><span class="caret">▼</span></button>
+    <div class="menuPop">
+      <button class="menuItem" id="bNew"><span data-i18n="file.new">Nowy…</span></button>
+      <button class="menuItem" id="bOpen"><span data-i18n="file.open">Otwórz…</span><span class="sc">Ctrl+O</span></button>
+      <button class="menuItem" id="bSave"><span data-i18n="file.save">Zapisz projekt</span><span class="sc">Ctrl+S</span></button>
+      <button class="menuItem" id="bSaveAs"><span data-i18n="file.saveAs">Zapisz jako…</span></button>
+      <div class="menuSep"></div>
+      <button class="menuItem" id="bXlsx"><span data-i18n="file.importXlsx">Import XLSX/XLSM</span></button>
+      <button class="menuItem" id="bImg"><span data-i18n="file.insertImg">Wstaw obraz…</span></button>
+    </div>
+  </div>
+
+  <div class="menu" id="mExport">
+    <button class="btn" data-menu><span data-i18n="menu.export">Eksport</span><span class="caret">▼</span></button>
+    <div class="menuPop">
+      <button class="menuItem" id="bPng"><span data-i18n="export.png">Eksport PNG</span></button>
+      <button class="menuItem" id="bJpg"><span data-i18n="export.jpg">Eksport JPG</span></button>
+    </div>
+  </div>
+
+  <div class="menu" id="mConfig">
+    <button class="btn" data-menu><span data-i18n="menu.config">Konfig</span><span class="caret">▼</span></button>
+    <div class="menuPop">
+      <button class="menuItem" id="bTmpl"><span data-i18n="config.saveTmpl">Zapisz jako szablon…</span></button>
+      <div class="menuSep"></div>
+      <button class="menuItem" id="bExpSet"><span data-i18n="config.save">Zapisz konfig (plik)</span></button>
+      <button class="menuItem" id="bImpSet"><span data-i18n="config.load">Wczytaj konfig (plik)</span></button>
+    </div>
+  </div>
+
   <div class="sep"></div>
-  <button class="btn" id="bTmpl" title="Zapisz bieżący projekt jako domyślny szablon nowych projektów">Szablon ↓</button>
-  <button class="btn" id="bExpSet" title="Eksportuj bibliotekę i szablon do pliku (przeniesienie między przeglądarkami)">Ustaw. ↓</button>
-  <button class="btn" id="bImpSet" title="Importuj bibliotekę i szablon z pliku">Ustaw. ↑</button>
-  <div class="sep"></div>
-  <button class="btn primary" id="bPng">Eksport PNG</button>
+  <button class="btn primary" id="bPngQuick" data-i18n="export.pngQuick">Eksport PNG</button>
   <div class="spacer"></div>
-  <button class="btn" id="bUndo" title="Cofnij (Ctrl+Z)">&#x21B6;</button>
-  <button class="btn" id="bRedo" title="Ponów (Ctrl+Y)">&#x21B7;</button>
+  <button class="btn" id="bUndo" data-i18n-title="tt.undo">&#x21B6;</button>
+  <button class="btn" id="bRedo" data-i18n-title="tt.redo">&#x21B7;</button>
 </div>
 
 <!-- ======= TOOL RAIL ======= -->
 <div class="rail">
-  <button class="tool on" data-tool="select" title="Zaznaczanie (V)"><svg viewBox="0 0 24 24"><path d="M6 3l12 9-6 1 3 7-3 1-3-7-4 4z"/></svg></button>
-  <button class="tool" data-tool="rect" title="Prostokąt (R)"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12"/></svg></button>
-  <button class="tool" data-tool="ellipse" title="Elipsa / koło (C)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg></button>
-  <button class="tool" data-tool="line" title="Linia (L)"><svg viewBox="0 0 24 24"><path d="M4 20L20 4"/></svg></button>
-  <button class="tool" data-tool="arrow" title="Strzałka (A)"><svg viewBox="0 0 24 24"><path d="M4 20L18 6M18 6h-6M18 6v6"/></svg></button>
-  <button class="tool" data-tool="text" title="Tekst (T)"><svg viewBox="0 0 24 24"><path d="M5 6h14M12 6v13"/></svg></button>
-  <button class="tool" data-tool="image" title="Wstaw obraz PNG/JPG (I)"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14"/><path d="M4 15l5-5 4 4 3-3 4 4"/><circle cx="9" cy="9" r="1.4"/></svg></button>
+  <button class="tool on" data-tool="select" data-i18n-title="tt.tool.select"><svg viewBox="0 0 24 24"><path d="M6 3l12 9-6 1 3 7-3 1-3-7-4 4z"/></svg></button>
+  <button class="tool" data-tool="rect" data-i18n-title="tt.tool.rect"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12"/></svg></button>
+  <button class="tool" data-tool="ellipse" data-i18n-title="tt.tool.ellipse"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg></button>
+  <button class="tool" data-tool="line" data-i18n-title="tt.tool.line"><svg viewBox="0 0 24 24"><path d="M4 20L20 4"/></svg></button>
+  <button class="tool" data-tool="arrow" data-i18n-title="tt.tool.arrow"><svg viewBox="0 0 24 24"><path d="M4 20L18 6M18 6h-6M18 6v6"/></svg></button>
+  <button class="tool" data-tool="text" data-i18n-title="tt.tool.text"><svg viewBox="0 0 24 24"><path d="M5 6h14M12 6v13"/></svg></button>
+  <button class="tool" data-tool="shapes" data-i18n-title="tt.tool.shapes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><polygon points="12,3 22,21 2,21"/></svg></button>
+  <button class="tool" data-tool="image" data-i18n-title="tt.tool.image"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14"/><path d="M4 15l5-5 4 4 3-3 4 4"/><circle cx="9" cy="9" r="1.4"/></svg></button>
+  <button class="tool" data-tool="eyedrop" data-i18n-title="tt.tool.eyedrop"><svg viewBox="0 0 24 24"><path d="M18 3a2.5 2.5 0 0 1 3 3l-8 8-4 1 1-4z"/><path d="M9 11l-4 4v4h4l4-4"/></svg></button>
 </div>
 
 <!-- ======= CANVAS ======= -->
@@ -164,50 +226,73 @@ input[type=checkbox]{accent-color:var(--acc);}
 </div>
 
 <!-- ======= SIDE PANEL ======= -->
+<div class="sideResizer" id="sideResizer" title="Przeciągnij, aby zmienić szerokość"></div>
 <div class="side">
   <div class="tabbar">
-    <button class="tab on" data-tab="props">Właściwości</button>
-    <button class="tab" data-tab="lib">Biblioteka</button>
-    <button class="tab" data-tab="vars">Warianty</button>
+    <button class="tab on" data-tab="props" data-i18n="tab.props">Właściwości</button>
+    <button class="tab" data-tab="lib" data-i18n="tab.lib">Biblioteka</button>
+    <button class="tab" data-tab="vars" data-i18n="tab.vars">Warianty</button>
+    <button class="tab" data-tab="settings" data-i18n="tab.settings">Ustawienia</button>
   </div>
   <div class="tabBody on" id="tab-props"></div>
   <div class="tabBody" id="tab-lib"></div>
   <div class="tabBody" id="tab-vars"></div>
+  <div class="tabBody" id="tab-settings"></div>
 </div>
 
 <!-- ======= STATUS ======= -->
 <div class="status">
-  <label>Format <select class="in" id="pageSel" style="width:118px">
-    <option value="a4l">A4 poziomo</option>
-    <option value="a4p">A4 pionowo</option>
+  <label><span data-i18n="status.format">Format</span> <select class="in" id="pageSel" style="width:118px">
+    <option value="a4l" data-i18n="page.a4l">A4 poziomo</option>
+    <option value="a4p" data-i18n="page.a4p">A4 pionowo</option>
     <option value="hd">1600×900</option>
-    <option value="custom">Własny</option>
-    <option value="off">∞ nieskończony</option>
+    <option value="custom" data-i18n="page.custom">Własny</option>
+    <option value="off" data-i18n="page.off">∞ nieskończony</option>
   </select></label>
   <span id="pageWH" style="display:none">
     <input class="in" type="number" id="pageW" value="1123" min="50"> ×
     <input class="in" type="number" id="pageH" value="794" min="50"> px
   </span>
   <div class="sep"></div>
-  <label><input type="checkbox" id="snapG" checked> Przyciągaj do siatki</label>
-  <label>Siatka <input class="in" type="number" id="gridSize" value="10" min="1" max="200"> px</label>
-  <label><input type="checkbox" id="snapO" checked> Przyciągaj do obiektów</label>
+  <label><input type="checkbox" id="snapG" checked> <span data-i18n="status.snapGrid">Przyciągaj do siatki</span></label>
+  <label><span data-i18n="status.grid">Siatka</span> <input class="in" type="number" id="gridSize" value="10" min="1" max="200"> px</label>
+  <label><input type="checkbox" id="snapO" checked> <span data-i18n="status.snapObj">Przyciągaj do obiektów</span></label>
   <div class="spacer"></div>
+  <button class="miniBtn" id="bZoomOut" title="Zoom -">-</button>
   <span id="zoomLbl">100%</span>
-  <span>Kółko = zoom &nbsp;|&nbsp; Spacja/środkowy = przesuwanie &nbsp;|&nbsp; 2×klik = tekst</span>
+  <button class="miniBtn" id="bZoomIn" title="Zoom +">+</button>
+  <span data-i18n="status.hint">Kółko = zoom &nbsp;|&nbsp; Spacja/środkowy = przesuwanie &nbsp;|&nbsp; 2×klik = tekst</span>
 </div>
 
 <!-- ======= MODAL: XLSX ======= -->
 <div class="modalBg" id="xlModal">
   <div class="modal">
-    <h3>Obrazy znalezione w pliku — kliknij, aby wstawić</h3>
+    <h3 data-i18n="xlsx.title">Obrazy znalezione w pliku — kliknij, aby wstawić</h3>
     <div class="modalBody" id="xlBody"></div>
-    <div class="modalFoot"><button class="btn" id="xlClose">Zamknij</button></div>
+    <div class="modalFoot"><button class="btn" id="xlClose" data-i18n="btn.close">Zamknij</button></div>
+  </div>
+</div>
+
+<!-- ======= MODAL: SHAPES ======= -->
+<div class="modalBg" id="shapeModal">
+  <div class="modal" style="width:520px">
+    <h3 data-i18n="shapes.title">Kształty dodatkowe — kliknij, aby dodać</h3>
+    <div class="modalBody" id="shapeBody"></div>
+    <div class="modalFoot"><button class="btn" id="shapeClose" data-i18n="btn.close">Zamknij</button></div>
+  </div>
+</div>
+
+<!-- ======= MODAL: TEMPLATE PICKER ======= -->
+<div class="modalBg" id="tmplModal">
+  <div class="modal">
+    <h3 data-i18n="tmpl.title">Wybierz szablon nowego projektu</h3>
+    <div class="modalBody" id="tmplBody"></div>
+    <div class="modalFoot"><button class="btn" id="tmplClose" data-i18n="btn.cancel">Anuluj</button></div>
   </div>
 </div>
 
 <div id="toast"></div>
-<input type="file" id="fOpen" accept=".json,.prodrys" hidden>
+<input type="file" id="fOpen" accept=".pdraw,.json,.prodrys" hidden>
 <input type="file" id="fXlsx" accept=".xlsx,.xlsm" hidden>
 <input type="file" id="fImg" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" hidden>
 <input type="file" id="fSettings" accept=".json" hidden>
@@ -242,8 +327,222 @@ let clip = null;                 // wewnętrzny schowek kształtów
 let spaceDown = false;
 let matrixGap = 0;          // odstęp w układzie macierzowym
 
+/* ---------- ustawienia aplikacji + szablony ---------- */
+let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, sideW: 272 };
+let templates = [];         // [{name, shapes, vars, page}]
+let imgCascade = 0;         // przesunięcie kolejnych wstawianych obrazów
+
+/* =====================================================================
+   I18N — tłumaczenia interfejsu (PL / EN / DE)
+   ===================================================================== */
+const I18N = {
+  pl: {
+    'menu.file':'Plik','menu.export':'Eksport','menu.config':'Konfig',
+    'file.new':'Nowy…','file.open':'Otwórz…','file.save':'Zapisz projekt','file.saveAs':'Zapisz jako…',
+    'file.importXlsx':'Import XLSX/XLSM','file.insertImg':'Wstaw obraz…',
+    'export.png':'Eksport PNG','export.jpg':'Eksport JPG','export.pngQuick':'Eksport PNG',
+    'config.saveTmpl':'Zapisz jako szablon…','config.save':'Zapisz konfig (plik)','config.load':'Wczytaj konfig (plik)',
+    'tt.projName':'Nazwa projektu — użyta w nazwach plików','tt.undo':'Cofnij (Ctrl+Z)','tt.redo':'Ponów (Ctrl+Y)',
+    'tt.tool.select':'Zaznaczanie (V)','tt.tool.rect':'Prostokąt (R)','tt.tool.ellipse':'Elipsa / koło (C)',
+    'tt.tool.line':'Linia (L)','tt.tool.arrow':'Strzałka (A)','tt.tool.text':'Tekst (T)',
+    'tt.tool.image':'Wstaw obraz PNG/JPG (I)','tt.tool.eyedrop':'Pipeta — pobierz kolor z ekranu (K)',
+    'tab.props':'Właściwości','tab.lib':'Biblioteka','tab.vars':'Warianty','tab.settings':'Ustawienia',
+    'status.format':'Format','status.snapGrid':'Przyciągaj do siatki','status.grid':'Siatka',
+    'status.snapObj':'Przyciągaj do obiektów',
+    'status.hint':'Kółko = zoom  |  Spacja/środkowy = przesuwanie  |  2×klik = tekst',
+    'page.a4l':'A4 poziomo','page.a4p':'A4 pionowo','page.custom':'Własny','page.off':'∞ nieskończony',
+    'xlsx.title':'Obrazy znalezione w pliku — kliknij, aby wstawić','xlsx.insertAll':'Wstaw wszystkie',
+    'btn.close':'Zamknij','btn.cancel':'Anuluj',
+    'tmpl.title':'Wybierz szablon nowego projektu','tmpl.blank':'Pusty projekt','tmpl.default':'Domyślny szablon',
+    'set.language':'Język','set.zoom':'Sterowanie zoomem','set.mxMaster':'Tryb MX Master (wolniejszy zoom)',
+    'set.mxMasterHint':'Włącz, jeśli kółko myszy przewija zbyt szybko. Wyższy dzielnik = wolniejszy zoom.',
+    'set.zoomDiv':'Dzielnik zoomu','set.panel':'Panel','set.panelWidth':'Szerokość panelu (px)',
+    'set.about':'ProdRys — edytor instrukcji produkcyjnych.',
+    'props.none':'Nic nie zaznaczono.','props.noneHint':'Narysuj kształt narzędziami po lewej, wklej zrzut (Ctrl+V) lub zaimportuj obraz z pliku XLSX.',
+    'props.selected':'Zaznaczone','props.posSize':'Pozycja i rozmiar','props.linePts':'Punkty linii',
+    'props.stroke':'Obrys','props.color':'Kolor','props.none2':'brak','props.width':'Grubość','props.style':'Styl',
+    'props.fill':'Wypełnienie','props.text':'Tekst','props.textHint':'(2×klik na kształcie, aby edytować)',
+    'props.size':'Rozmiar','props.bold':'gruby','props.arrows':'Groty strzałek','props.start':'początek','props.end':'koniec',
+    'props.rotation':'Obrót','props.rotDeg':'Kąt (°)','props.align':'Wyrównanie (min. 2 kształty)',
+    'props.gridGap':'Odstęp siatki','props.matrixFit':'Macierz + rozmiar','props.matrix':'Macierz',
+    'props.order':'Kolejność','props.top':'Na wierzch','props.up':'Wyżej','props.down':'Niżej','props.bot':'Na spód',
+    'props.group':'Grupa','props.doGroup':'Grupuj','props.ungroup':'Rozgrupuj','props.toLib':'Do biblioteki',
+    'props.dup':'Duplikuj','props.del':'Usuń',
+    'lib.hint':'Zaznacz kształty i użyj „Do biblioteki” w zakładce Właściwości, aby zapisać własną grupę. Kliknij miniaturę, aby wstawić.',
+    'lib.empty':'Biblioteka jest pusta.',
+    'vars.hint':'W tekstach kształtów wpisz {NAZWA} — np. {A}. Każdy wiersz tabeli to jeden wariant. „Generuj” tworzy ZIP z plikiem PNG dla każdego wiersza.',
+    'vars.addCol':'+ Zmienna','vars.addRow':'+ Wariant','vars.variant':'Wariant','vars.preview':'Podgląd na płótnie',
+    'vars.rawVals':'— wartości surowe {A} —','vars.gen':'Generuj wszystkie PNG (ZIP)',
+    't.saved':'Zapisano projekt: ','t.loaded':'Wczytano projekt: ','t.emptyCanvas':'Płótno jest puste',
+    't.pasteImg':'Wklejono obraz ze schowka','t.copied':'Skopiowano: ','t.grouped':'Zgrupowano','t.ungrouped':'Rozgrupowano',
+    't.libSaved':'Zapisano do biblioteki: ','t.min2':'Zaznacz min. 2 kształty','t.min3':'Rozłożenie wymaga min. 3 kształtów',
+    't.autorestore':'Przywrócono autozapis','t.tmplSaved':'Zapisano szablon: ','t.cfgSaved':'Zapisano konfigurację',
+    't.cfgLoaded':'Wczytano konfigurację','t.cfgBad':'Nieprawidłowy plik konfiguracji','t.badProj':'To nie jest plik projektu ProdRys',
+    't.badFile':'Nieprawidłowy plik projektu','t.exported':'Wyeksportowano: ','t.noEyedropper':'Pipeta niedostępna w tej przeglądarce (użyj Chrome/Edge)',
+    't.picked':'Pobrano kolor: ','t.min2mx':'Zaznacz min. 2 kształty (linie pomijane)',
+    't.badVar':'Pusta lub istniejąca nazwa zmiennej',
+    't.reading':'Odczytywanie pliku…','t.noDecomp':'Przeglądarka nie wspiera dekompresji — użyj Chrome/Edge',
+    't.noImgs':'Brak obrazów PNG/JPG w pliku','t.emfSkip':' ({n} w formacie EMF/WMF — niewspierane)',
+    't.xlsxInserted':'Wstawiono obraz z XLSX','t.importErr':'Błąd importu: ','t.imgLoadErr':'Nie udało się wczytać obrazu',
+    't.genVariants':'Generowanie wariantów…','t.noVariants':'Brak wariantów do wygenerowania','t.genDone':'Gotowe: {n} plików PNG w ZIP',
+    't.emfHint':'Pominięto {n} obrazów EMF/WMF (format wektorowy Excela — niewspierany w przeglądarce). W CATII/Excelu wklejaj zrzuty jako bitmapę.',
+    'p.libName':'Nazwa grupy w bibliotece:','p.varName':'Nazwa zmiennej (bez klamr), np. A lub DL:','p.tmplName':'Nazwa szablonu:',
+    'p.saveAs':'Nazwa projektu:','c.delLib':'Usunąć „{n}” z biblioteki?','c.delTmpl':'Usunąć szablon „{n}”?',
+    'lib.default1':'Linia wymiarowa','lib.default2':'Balon nr części',
+    'props.font':'Czcionka','props.locked':'zablokowane','props.content':'Treść',
+    't.locked':'Kształt zablokowany — odblokuj we Właściwościach','t.added':'Dodano: ',
+    'tt.tool.shapes':'Kształty dodatkowe (S)','shapes.title':'Kształty dodatkowe — kliknij, aby dodać',
+    'xl.selectAll':'Zaznacz wszystko','xl.importSel':'Importuj zaznaczone','xl.image':'Obraz','xl.shape':'Kształt',
+    'xl.nothing':'Nic nie zaznaczono','xl.fail':'Import nieudany','xl.done':'Zaimportowano: {i} obrazów + {s} kształtów',
+    'xl.count':'Import XLSX — {i} obrazów + {s} kształtów','xl.none':'Brak obsługiwanych obrazów lub kształtów w pliku',
+    'xl.emf':' ({n} EMF/WMF pominięto)','xl.fallback':'Zastępczo: {n} nieobsługiwanych kształtów Office jako obrazy.',
+  },
+  en: {
+    'menu.file':'File','menu.export':'Export','menu.config':'Config',
+    'file.new':'New…','file.open':'Open…','file.save':'Save project','file.saveAs':'Save as…',
+    'file.importXlsx':'Import XLSX/XLSM','file.insertImg':'Insert image…',
+    'export.png':'Export PNG','export.jpg':'Export JPG','export.pngQuick':'Export PNG',
+    'config.saveTmpl':'Save as template…','config.save':'Save config (file)','config.load':'Load config (file)',
+    'tt.projName':'Project name — used in file names','tt.undo':'Undo (Ctrl+Z)','tt.redo':'Redo (Ctrl+Y)',
+    'tt.tool.select':'Select (V)','tt.tool.rect':'Rectangle (R)','tt.tool.ellipse':'Ellipse / circle (C)',
+    'tt.tool.line':'Line (L)','tt.tool.arrow':'Arrow (A)','tt.tool.text':'Text (T)',
+    'tt.tool.image':'Insert PNG/JPG image (I)','tt.tool.eyedrop':'Eyedropper — pick a color from screen (K)',
+    'tab.props':'Properties','tab.lib':'Library','tab.vars':'Variants','tab.settings':'Settings',
+    'status.format':'Format','status.snapGrid':'Snap to grid','status.grid':'Grid',
+    'status.snapObj':'Snap to objects',
+    'status.hint':'Wheel = zoom  |  Space/middle = pan  |  double-click = text',
+    'page.a4l':'A4 landscape','page.a4p':'A4 portrait','page.custom':'Custom','page.off':'∞ infinite',
+    'xlsx.title':'Images found in file — click to insert','xlsx.insertAll':'Insert all',
+    'btn.close':'Close','btn.cancel':'Cancel',
+    'tmpl.title':'Choose a template for the new project','tmpl.blank':'Blank project','tmpl.default':'Default template',
+    'set.language':'Language','set.zoom':'Zoom control','set.mxMaster':'MX Master mode (slower zoom)',
+    'set.mxMasterHint':'Enable if the mouse wheel zooms too fast. Higher divider = slower zoom.',
+    'set.zoomDiv':'Zoom divider','set.panel':'Panel','set.panelWidth':'Panel width (px)',
+    'set.about':'ProdRys — production-instruction editor.',
+    'props.none':'Nothing selected.','props.noneHint':'Draw a shape with the tools on the left, paste a screenshot (Ctrl+V) or import an image from an XLSX file.',
+    'props.selected':'Selected','props.posSize':'Position & size','props.linePts':'Line points',
+    'props.stroke':'Stroke','props.color':'Color','props.none2':'none','props.width':'Width','props.style':'Style',
+    'props.fill':'Fill','props.text':'Text','props.textHint':'(double-click the shape to edit)',
+    'props.size':'Size','props.bold':'bold','props.arrows':'Arrowheads','props.start':'start','props.end':'end',
+    'props.rotation':'Rotation','props.rotDeg':'Angle (°)','props.align':'Align (min. 2 shapes)',
+    'props.gridGap':'Grid gap','props.matrixFit':'Matrix + resize','props.matrix':'Matrix',
+    'props.order':'Order','props.top':'To front','props.up':'Up','props.down':'Down','props.bot':'To back',
+    'props.group':'Group','props.doGroup':'Group','props.ungroup':'Ungroup','props.toLib':'To library',
+    'props.dup':'Duplicate','props.del':'Delete',
+    'lib.hint':'Select shapes and use “To library” in the Properties tab to save your own group. Click a thumbnail to insert.',
+    'lib.empty':'The library is empty.',
+    'vars.hint':'In shape texts type {NAME} — e.g. {A}. Each table row is one variant. “Generate” builds a ZIP with a PNG for each row.',
+    'vars.addCol':'+ Variable','vars.addRow':'+ Variant','vars.variant':'Variant','vars.preview':'Canvas preview',
+    'vars.rawVals':'— raw values {A} —','vars.gen':'Generate all PNG (ZIP)',
+    't.saved':'Project saved: ','t.loaded':'Project loaded: ','t.emptyCanvas':'Canvas is empty',
+    't.pasteImg':'Image pasted from clipboard','t.copied':'Copied: ','t.grouped':'Grouped','t.ungrouped':'Ungrouped',
+    't.libSaved':'Saved to library: ','t.min2':'Select at least 2 shapes','t.min3':'Distribution needs at least 3 shapes',
+    't.autorestore':'Autosave restored','t.tmplSaved':'Template saved: ','t.cfgSaved':'Configuration saved',
+    't.cfgLoaded':'Configuration loaded','t.cfgBad':'Invalid configuration file','t.badProj':'This is not a ProdRys project file',
+    't.badFile':'Invalid project file','t.exported':'Exported: ','t.noEyedropper':'Eyedropper unavailable in this browser (use Chrome/Edge)',
+    't.picked':'Color picked: ','t.min2mx':'Select at least 2 shapes (lines ignored)',
+    't.badVar':'Empty or existing variable name',
+    't.reading':'Reading file…','t.noDecomp':'Browser does not support decompression — use Chrome/Edge',
+    't.noImgs':'No PNG/JPG images in the file','t.emfSkip':' ({n} in EMF/WMF format — unsupported)',
+    't.xlsxInserted':'Image inserted from XLSX','t.importErr':'Import error: ','t.imgLoadErr':'Could not load image',
+    't.genVariants':'Generating variants…','t.noVariants':'No variants to generate','t.genDone':'Done: {n} PNG files in ZIP',
+    't.emfHint':'Skipped {n} EMF/WMF images (Excel vector format — unsupported in the browser). In CATIA/Excel paste screenshots as bitmaps.',
+    'p.libName':'Library group name:','p.varName':'Variable name (no braces), e.g. A or DL:','p.tmplName':'Template name:',
+    'p.saveAs':'Project name:','c.delLib':'Remove “{n}” from the library?','c.delTmpl':'Delete template “{n}”?',
+    'lib.default1':'Dimension line','lib.default2':'Part-number balloon',
+    'props.font':'Font','props.locked':'locked','props.content':'Content',
+    't.locked':'Shape locked — unlock it in Properties','t.added':'Added: ',
+    'tt.tool.shapes':'More shapes (S)','shapes.title':'More shapes — click to add',
+    'xl.selectAll':'Select all','xl.importSel':'Import selected','xl.image':'Image','xl.shape':'Shape',
+    'xl.nothing':'Nothing selected','xl.fail':'Import failed','xl.done':'Imported: {i} images + {s} shapes',
+    'xl.count':'XLSX Import — {i} images + {s} shapes','xl.none':'No supported images or shapes found in file',
+    'xl.emf':' ({n} EMF/WMF skipped)','xl.fallback':'Fallback: {n} unsupported Office shapes imported as images.',
+  },
+  de: {
+    'menu.file':'Datei','menu.export':'Export','menu.config':'Konfig',
+    'file.new':'Neu…','file.open':'Öffnen…','file.save':'Projekt speichern','file.saveAs':'Speichern unter…',
+    'file.importXlsx':'XLSX/XLSM importieren','file.insertImg':'Bild einfügen…',
+    'export.png':'PNG exportieren','export.jpg':'JPG exportieren','export.pngQuick':'PNG exportieren',
+    'config.saveTmpl':'Als Vorlage speichern…','config.save':'Konfig speichern (Datei)','config.load':'Konfig laden (Datei)',
+    'tt.projName':'Projektname — in Dateinamen verwendet','tt.undo':'Rückgängig (Strg+Z)','tt.redo':'Wiederholen (Strg+Y)',
+    'tt.tool.select':'Auswahl (V)','tt.tool.rect':'Rechteck (R)','tt.tool.ellipse':'Ellipse / Kreis (C)',
+    'tt.tool.line':'Linie (L)','tt.tool.arrow':'Pfeil (A)','tt.tool.text':'Text (T)',
+    'tt.tool.image':'PNG/JPG-Bild einfügen (I)','tt.tool.eyedrop':'Pipette — Farbe vom Bildschirm wählen (K)',
+    'tab.props':'Eigenschaften','tab.lib':'Bibliothek','tab.vars':'Varianten','tab.settings':'Einstellungen',
+    'status.format':'Format','status.snapGrid':'Am Raster ausrichten','status.grid':'Raster',
+    'status.snapObj':'An Objekten ausrichten',
+    'status.hint':'Rad = Zoom  |  Leertaste/Mitte = verschieben  |  Doppelklick = Text',
+    'page.a4l':'A4 quer','page.a4p':'A4 hoch','page.custom':'Eigen','page.off':'∞ unendlich',
+    'xlsx.title':'Bilder in der Datei — zum Einfügen klicken','xlsx.insertAll':'Alle einfügen',
+    'btn.close':'Schließen','btn.cancel':'Abbrechen',
+    'tmpl.title':'Vorlage für das neue Projekt wählen','tmpl.blank':'Leeres Projekt','tmpl.default':'Standardvorlage',
+    'set.language':'Sprache','set.zoom':'Zoom-Steuerung','set.mxMaster':'MX-Master-Modus (langsamerer Zoom)',
+    'set.mxMasterHint':'Aktivieren, wenn das Mausrad zu schnell zoomt. Höherer Teiler = langsamerer Zoom.',
+    'set.zoomDiv':'Zoom-Teiler','set.panel':'Panel','set.panelWidth':'Panelbreite (px)',
+    'set.about':'ProdRys — Editor für Produktionsanweisungen.',
+    'props.none':'Nichts ausgewählt.','props.noneHint':'Zeichnen Sie eine Form mit den Werkzeugen links, fügen Sie einen Screenshot ein (Strg+V) oder importieren Sie ein Bild aus einer XLSX-Datei.',
+    'props.selected':'Ausgewählt','props.posSize':'Position & Größe','props.linePts':'Linienpunkte',
+    'props.stroke':'Kontur','props.color':'Farbe','props.none2':'keine','props.width':'Stärke','props.style':'Stil',
+    'props.fill':'Füllung','props.text':'Text','props.textHint':'(Form doppelklicken zum Bearbeiten)',
+    'props.size':'Größe','props.bold':'fett','props.arrows':'Pfeilspitzen','props.start':'Anfang','props.end':'Ende',
+    'props.rotation':'Drehung','props.rotDeg':'Winkel (°)','props.align':'Ausrichten (min. 2 Formen)',
+    'props.gridGap':'Rasterabstand','props.matrixFit':'Matrix + Größe','props.matrix':'Matrix',
+    'props.order':'Reihenfolge','props.top':'Nach vorn','props.up':'Höher','props.down':'Tiefer','props.bot':'Nach hinten',
+    'props.group':'Gruppe','props.doGroup':'Gruppieren','props.ungroup':'Gruppierung aufheben','props.toLib':'In Bibliothek',
+    'props.dup':'Duplizieren','props.del':'Löschen',
+    'lib.hint':'Formen auswählen und „In Bibliothek“ im Reiter Eigenschaften verwenden, um eine eigene Gruppe zu speichern. Miniatur anklicken zum Einfügen.',
+    'lib.empty':'Die Bibliothek ist leer.',
+    'vars.hint':'In Formtexten {NAME} eingeben — z. B. {A}. Jede Tabellenzeile ist eine Variante. „Generieren“ erstellt ein ZIP mit einem PNG pro Zeile.',
+    'vars.addCol':'+ Variable','vars.addRow':'+ Variante','vars.variant':'Variante','vars.preview':'Vorschau auf Zeichenfläche',
+    'vars.rawVals':'— Rohwerte {A} —','vars.gen':'Alle PNG generieren (ZIP)',
+    't.saved':'Projekt gespeichert: ','t.loaded':'Projekt geladen: ','t.emptyCanvas':'Zeichenfläche ist leer',
+    't.pasteImg':'Bild aus Zwischenablage eingefügt','t.copied':'Kopiert: ','t.grouped':'Gruppiert','t.ungrouped':'Gruppierung aufgehoben',
+    't.libSaved':'In Bibliothek gespeichert: ','t.min2':'Mindestens 2 Formen auswählen','t.min3':'Verteilung braucht mindestens 3 Formen',
+    't.autorestore':'Autospeicherung wiederhergestellt','t.tmplSaved':'Vorlage gespeichert: ','t.cfgSaved':'Konfiguration gespeichert',
+    't.cfgLoaded':'Konfiguration geladen','t.cfgBad':'Ungültige Konfigurationsdatei','t.badProj':'Dies ist keine ProdRys-Projektdatei',
+    't.badFile':'Ungültige Projektdatei','t.exported':'Exportiert: ','t.noEyedropper':'Pipette in diesem Browser nicht verfügbar (Chrome/Edge verwenden)',
+    't.picked':'Farbe gewählt: ','t.min2mx':'Mindestens 2 Formen auswählen (Linien ignoriert)',
+    't.badVar':'Leerer oder vorhandener Variablenname',
+    't.reading':'Datei wird gelesen…','t.noDecomp':'Browser unterstützt keine Dekompression — Chrome/Edge verwenden',
+    't.noImgs':'Keine PNG/JPG-Bilder in der Datei','t.emfSkip':' ({n} im EMF/WMF-Format — nicht unterstützt)',
+    't.xlsxInserted':'Bild aus XLSX eingefügt','t.importErr':'Importfehler: ','t.imgLoadErr':'Bild konnte nicht geladen werden',
+    't.genVariants':'Varianten werden generiert…','t.noVariants':'Keine Varianten zu generieren','t.genDone':'Fertig: {n} PNG-Dateien im ZIP',
+    't.emfHint':'{n} EMF/WMF-Bilder übersprungen (Excel-Vektorformat — im Browser nicht unterstützt). In CATIA/Excel Screenshots als Bitmap einfügen.',
+    'p.libName':'Name der Bibliotheksgruppe:','p.varName':'Variablenname (ohne Klammern), z. B. A oder DL:','p.tmplName':'Vorlagenname:',
+    'p.saveAs':'Projektname:','c.delLib':'„{n}“ aus der Bibliothek entfernen?','c.delTmpl':'Vorlage „{n}“ löschen?',
+    'lib.default1':'Maßlinie','lib.default2':'Teilenummer-Ballon',
+    'props.font':'Schriftart','props.locked':'gesperrt','props.content':'Inhalt',
+    't.locked':'Form gesperrt — in Eigenschaften entsperren','t.added':'Hinzugefügt: ',
+    'tt.tool.shapes':'Weitere Formen (S)','shapes.title':'Weitere Formen — zum Hinzufügen klicken',
+    'xl.selectAll':'Alle auswählen','xl.importSel':'Ausgewählte importieren','xl.image':'Bild','xl.shape':'Form',
+    'xl.nothing':'Nichts ausgewählt','xl.fail':'Import fehlgeschlagen','xl.done':'Importiert: {i} Bilder + {s} Formen',
+    'xl.count':'XLSX-Import — {i} Bilder + {s} Formen','xl.none':'Keine unterstützten Bilder oder Formen in der Datei',
+    'xl.emf':' ({n} EMF/WMF übersprungen)','xl.fallback':'Ersatz: {n} nicht unterstützte Office-Formen als Bilder importiert.',
+  }
+};
+function t(key, vars) {
+  const dict = I18N[settings.lang] || I18N.pl;
+  let s = dict[key] != null ? dict[key] : (I18N.pl[key] != null ? I18N.pl[key] : key);
+  if (vars) for (const k in vars) s = s.replace('{' + k + '}', vars[k]);
+  return s;
+}
+function applyI18n() {
+  $$('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  $$('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+  document.documentElement.lang = settings.lang;
+}
+
 let uidN = 1;
 const uid = () => 'S' + (uidN++) + '_' + Date.now().toString(36);
+const isProjectApp = app => app === 'prodrys' || app === 'proddraw';
+/* uzupełnij brakujące pola (locked, font) na wczytanych kształtach */
+function normalizeShape(s) {
+  if (!s || typeof s !== 'object') return s;
+  const n = { ...s };
+  if (n.locked === undefined) n.locked = false;
+  if (['rect', 'ellipse', 'text', 'poly', 'roundRect'].includes(n.type) && !n.font) n.font = 'Calibri';
+  return n;
+}
 
 /* ---------- undo / redo ---------- */
 const undoStack = [], redoStack = [];
@@ -272,6 +571,12 @@ function toast(msg) {
   clearTimeout(t._tm); t._tm = setTimeout(() => t.classList.remove('on'), 2600);
 }
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+/* obrót punktu (px,py) wokół (cx,cy) o deg stopni */
+function rotatePt(px, py, cx, cy, deg) {
+  const a = deg * Math.PI / 180, cos = Math.cos(a), sin = Math.sin(a);
+  const dx = px - cx, dy = py - cy;
+  return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos };
+}
 const escXml = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
   .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const sanitizeFile = s => (s || 'projekt').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'projekt';
@@ -380,6 +685,304 @@ async function readZipMedia(buf) { // wyciąga xl/media/* z xlsx
   }
   return out;
 }
+/* czytanie wszystkich wpisów ZIP (do importu kształtów z XLSM) */
+async function readZipAll(buf) {
+  const u8 = new Uint8Array(buf), dv = new DataView(buf);
+  let eocd = -1;
+  for (let i = u8.length - 22; i >= Math.max(0, u8.length - 70000); i--)
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error('Invalid ZIP/XLSX');
+  const count = dv.getUint16(eocd + 10, true), cdOff = dv.getUint32(eocd + 16, true);
+  const td = new TextDecoder(); const out = []; let p = cdOff;
+  for (let n = 0; n < count; n++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+    const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true);
+    const lo = dv.getUint32(p + 42, true);
+    const name = td.decode(u8.subarray(p + 46, p + 46 + nl));
+    const lnl = dv.getUint16(lo + 26, true), lel = dv.getUint16(lo + 28, true);
+    const start = lo + 30 + lnl + lel;
+    const comp = u8.slice(start, start + csize);
+    let data = null;
+    try {
+      if (method === 0) data = comp;
+      else if (method === 8) data = await inflateRaw(comp);
+    } catch (e) {}
+    if (data) out.push({ name, data });
+    p += 46 + nl + el + cl;
+  }
+  return out;
+}
+function parseSheetDims(xml) {
+  const DEFAULT_COL = 64, DEFAULT_ROW = 20;
+  const colWidths = new Array(1024).fill(DEFAULT_COL);
+  const rowHeights = new Array(65536).fill(DEFAULT_ROW);
+  for (const m of xml.matchAll(/<col\s[^>]+>/g)) {
+    const s = m[0];
+    const minM = s.match(/\bmin="(\d+)"/), maxM = s.match(/\bmax="(\d+)"/);
+    const wM = s.match(/\bwidth="([\d.]+)"/);
+    if (minM && maxM && wM) {
+      const px = Math.max(4, Math.round(parseFloat(wM[1]) * 7 + 5));
+      for (let c = +minM[1] - 1; c <= +maxM[1] - 1 && c < 1024; c++) colWidths[c] = px;
+    }
+  }
+  for (const m of xml.matchAll(/<row\s[^>]+>/g)) {
+    const s = m[0];
+    const rM = s.match(/\br="(\d+)"/), htM = s.match(/\bht="([\d.]+)"/);
+    if (rM && htM) rowHeights[+rM[1] - 1] = Math.max(4, Math.round(parseFloat(htM[1]) * 96 / 72));
+  }
+  return { colWidths, rowHeights };
+}
+function cellPx(col, colOff, row, rowOff, dims) {
+  const EPX = 9525;
+  let x = colOff / EPX, y = rowOff / EPX;
+  for (let c = 0; c < col && c < dims.colWidths.length; c++) x += dims.colWidths[c];
+  for (let r = 0; r < row && r < dims.rowHeights.length; r++) y += dims.rowHeights[r];
+  return { x, y };
+}
+function xlColor(xml) {
+  const m = xml.match(/<a:srgbClr\s+val="([0-9a-fA-F]{6})"/);
+  return m ? '#' + m[1] : null;
+}
+function parseNodeXfrm(xml) {
+  const xfrm = xml.match(/<a:xfrm[^>]*>([\s\S]*?)<\/a:xfrm>/)?.[1];
+  if (!xfrm) return null;
+  const off = xfrm.match(/<a:off\s+x="(-?\d+)"\s+y="(-?\d+)"/);
+  const ext = xfrm.match(/<a:ext\s+cx="(-?\d+)"\s+cy="(-?\d+)"/);
+  const chOff = xfrm.match(/<a:chOff\s+x="(-?\d+)"\s+y="(-?\d+)"/);
+  const chExt = xfrm.match(/<a:chExt\s+cx="(-?\d+)"\s+cy="(-?\d+)"/);
+  return {
+    offX: off ? +off[1] : 0, offY: off ? +off[2] : 0,
+    extX: ext ? +ext[1] : 0, extY: ext ? +ext[2] : 0,
+    chOffX: chOff ? +chOff[1] : 0, chOffY: chOff ? +chOff[2] : 0,
+    chExtX: chExt ? +chExt[1] : 0, chExtY: chExt ? +chExt[2] : 0
+  };
+}
+function parseShapeNode(nodeXml, box) {
+  const prstM = nodeXml.match(/<a:prstGeom\s+prst="([^"]+)"/);
+  const prst = prstM ? prstM[1] : 'rect';
+  let fill = '#ffffff', noFill = false;
+  const spFillM = nodeXml.match(/<a:solidFill>([\s\S]*?)<\/a:solidFill>/);
+  if (/<a:noFill/.test(nodeXml.match(/<a:spPr[^>]*>([\s\S]*?)<\/a:spPr>/)?.[1] || '')) {
+    noFill = true; fill = 'none';
+  } else if (spFillM) {
+    const c = xlColor(spFillM[1]); if (c) fill = c;
+  }
+  let stroke = '#111827', noStroke = false, sw = 1.5;
+  const lnM = nodeXml.match(/<a:ln(?:\s[^>]*)?>[\s\S]*?<\/a:ln>/);
+  if (lnM) {
+    const lnStr = lnM[0];
+    if (/<a:noFill/.test(lnStr)) noStroke = true;
+    const wm = lnStr.match(/\bw="(\d+)"/);
+    if (wm) sw = Math.max(0.5, Math.round(+wm[1] / 12700 * 10) / 10);
+    const lc = xlColor(lnStr); if (lc) stroke = lc;
+  } else noStroke = true;
+  let text = '', fs = 14, tc = '#111827', bold = false, font = 'Calibri';
+  const txM = nodeXml.match(/<xdr:txBody>([\s\S]*?)<\/xdr:txBody>/);
+  if (txM) {
+    const parts = [];
+    for (const tm of txM[1].matchAll(/<a:t>([^<]*)<\/a:t>/g)) parts.push(tm[1]);
+    text = parts.join('');
+    const fontM = txM[1].match(/typeface="([^"]+)"/);
+    if (fontM && fontM[1]) font = fontM[1];
+    const rPrM = txM[1].match(/<a:rPr\s([^>]+)/);
+    if (rPrM) {
+      const szM = rPrM[1].match(/\bsz="(\d+)"/);
+      if (szM) fs = Math.max(6, Math.round(+szM[1] / 100));
+      bold = /\bb="1"/.test(rPrM[1]);
+      const tcM = txM[1].match(/<a:rPr[^>]*>([\s\S]*?)<\/a:rPr>/);
+      if (tcM) { const tcc = xlColor(tcM[1]); if (tcc) tc = tcc; }
+    }
+  }
+  const polyPrests = {
+    ellipse: null, triangle: 'triangle', rtTriangle: 'rtTriangle', diamond: 'diamond',
+    pentagon: 'pentagon', hexagon: 'hexagon', heptagon: 'heptagon', octagon: 'octagon',
+    star4: 'star4', star5: 'star5', star6: 'star6', plus: 'cross', irregularSeal1: 'star5',
+    irregularSeal2: 'star6', rightArrow: 'rightArrow', leftArrow: 'leftArrow',
+    parallelogram: 'parallelogram', trapezoid: 'trapezoid', chevron: 'chevron', homePlate: 'chevron'
+  };
+  const knownPrst = new Set(['rect', 'roundRect', 'ellipse', ...Object.keys(polyPrests)]);
+  const s = {
+    id: uid(), type: 'rect', x: box.x, y: box.y, w: box.w, h: box.h,
+    fill, noFill, stroke, noStroke, sw, dash: 'solid', text, fs, tc, bold, font, locked: false
+  };
+  if (prst === 'ellipse') s.type = 'ellipse';
+  else if (prst === 'roundRect') { s.type = 'roundRect'; s.rx = 8; }
+  else if (polyPrests[prst]) { s.type = 'poly'; s.preset = polyPrests[prst]; }
+  const rid = nodeXml.match(/<a:blip[^>]*r:embed="([^"]+)"/)?.[1] || null;
+  s._unsupported = !knownPrst.has(prst);
+  s._embedRid = rid;
+  return s;
+}
+function parseConnectorNode(nodeXml, box) {
+  let stroke = '#111827', sw = 1.5;
+  const lnM = nodeXml.match(/<a:ln(?:\s[^>]*)?>[\s\S]*?<\/a:ln>/);
+  if (lnM) {
+    const wm = lnM[0].match(/\bw="(\d+)"/);
+    if (wm) sw = Math.max(0.5, Math.round(+wm[1] / 12700 * 10) / 10);
+    const lc = xlColor(lnM[0]); if (lc) stroke = lc;
+  }
+  const flipH = /<a:xfrm[^>]*\bflipH="1"/.test(nodeXml);
+  const flipV = /<a:xfrm[^>]*\bflipV="1"/.test(nodeXml);
+  const ae = /<a:tailEnd[^>]*(?:type="arrow"|type="triangle")/.test(nodeXml) ||
+             /<a:headEnd[^>]*(?:type="arrow"|type="triangle")/.test(nodeXml);
+  return {
+    id: uid(), type: 'line',
+    x1: flipH ? box.x + box.w : box.x, y1: flipV ? box.y + box.h : box.y,
+    x2: flipH ? box.x : box.x + box.w, y2: flipV ? box.y : box.y + box.h,
+    stroke, sw, dash: 'solid', as: false, ae, locked: false
+  };
+}
+function parseGroupedShapes(aXml, anchorBox, relMap = {}, mediaMap = {}) {
+  const out = [];
+  const pictures = [];
+  let unsupportedFallbacks = 0;
+  const groupId = 'G' + Date.now().toString(36) + '_' + uidN;
+  const grpXml = aXml.match(/<xdr:grpSp[\s>][\s\S]*?<\/xdr:grpSp>/)?.[0];
+  if (!grpXml) return { shapes: out, pictures, unsupportedFallbacks };
+  const gx = parseNodeXfrm(grpXml);
+  const chW = gx?.chExtX || gx?.extX || 1;
+  const chH = gx?.chExtY || gx?.extY || 1;
+  const chOX = gx?.chOffX || 0;
+  const chOY = gx?.chOffY || 0;
+  const mapBox = (xf) => {
+    const lx = xf?.offX || 0, ly = xf?.offY || 0, lw = xf?.extX || chW, lh = xf?.extY || chH;
+    return {
+      x: Math.round(anchorBox.x + ((lx - chOX) / chW) * anchorBox.w),
+      y: Math.round(anchorBox.y + ((ly - chOY) / chH) * anchorBox.h),
+      w: Math.max(2, Math.round((lw / chW) * anchorBox.w)),
+      h: Math.max(2, Math.round((lh / chH) * anchorBox.h))
+    };
+  };
+  for (const sm of grpXml.matchAll(/<xdr:sp[\s>][\s\S]*?<\/xdr:sp>/g)) {
+    const spXml = sm[0];
+    const box = mapBox(parseNodeXfrm(spXml));
+    const s = parseShapeNode(spXml, box);
+    if (s._unsupported && s._embedRid && relMap[s._embedRid] && mediaMap[relMap[s._embedRid]]) {
+      pictures.push({ ...box, ...mediaMap[relMap[s._embedRid]], name: relMap[s._embedRid].replace(/^xl\/media\//i, '') });
+      unsupportedFallbacks++;
+      continue;
+    }
+    delete s._unsupported; delete s._embedRid;
+    s.g = groupId;
+    out.push(s);
+  }
+  for (const cm of grpXml.matchAll(/<xdr:cxnSp[\s>][\s\S]*?<\/xdr:cxnSp>/g)) {
+    const box = mapBox(parseNodeXfrm(cm[0]));
+    const s = parseConnectorNode(cm[0], box);
+    s.g = groupId;
+    out.push(s);
+  }
+  for (const pm of grpXml.matchAll(/<xdr:pic[\s>][\s\S]*?<\/xdr:pic>/g)) {
+    const pXml = pm[0];
+    const box = mapBox(parseNodeXfrm(pXml));
+    const rid = pXml.match(/<a:blip[^>]*r:embed="([^"]+)"/)?.[1];
+    const mediaPath = rid ? relMap[rid] : null;
+    if (mediaPath && mediaMap[mediaPath]) pictures.push({ ...box, ...mediaMap[mediaPath], name: mediaPath.replace(/^xl\/media\//i, '') });
+  }
+  return { shapes: out, pictures, unsupportedFallbacks };
+}
+function parseDrawingShapes(xml, dims, relMap = {}, mediaMap = {}) {
+  const shapes = [];
+  const pictures = [];
+  let unsupportedFallbacks = 0;
+  const EPX = 9525;
+  const anchorRe = /<xdr:(absoluteAnchor|twoCellAnchor|oneCellAnchor)>([\s\S]*?)<\/xdr:\1>/g;
+  let am;
+  while ((am = anchorRe.exec(xml)) !== null) {
+    const aType = am[1], aXml = am[2];
+    let x, y, w, h;
+    try {
+      if (aType === 'absoluteAnchor') {
+        const pm = aXml.match(/<xdr:pos\s+x="(\d+)"\s+y="(\d+)"/);
+        const em = aXml.match(/<xdr:ext\s+cx="(\d+)"\s+cy="(\d+)"/);
+        if (!pm || !em) continue;
+        x = +pm[1] / EPX; y = +pm[2] / EPX; w = +em[1] / EPX; h = +em[2] / EPX;
+      } else if (aType === 'twoCellAnchor') {
+        const fm = aXml.match(/<xdr:from>([\s\S]*?)<\/xdr:from>/);
+        const tm = aXml.match(/<xdr:to>([\s\S]*?)<\/xdr:to>/);
+        if (!fm || !tm) continue;
+        const fi = fm[1], ti = tm[1], g = s => parseInt(s || '0');
+        const fc = g(fi.match(/<xdr:col>(\d+)/)?.[1]), fco = g(fi.match(/<xdr:colOff>(\d+)/)?.[1]);
+        const fr = g(fi.match(/<xdr:row>(\d+)/)?.[1]), fro = g(fi.match(/<xdr:rowOff>(\d+)/)?.[1]);
+        const tc = g(ti.match(/<xdr:col>(\d+)/)?.[1]), tco = g(ti.match(/<xdr:colOff>(\d+)/)?.[1]);
+        const tr = g(ti.match(/<xdr:row>(\d+)/)?.[1]), tro = g(ti.match(/<xdr:rowOff>(\d+)/)?.[1]);
+        const fp = cellPx(fc, fco, fr, fro, dims), tp = cellPx(tc, tco, tr, tro, dims);
+        x = fp.x; y = fp.y; w = tp.x - fp.x; h = tp.y - fp.y;
+      } else {
+        const fm = aXml.match(/<xdr:from>([\s\S]*?)<\/xdr:from>/);
+        const em = aXml.match(/<xdr:ext\s+cx="(\d+)"\s+cy="(\d+)"/);
+        if (!fm || !em) continue;
+        const fi = fm[1], g = s => parseInt(s || '0');
+        const fc = g(fi.match(/<xdr:col>(\d+)/)?.[1]), fco = g(fi.match(/<xdr:colOff>(\d+)/)?.[1]);
+        const fr = g(fi.match(/<xdr:row>(\d+)/)?.[1]), fro = g(fi.match(/<xdr:rowOff>(\d+)/)?.[1]);
+        const fp = cellPx(fc, fco, fr, fro, dims);
+        x = fp.x; y = fp.y; w = +em[1] / EPX; h = +em[2] / EPX;
+      }
+    } catch (e) { continue; }
+    if (!w || !h || w < 2 || h < 2) continue;
+    const box = { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) };
+    if (/<xdr:grpSp[\s>]/.test(aXml)) {
+      const g = parseGroupedShapes(aXml, box, relMap, mediaMap);
+      if (g.shapes.length || g.pictures.length) {
+        shapes.push(...g.shapes);
+        pictures.push(...g.pictures);
+        unsupportedFallbacks += g.unsupportedFallbacks;
+        continue;
+      }
+    }
+    if (/<xdr:sp[\s>]/.test(aXml)) {
+      const spXml = aXml.match(/<xdr:sp[\s>][\s\S]*?<\/xdr:sp>/)?.[0];
+      if (spXml) {
+        const s = parseShapeNode(spXml, box);
+        if (s._unsupported && s._embedRid && relMap[s._embedRid] && mediaMap[relMap[s._embedRid]]) {
+          pictures.push({ ...box, ...mediaMap[relMap[s._embedRid]], name: relMap[s._embedRid].replace(/^xl\/media\//i, '') });
+          unsupportedFallbacks++;
+        } else {
+          delete s._unsupported; delete s._embedRid;
+          shapes.push(s);
+        }
+      }
+    } else if (/<xdr:cxnSp[\s>]/.test(aXml)) {
+      const cxnXml = aXml.match(/<xdr:cxnSp[\s>][\s\S]*?<\/xdr:cxnSp>/)?.[0];
+      if (cxnXml) shapes.push(parseConnectorNode(cxnXml, box));
+    } else if (/<xdr:pic[\s>]/.test(aXml)) {
+      const picXml = aXml.match(/<xdr:pic[\s>][\s\S]*?<\/xdr:pic>/)?.[0];
+      if (picXml) {
+        const rid = picXml.match(/<a:blip[^>]*r:embed="([^"]+)"/)?.[1];
+        const mediaPath = rid ? relMap[rid] : null;
+        if (mediaPath && mediaMap[mediaPath]) pictures.push({ ...box, ...mediaMap[mediaPath], name: mediaPath.replace(/^xl\/media\//i, '') });
+      }
+    }
+  }
+  return { shapes, pictures, unsupportedFallbacks };
+}
+function resolveRelTarget(basePath, target) {
+  if (!target) return null;
+  if (/^\/xl\//i.test(target)) return target.replace(/^\//, '');
+  if (/^xl\//i.test(target)) return target;
+  const baseParts = basePath.split('/'); baseParts.pop();
+  for (const seg of target.split('/')) {
+    if (!seg || seg === '.') continue;
+    if (seg === '..') baseParts.pop();
+    else baseParts.push(seg);
+  }
+  return baseParts.join('/');
+}
+function parseDrawingRels(relXml, drawingPath) {
+  const map = {};
+  for (const m of relXml.matchAll(/<Relationship\b[^>]*\bId="([^"]+)"[^>]*\bTarget="([^"]+)"/g))
+    map[m[1]] = resolveRelTarget(drawingPath, m[2]);
+  return map;
+}
+function mediaMimeFromName(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  if (ext === 'png') return 'image/png';
+  if (ext === 'gif') return 'image/gif';
+  if (ext === 'bmp') return 'image/bmp';
+  if (ext === 'webp') return 'image/webp';
+  return 'image/jpeg';
+}
 function downloadBlob(blob, name) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = name;
@@ -405,14 +1008,56 @@ function subst(text, vals) {
   return String(text ?? '').replace(/\{([^}]+)\}/g, (m, k) =>
     (k in vals) ? vals[k] : m);
 }
-function textBlockSVG(cx, cy, text, fs, color, bold, vals) {
+function textBlockSVG(cx, cy, text, fs, color, bold, vals, font = 'Calibri') {
   const lines = subst(text, vals).split('\n');
   if (!lines.join('')) return '';
   const lh = fs * 1.25;
-  const y0 = cy - (lines.length - 1) * lh / 2;
+  /* wyrównanie linii bazowej: środek wizualny w środku geometrycznym */
+  const y0 = cy - (lines.length - 1) * lh / 2 + fs * 0.35;
   const ts = lines.map((l, i) =>
     `<tspan x="${cx}" y="${y0 + i * lh}">${escXml(l)}</tspan>`).join('');
-  return `<text text-anchor="middle" dominant-baseline="middle" font-family="Arial,Helvetica,sans-serif" font-size="${fs}" ${bold ? 'font-weight="bold"' : ''} fill="${color}">${ts}</text>`;
+  return `<text text-anchor="middle" font-family="${escXml(font || 'Calibri')},Arial,sans-serif" font-size="${fs}" ${bold ? 'font-weight="bold"' : ''} fill="${color}">${ts}</text>`;
+}
+/* punkty wielokątów dla presetów kształtów */
+function polyPoints(preset, x, y, w, h) {
+  const cx = x + w / 2, cy = y + h / 2, r = w / 2, ry = h / 2;
+  const nPts = (n, oRx, oRy, iRx, iRy, sa) => {
+    const pts = [];
+    for (let i = 0; i < n * 2; i++) {
+      const a = sa + (i * Math.PI / n);
+      const rx = i % 2 === 0 ? oRx : iRx, ry2 = i % 2 === 0 ? oRy : iRy;
+      pts.push([cx + rx * Math.cos(a), cy + ry2 * Math.sin(a)]);
+    }
+    return pts;
+  };
+  const regPoly = (n, sa = -Math.PI / 2) => Array.from({ length: n }, (_, i) => {
+    const a = sa + i * 2 * Math.PI / n;
+    return [cx + r * Math.cos(a), cy + ry * Math.sin(a)];
+  });
+  switch (preset) {
+    case 'triangle': return [[cx, y], [x + w, y + h], [x, y + h]];
+    case 'rtTriangle': return [[x, y], [x + w, y + h], [x, y + h]];
+    case 'diamond': return [[cx, y], [x + w, cy], [cx, y + h], [x, cy]];
+    case 'pentagon': return regPoly(5);
+    case 'hexagon': return regPoly(6, 0);
+    case 'heptagon': return regPoly(7);
+    case 'octagon': return regPoly(8, -Math.PI / 8);
+    case 'star4': return nPts(4, r, ry, r * 0.4, ry * 0.4, -Math.PI / 2);
+    case 'star5': return nPts(5, r, ry, r * 0.38, ry * 0.38, -Math.PI / 2);
+    case 'star6': return nPts(6, r, ry, r * 0.5, ry * 0.5, -Math.PI / 2);
+    case 'cross': {
+      const t = w * 0.3, t2 = h * 0.3;
+      return [[cx - t / 2, y], [cx + t / 2, y], [cx + t / 2, cy - t2 / 2], [x + w, cy - t2 / 2],
+        [x + w, cy + t2 / 2], [cx + t / 2, cy + t2 / 2], [cx + t / 2, y + h], [cx - t / 2, y + h],
+        [cx - t / 2, cy + t2 / 2], [x, cy + t2 / 2], [x, cy - t2 / 2], [cx - t / 2, cy - t2 / 2]];
+    }
+    case 'parallelogram': { const s2 = w * 0.2; return [[x + s2, y], [x + w, y], [x + w - s2, y + h], [x, y + h]]; }
+    case 'trapezoid': { const s2 = w * 0.15; return [[x + s2, y], [x + w - s2, y], [x + w, y + h], [x, y + h]]; }
+    case 'chevron': { const p = w * 0.25; return [[x, y], [x + w - p, y], [x + w, cy], [x + w - p, y + h], [x, y + h], [x + p, cy]]; }
+    case 'rightArrow': { const aw = w * 0.4, ah = h * 0.35; return [[x, cy - ah], [x + w - aw, cy - ah], [x + w - aw, y], [x + w, cy], [x + w - aw, y + h], [x + w - aw, cy + ah], [x, cy + ah]]; }
+    case 'leftArrow': { const aw = w * 0.4, ah = h * 0.35; return [[x, cy], [x + aw, y], [x + aw, cy - ah], [x + w, cy - ah], [x + w, cy + ah], [x + aw, cy + ah], [x + aw, y + h]]; }
+    default: return [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+  }
 }
 function arrowHeadSVG(fromX, fromY, tipX, tipY, sw, color) {
   const a = Math.atan2(tipY - fromY, tipX - fromX);
@@ -421,9 +1066,21 @@ function arrowHeadSVG(fromX, fromY, tipX, tipY, sw, color) {
   const px = -Math.sin(a) * W, py = Math.cos(a) * W;
   return `<polygon points="${tipX},${tipY} ${bx + px},${by + py} ${bx - px},${by - py}" fill="${color}"/>`;
 }
+/* środek kształtu (do obrotu) */
+function shapeCenter(s) {
+  if (s.type === 'line') return { x: (s.x1 + s.x2) / 2, y: (s.y1 + s.y2) / 2 };
+  const b = bboxOf(s);
+  return { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+}
+/* atrybut transform rotate() dla kształtu (linie się nie obracają tym mechanizmem) */
+function rotAttr(s) {
+  if (!s.rot || s.type === 'line') return '';
+  const c = shapeCenter(s);
+  return ` transform="rotate(${s.rot} ${c.x} ${c.y})"`;
+}
 /* kształt -> SVG string. live=true dodaje data-id (interakcja) */
 function shapeSVG(s, vals, live) {
-  const did = live ? ` data-id="${s.id}"` : '';
+  const did = (live ? ` data-id="${s.id}"` : '') + rotAttr(s);
   const stroke = s.noStroke ? 'none' : s.stroke;
   const fill = s.noFill ? 'none' : s.fill;
   const dash = getDash(s.dash, s.sw) ? ` stroke-dasharray="${getDash(s.dash, s.sw)}"` : '';
@@ -432,7 +1089,7 @@ function shapeSVG(s, vals, live) {
       `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fill}" stroke="${stroke}" stroke-width="${s.sw}"${dash}/>`;
     if (fill === 'none' && live)
       out += `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="transparent" stroke="none"/>`;
-    out += textBlockSVG(s.x + s.w / 2, s.y + s.h / 2, s.text, s.fs, s.tc, s.bold, vals) + '</g>';
+    out += textBlockSVG(s.x + s.w / 2, s.y + s.h / 2, s.text, s.fs, s.tc, s.bold, vals, s.font) + '</g>';
     return out;
   }
   if (s.type === 'ellipse') {
@@ -441,7 +1098,7 @@ function shapeSVG(s, vals, live) {
       `<ellipse cx="${cx}" cy="${cy}" rx="${s.w / 2}" ry="${s.h / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${s.sw}"${dash}/>`;
     if (fill === 'none' && live)
       out += `<ellipse cx="${cx}" cy="${cy}" rx="${s.w / 2}" ry="${s.h / 2}" fill="transparent" stroke="none"/>`;
-    out += textBlockSVG(cx, cy, s.text, s.fs, s.tc, s.bold, vals) + '</g>';
+    out += textBlockSVG(cx, cy, s.text, s.fs, s.tc, s.bold, vals, s.font) + '</g>';
     return out;
   }
   if (s.type === 'line') {
@@ -466,13 +1123,30 @@ function shapeSVG(s, vals, live) {
     const lh = s.fs * 1.25;
     const ts = lines.map((l, i) =>
       `<tspan x="${s.x}" y="${s.y + s.fs + i * lh}">${escXml(l)}</tspan>`).join('');
-    let out = `<g${did}><text font-family="Arial,Helvetica,sans-serif" font-size="${s.fs}" ${s.bold ? 'font-weight="bold"' : ''} fill="${s.tc}">${ts}</text>`;
+    let out = `<g${did}><text font-family="${escXml(s.font || 'Calibri')},Arial,sans-serif" font-size="${s.fs}" ${s.bold ? 'font-weight="bold"' : ''} fill="${s.tc}">${ts}</text>`;
     if (live) { const b = bboxOf(s);
       out += `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="transparent"/>`; }
     return out + '</g>';
   }
   if (s.type === 'image') {
     return `<g${did}><image x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" href="${s.href}" preserveAspectRatio="none"/></g>`;
+  }
+  if (s.type === 'roundRect') {
+    const rx = Math.min(s.rx || 8, s.w / 2, s.h / 2);
+    let out = `<g${did}><rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" rx="${rx}" ry="${rx}" fill="${fill}" stroke="${stroke}" stroke-width="${s.sw}"${dash}/>`;
+    if (fill === 'none' && live)
+      out += `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" rx="${rx}" ry="${rx}" fill="transparent" stroke="none"/>`;
+    out += textBlockSVG(s.x + s.w / 2, s.y + s.h / 2, s.text || '', s.fs || 14, s.tc || '#111827', s.bold, vals, s.font) + '</g>';
+    return out;
+  }
+  if (s.type === 'poly') {
+    const pts = polyPoints(s.preset, s.x, s.y, s.w, s.h);
+    const ptStr = pts.map(p => `${p[0]},${p[1]}`).join(' ');
+    let out = `<g${did}><polygon points="${ptStr}" fill="${fill}" stroke="${stroke}" stroke-width="${s.sw}"${dash}/>`;
+    out += textBlockSVG(s.x + s.w / 2, s.y + s.h / 2, s.text || '', s.fs || 14, s.tc || '#111827', s.bold, vals, s.font);
+    if (fill === 'none' && live)
+      out += `<polygon points="${ptStr}" fill="transparent" stroke="none"/>`;
+    return out + '</g>';
   }
   return '';
 }
@@ -509,32 +1183,43 @@ function overlaySVG() {
   const z = view.z; let out = '';
   const hw = 4 / z, hs = `width="${hw * 2}" height="${hw * 2}" fill="#fff" stroke="var(--sel)" stroke-width="${1.2 / z}"`;
   const ss = selShapes();
+  const lockedSel = hasLockedSelection(ss);
   /* kontury zaznaczenia */
   for (const s of ss) {
     if (s.type === 'line') {
       out += `<line x1="${s.x1}" y1="${s.y1}" x2="${s.x2}" y2="${s.y2}" stroke="var(--sel)" stroke-width="${1 / z}" stroke-dasharray="${4 / z} ${3 / z}"/>`;
     } else {
       const b = bboxOf(s);
-      out += `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="none" stroke="var(--sel)" stroke-width="${1 / z}" stroke-dasharray="${4 / z} ${3 / z}"/>`;
+      const rt = s.rot ? ` transform="rotate(${s.rot} ${b.x + b.w / 2} ${b.y + b.h / 2})"` : '';
+      out += `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="none" stroke="var(--sel)" stroke-width="${1 / z}" stroke-dasharray="${4 / z} ${3 / z}"${rt}/>`;
     }
   }
   /* uchwyty */
-  if (ss.length === 1) {
+  if (ss.length === 1 && !lockedSel) {
     const s = ss[0];
     if (s.type === 'line') {
       out += `<circle data-handle="p1" cx="${s.x1}" cy="${s.y1}" r="${5 / z}" fill="#fff" stroke="var(--sel)" stroke-width="${1.4 / z}" style="cursor:move"/>`;
       out += `<circle data-handle="p2" cx="${s.x2}" cy="${s.y2}" r="${5 / z}" fill="#fff" stroke="var(--sel)" stroke-width="${1.4 / z}" style="cursor:move"/>`;
-    } else if (s.type !== 'text') {
+    } else {
       const b = bboxOf(s);
-      const H = [
-        ['nw', b.x, b.y, 'nwse-resize'], ['n', b.x + b.w / 2, b.y, 'ns-resize'],
-        ['ne', b.x + b.w, b.y, 'nesw-resize'], ['e', b.x + b.w, b.y + b.h / 2, 'ew-resize'],
-        ['se', b.x + b.w, b.y + b.h, 'nwse-resize'], ['s', b.x + b.w / 2, b.y + b.h, 'ns-resize'],
-        ['sw', b.x, b.y + b.h, 'nesw-resize'], ['w', b.x, b.y + b.h / 2, 'ew-resize']];
-      for (const [k, x, y, cur] of H)
-        out += `<rect data-handle="${k}" x="${x - hw}" y="${y - hw}" ${hs} style="cursor:${cur}"/>`;
+      const rt = s.rot ? ` transform="rotate(${s.rot} ${b.x + b.w / 2} ${b.y + b.h / 2})"` : '';
+      let hh = '';
+      if (s.type !== 'text') {
+        const H = [
+          ['nw', b.x, b.y, 'nwse-resize'], ['n', b.x + b.w / 2, b.y, 'ns-resize'],
+          ['ne', b.x + b.w, b.y, 'nesw-resize'], ['e', b.x + b.w, b.y + b.h / 2, 'ew-resize'],
+          ['se', b.x + b.w, b.y + b.h, 'nwse-resize'], ['s', b.x + b.w / 2, b.y + b.h, 'ns-resize'],
+          ['sw', b.x, b.y + b.h, 'nesw-resize'], ['w', b.x, b.y + b.h / 2, 'ew-resize']];
+        for (const [k, x, y, cur] of H)
+          hh += `<rect data-handle="${k}" x="${x - hw}" y="${y - hw}" ${hs} style="cursor:${cur}"/>`;
+      }
+      /* uchwyt obrotu — nad środkiem górnej krawędzi */
+      const rx = b.x + b.w / 2, ry = b.y - 26 / z;
+      hh += `<line x1="${b.x + b.w / 2}" y1="${b.y}" x2="${rx}" y2="${ry}" stroke="var(--sel)" stroke-width="${1 / z}"/>`;
+      hh += `<circle data-handle="rot" cx="${rx}" cy="${ry}" r="${5 / z}" fill="var(--acc)" stroke="#fff" stroke-width="${1.4 / z}" style="cursor:grab"/>`;
+      out += `<g${rt}>${hh}</g>`;
     }
-  } else if (ss.length > 1) {
+  } else if (ss.length > 1 && !lockedSel) {
     const b = unionBBox(ss);
     out += `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="none" stroke="var(--sel)" stroke-width="${1.2 / z}"/>`;
     const H = [
@@ -544,6 +1229,14 @@ function overlaySVG() {
       ['sw', b.x, b.y + b.h, 'nesw-resize'], ['w', b.x, b.y + b.h / 2, 'ew-resize']];
     for (const [k, x, y, cur] of H)
       out += `<rect data-handle="${k}" x="${x - hw}" y="${y - hw}" ${hs} style="cursor:${cur}"/>`;
+  }
+  /* ikona kłódki dla zablokowanego zaznaczenia */
+  if (lockedSel) {
+    const b = unionBBox(ss);
+    if (b) {
+      const lx = b.x + 8 / z, ly = b.y + 8 / z;
+      out += `<g><rect x="${lx}" y="${ly + 6 / z}" width="${14 / z}" height="${10 / z}" rx="${2 / z}" fill="#fff7d6" stroke="var(--acc)" stroke-width="${1 / z}"/><path d="M ${lx + 3 / z} ${ly + 6 / z} v ${-3 / z} a ${4 / z} ${4 / z} 0 0 1 ${8 / z} 0 v ${3 / z}" fill="none" stroke="var(--acc)" stroke-width="${1 / z}" stroke-linecap="round"/></g>`;
+    }
   }
   /* linie pomocnicze przyciągania */
   for (const g of guides) {
@@ -579,7 +1272,7 @@ function buildSVG(shapes, vals, pad = 16, region = null) {
     `<rect x="${vb.x}" y="${vb.y}" width="${vb.w}" height="${vb.h}" fill="#ffffff"/>` + body + '</svg>';
   return { svg, w: vb.w, h: vb.h };
 }
-function svgToPngBlob(svgStr, w, h, scale = 2) {
+function svgToPngBlob(svgStr, w, h, scale = 2, mime = 'image/png') {
   return new Promise((res, rej) => {
     const img = new Image();
     const url = URL.createObjectURL(new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' }));
@@ -591,7 +1284,8 @@ function svgToPngBlob(svgStr, w, h, scale = 2) {
       g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
       g.drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(url);
-      c.toBlob(b => b ? res(b) : rej(new Error('Błąd PNG')), 'image/png');
+      c.toBlob(b => b ? res(b) : rej(new Error('Błąd PNG')), mime,
+        mime === 'image/jpeg' ? 0.92 : undefined);
     };
     img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Błąd renderowania SVG')); };
     img.src = url;
@@ -666,18 +1360,22 @@ let drag = null;
 function newShapeDefaults(type, p) {
   const base = { id: uid(), stroke: '#111827', sw: 2, dash: 'solid' };
   if (type === 'rect') return { ...base, type, x: p.x, y: p.y, w: 0, h: 0,
-    fill: '#ffffff', noFill: false, noStroke: false, text: '', fs: 14, tc: '#111827', bold: false };
+    fill: '#ffffff', noFill: false, noStroke: false, text: '', fs: 14, tc: '#111827', bold: false, font: 'Calibri', locked: false };
   if (type === 'ellipse') return { ...base, type, x: p.x, y: p.y, w: 0, h: 0,
-    fill: '#ffffff', noFill: true, noStroke: false, text: '', fs: 14, tc: '#111827', bold: false };
+    fill: '#ffffff', noFill: true, noStroke: false, text: '', fs: 14, tc: '#111827', bold: false, font: 'Calibri', locked: false };
   if (type === 'line' || type === 'arrow') return { ...base, type: 'line',
-    x1: p.x, y1: p.y, x2: p.x, y2: p.y, as: false, ae: type === 'arrow' };
+    x1: p.x, y1: p.y, x2: p.x, y2: p.y, as: false, ae: type === 'arrow', locked: false };
   if (type === 'text') return { id: uid(), type: 'text', x: p.x, y: p.y,
-    text: 'Tekst', fs: 16, tc: '#111827', bold: false };
+    text: 'Tekst', fs: 16, tc: '#111827', bold: false, font: 'Calibri', locked: false };
   return null;
 }
 function setSelection(ids) {
   sel = new Set(ids); render(); renderProps();
 }
+/* ---------- blokada kształtów ---------- */
+function isLockedShape(s) { return !!(s && s.locked); }
+function hasLockedSelection(shapes = selShapes()) { return shapes.some(isLockedShape); }
+function lockToast() { toast(t('t.locked')); }
 cv.addEventListener('pointerdown', e => {
   if (txtEd.style.display === 'block') commitEdit();
   cv.setPointerCapture(e.pointerId);
@@ -693,10 +1391,26 @@ cv.addEventListener('pointerdown', e => {
     const hEl = e.target.closest('[data-handle]');
     if (hEl && sel.size >= 1) {
       const ss = selShapes();
+      if (hasLockedSelection(ss)) { lockToast(); return; }
       pushUndo();
       const h = hEl.dataset.handle;
-      if (h === 'p1' || h === 'p2') drag = { mode: 'lineend', h, s: ss[0] };
-      else if (ss.length === 1) drag = { mode: 'resize', h, s: ss[0], b0: bboxOf(ss[0]), o: JSON.parse(JSON.stringify(ss[0])) };
+      if (h === 'rot') {
+        const s0 = ss[0], c = shapeCenter(s0);
+        drag = { mode: 'rotate', s: s0, cx: c.x, cy: c.y, startRot: s0.rot || 0,
+          startAng: Math.atan2(p.y - c.y, p.x - c.x) * 180 / Math.PI };
+      }
+      else if (h === 'p1' || h === 'p2') drag = { mode: 'lineend', h, s: ss[0] };
+      else if (ss.length === 1) {
+        const s0 = ss[0], b0 = bboxOf(s0);
+        const d = { mode: 'resize', h, s: s0, b0, o: JSON.parse(JSON.stringify(s0)) };
+        if (s0.rot) { /* zapamiętaj świat. pozycję kotwicy (przeciwległej krawędzi) */
+          const c0 = { x: b0.x + b0.w / 2, y: b0.y + b0.h / 2 };
+          const ax = h.includes('w') ? b0.x + b0.w : h.includes('e') ? b0.x : b0.x + b0.w / 2;
+          const ay = h.includes('n') ? b0.y + b0.h : h.includes('s') ? b0.y : b0.y + b0.h / 2;
+          d.anchorW = rotatePt(ax, ay, c0.x, c0.y, s0.rot);
+        }
+        drag = d;
+      }
       else drag = { mode: 'scale', h, b0: unionBBox(ss),
         orig: ss.map(s => [s.id, JSON.parse(JSON.stringify(s))]) };
       return;
@@ -711,6 +1425,7 @@ cv.addEventListener('pointerdown', e => {
         sel = new Set(ids);
       }
       renderProps();
+      if (hasLockedSelection(selShapes())) { render(); return; }
       pushUndo();
       drag = { mode: 'move', sx: p.x, sy: p.y, moved: false,
         b0: unionBBox(selShapes()),
@@ -826,9 +1541,23 @@ cv.addEventListener('pointermove', e => {
     }
     render(); return;
   }
+  if (drag.mode === 'rotate') {
+    const ang = Math.atan2(p.y - drag.cy, p.x - drag.cx) * 180 / Math.PI;
+    let rot = drag.startRot + (ang - drag.startAng);
+    if (e.shiftKey) rot = Math.round(rot / 15) * 15;   /* Shift = co 15° */
+    rot = ((rot % 360) + 360) % 360;
+    drag.s.rot = Math.round(rot * 10) / 10;
+    render(); refreshRot(); return;
+  }
   if (drag.mode === 'resize') {
     const s = drag.s, o = drag.o, h = drag.h;
-    const sp = snapPt(p, new Set([s.id]));
+    let sp;
+    if (o.rot) { /* przenieś kursor do lokalnego (nieobróconego) układu kształtu */
+      const c0 = { x: o.x + o.w / 2, y: o.y + o.h / 2 };
+      sp = rotatePt(p.x, p.y, c0.x, c0.y, -o.rot);
+    } else {
+      sp = snapPt(p, new Set([s.id]));
+    }
     let x1 = o.x, y1 = o.y, x2 = o.x + o.w, y2 = o.y + o.h;
     if (h.includes('w')) x1 = sp.x; if (h.includes('e')) x2 = sp.x;
     if (h.includes('n')) y1 = sp.y; if (h.includes('s')) y2 = sp.y;
@@ -843,6 +1572,14 @@ cv.addEventListener('pointermove', e => {
     }
     s.x = Math.min(x1, x2); s.y = Math.min(y1, y2);
     s.w = Math.max(2, Math.abs(x2 - x1)); s.h = Math.max(2, Math.abs(y2 - y1));
+    if (o.rot && drag.anchorW) { /* utrzymaj przeciwległą krawędź w miejscu (świat) */
+      const cN = { x: s.x + s.w / 2, y: s.y + s.h / 2 };
+      const ax = h.includes('w') ? s.x + s.w : h.includes('e') ? s.x : s.x + s.w / 2;
+      const ay = h.includes('n') ? s.y + s.h : h.includes('s') ? s.y : s.y + s.h / 2;
+      const aw = rotatePt(ax, ay, cN.x, cN.y, o.rot);
+      s.x += drag.anchorW.x - aw.x;
+      s.y += drag.anchorW.y - aw.y;
+    }
     render(); refreshXYWH(); return;
   }
 });
@@ -882,12 +1619,24 @@ cv.addEventListener('pointerup', e => {
   if (d.mode === 'move' && !d.moved) undoStack.pop(); /* klik bez ruchu */
   render(); renderProps(); autosave();
 });
+/* zoom wokół środka płótna (przyciski +/- i klawisze) */
+function zoomAtCenter(k) {
+  const r = cv.getBoundingClientRect();
+  const mx = r.width / 2, my = r.height / 2;
+  const z2 = clamp(view.z * k, 0.08, 12);
+  view.x = mx - (mx - view.x) * (z2 / view.z);
+  view.y = my - (my - view.y) * (z2 / view.z);
+  view.z = z2; render();
+}
 /* zoom kółkiem — wokół kursora */
 cwrap.addEventListener('wheel', e => {
   e.preventDefault();
   const r = cv.getBoundingClientRect();
   const mx = e.clientX - r.left, my = e.clientY - r.top;
-  const k = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+  /* tryb MX Master — mniejszy krok zoomu (kółko przewija zbyt szybko) */
+  let step = 1.12;
+  if (settings.mxMaster) step = Math.pow(1.12, 1 / Math.max(1, settings.zoomDiv));
+  const k = e.deltaY < 0 ? step : 1 / step;
   const z2 = clamp(view.z * k, 0.08, 12);
   view.x = mx - (mx - view.x) * (z2 / view.z);
   view.y = my - (my - view.y) * (z2 / view.z);
@@ -898,6 +1647,7 @@ cwrap.addEventListener('wheel', e => {
    EDYCJA TEKSTU (2x klik)
    ===================================================================== */
 let editShape = null;
+const isTextShapeType = t => ['rect', 'ellipse', 'text', 'poly', 'roundRect'].includes(t);
 cv.addEventListener('dblclick', e => {
   const el = e.target.closest('[data-id]');
   let s = el ? state.shapes.find(a => a.id === el.dataset.id) : null;
@@ -906,10 +1656,10 @@ cv.addEventListener('dblclick', e => {
   if (!s) {
     for (const id of sel) {
       const c = state.shapes.find(a => a.id === id);
-      if (c && (c.type === 'rect' || c.type === 'ellipse' || c.type === 'text')) { s = c; break; }
+      if (c && isTextShapeType(c.type)) { s = c; break; }
     }
   }
-  if (s && (s.type === 'rect' || s.type === 'ellipse' || s.type === 'text')) {
+  if (s && isTextShapeType(s.type) && !isLockedShape(s)) {
     setSelection([s.id]);
     startEdit(s);
   }
@@ -927,6 +1677,7 @@ function startEdit(s) {
   txtEd.style.height = Math.max(30, b.h * z) + 'px';
   txtEd.style.fontSize = (s.fs * z) + 'px';
   txtEd.style.fontWeight = s.bold ? 'bold' : 'normal';
+  txtEd.style.fontFamily = (s.font || 'Calibri') + ',Arial,sans-serif';
   txtEd.style.textAlign = s.type === 'text' ? 'left' : 'center';
   txtEd.value = s.text || '';
   txtEd.focus(); txtEd.select();
@@ -956,104 +1707,130 @@ function refreshXYWH() {
   if (s.type === 'line') { set('pX1', s.x1); set('pY1', s.y1); set('pX2', s.x2); set('pY2', s.y2); }
   else { set('pX', s.x); set('pY', s.y); if (s.w !== undefined) { set('pW', s.w); set('pH', s.h); } }
 }
+function refreshRot() {
+  const ss = selShapes(); if (ss.length !== 1) return;
+  const el = $('#pRot'); if (el && document.activeElement !== el) el.value = Math.round((ss[0].rot || 0) * 10) / 10;
+}
 function applyAll(fn) { pushUndo(); selShapes().forEach(fn); render(); autosave(); }
+function applyUnlockedAll(fn) {
+  const unlocked = selShapes().filter(s => !isLockedShape(s));
+  if (!unlocked.length) return lockToast();
+  pushUndo(); unlocked.forEach(fn); render(); autosave();
+}
 function renderProps() {
   const el = $('#tab-props');
   const ss = selShapes();
   if (!ss.length) {
-    el.innerHTML = `<div class="empty">Nic nie zaznaczono.<br><br>
-      Narysuj kształt narzędziami po lewej,<br>wklej zrzut z CATII (Ctrl+V)<br>
-      lub zaimportuj obraz z pliku XLSX.</div>`;
+    el.innerHTML = `<div class="empty">${t('props.none')}<br><br>${t('props.noneHint')}</div>`;
     return;
   }
   const s = ss[0];
   const one = ss.length === 1;
   const types = new Set(ss.map(a => a.type));
   const hasStroke = [...types].some(t => t !== 'text' && t !== 'image');
-  const hasFill = types.has('rect') || types.has('ellipse');
-  const hasText = types.has('rect') || types.has('ellipse') || types.has('text');
+  const hasFill = ['rect', 'ellipse', 'poly', 'roundRect'].some(t => types.has(t));
+  const hasText = ['rect', 'ellipse', 'text', 'poly', 'roundRect'].some(t => types.has(t));
   const hasLine = types.has('line');
-  let h = `<div class="grp"><h4>Zaznaczone: ${ss.length}</h4></div>`;
+  let h = `<div class="grp"><h4>${t('props.selected')}: ${ss.length}</h4></div>`;
+  h += `<div class="grp"><div class="row"><label style="min-width:0"><input type="checkbox" id="pLock" ${ss.every(a => a.locked) ? 'checked' : ''}> ${t('props.locked')}</label></div></div>`;
 
   if (one && s.type !== 'line') {
-    h += `<div class="grp"><h4>Pozycja i rozmiar</h4>
+    h += `<div class="grp"><h4>${t('props.posSize')}</h4>
       <div class="row"><label>X / Y</label><input class="in" type="number" id="pX" step="1"><input class="in" type="number" id="pY" step="1"></div>`;
     if (s.w !== undefined)
-      h += `<div class="row"><label>Szer / Wys</label><input class="in" type="number" id="pW" step="1"><input class="in" type="number" id="pH" step="1"></div>`;
+      h += `<div class="row"><label>${t('props.size')}</label><input class="in" type="number" id="pW" step="1"><input class="in" type="number" id="pH" step="1"></div>`;
+    h += `<div class="row"><label>${t('props.rotDeg')}</label><input class="in" type="number" id="pRot" step="1" value="${Math.round((s.rot || 0) * 10) / 10}"></div>`;
     h += `</div>`;
   }
   if (one && s.type === 'line') {
-    h += `<div class="grp"><h4>Punkty linii</h4>
+    h += `<div class="grp"><h4>${t('props.linePts')}</h4>
       <div class="row"><label>P1</label><input class="in" type="number" id="pX1"><input class="in" type="number" id="pY1"></div>
       <div class="row"><label>P2</label><input class="in" type="number" id="pX2"><input class="in" type="number" id="pY2"></div></div>`;
   }
   if (hasStroke) {
-    h += `<div class="grp"><h4>Obrys</h4>
-      <div class="row"><label>Kolor</label><input class="in" type="color" id="pStroke" value="${s.stroke || '#111827'}">
-        <label style="min-width:0"><input type="checkbox" id="pNoStroke" ${s.noStroke ? 'checked' : ''}> brak</label></div>
-      <div class="row"><label>Grubość</label><input class="in" type="number" id="pSw" min="0.5" step="0.5" value="${s.sw ?? 2}"></div>
-      <div class="row"><label>Styl</label><select class="in" id="pDash">` +
+    h += `<div class="grp"><h4>${t('props.stroke')}</h4>
+      <div class="row"><label>${t('props.color')}</label><input class="in" type="color" id="pStroke" value="${s.stroke || '#111827'}">
+        <label style="min-width:0"><input type="checkbox" id="pNoStroke" ${s.noStroke ? 'checked' : ''}> ${t('props.none2')}</label></div>
+      <div class="row"><label>${t('props.width')}</label><input class="in" type="number" id="pSw" min="0.5" step="0.5" value="${s.sw ?? 2}"></div>
+      <div class="row"><label>${t('props.style')}</label><select class="in" id="pDash">` +
       DASH_OPTS.map(([v, n]) => `<option value="${v}" ${s.dash === v ? 'selected' : ''}>${n}</option>`).join('') +
       `</select></div></div>`;
   }
   if (hasFill) {
-    h += `<div class="grp"><h4>Wypełnienie</h4>
-      <div class="row"><label>Kolor</label><input class="in" type="color" id="pFill" value="${s.fill || '#ffffff'}">
-        <label style="min-width:0"><input type="checkbox" id="pNoFill" ${s.noFill ? 'checked' : ''}> brak</label></div></div>`;
+    h += `<div class="grp"><h4>${t('props.fill')}</h4>
+      <div class="row"><label>${t('props.color')}</label><input class="in" type="color" id="pFill" value="${s.fill || '#ffffff'}">
+        <label style="min-width:0"><input type="checkbox" id="pNoFill" ${s.noFill ? 'checked' : ''}> ${t('props.none2')}</label></div></div>`;
   }
   if (hasText) {
-    h += `<div class="grp"><h4>Tekst <span style="text-transform:none;font-weight:400">(2×klik na kształcie, aby edytować)</span></h4>
-      <div class="row"><label>Rozmiar</label><input class="in" type="number" id="pFs" min="4" value="${s.fs ?? 14}">
+    h += `<div class="grp"><h4>${t('props.text')} <span style="text-transform:none;font-weight:400">${t('props.textHint')}</span></h4>
+      <div class="row"><label>${t('props.font')}</label><select class="in" id="pFont" style="width:130px">
+        ${['Calibri','Arial','Helvetica','Times New Roman','Georgia','Verdana','Courier New','Trebuchet MS','Impact'].map(f => `<option value="${f}" ${(s.font || 'Calibri') === f ? 'selected' : ''}>${f}</option>`).join('')}
+      </select></div>
+      <div class="row"><label>${t('props.size')}</label><input class="in" type="number" id="pFs" min="4" value="${s.fs ?? 14}">
         <input class="in" type="color" id="pTc" value="${s.tc || '#111827'}">
-        <label style="min-width:0"><input type="checkbox" id="pBold" ${s.bold ? 'checked' : ''}> gruby</label></div></div>`;
+        <label style="min-width:0"><input type="checkbox" id="pBold" ${s.bold ? 'checked' : ''}> ${t('props.bold')}</label></div>`;
+    if (one && isTextShapeType(s.type)) {
+      h += `<div class="row"><label style="align-self:flex-start;padding-top:4px">${t('props.content')}</label>
+        <textarea class="in wide" id="pText" rows="4" style="width:100%;min-height:78px;resize:vertical;font-family:${escXml(s.font || 'Calibri')},Arial,sans-serif">${escXml(s.text || '')}</textarea></div>`;
+    }
+    h += `</div>`;
   }
   if (hasLine) {
-    h += `<div class="grp"><h4>Groty strzałek</h4>
-      <div class="row"><label style="min-width:0"><input type="checkbox" id="pAs" ${s.as ? 'checked' : ''}> początek</label>
-      <label style="min-width:0"><input type="checkbox" id="pAe" ${s.ae ? 'checked' : ''}> koniec</label></div></div>`;
+    h += `<div class="grp"><h4>${t('props.arrows')}</h4>
+      <div class="row"><label style="min-width:0"><input type="checkbox" id="pAs" ${s.as ? 'checked' : ''}> ${t('props.start')}</label>
+      <label style="min-width:0"><input type="checkbox" id="pAe" ${s.ae ? 'checked' : ''}> ${t('props.end')}</label></div></div>`;
   }
   /* wyrównanie */
-  const I = (t, p) => `<button class="miniBtn" data-al="${t}" title="${p}"><svg viewBox="0 0 24 24">${ALICON[t]}</svg></button>`;
-  h += `<div class="grp"><h4>Wyrównanie (min. 2 kształty)</h4>
-    <div class="row">${I('l', 'Do lewej')}${I('cx', 'Środek w pionie')}${I('r', 'Do prawej')}${I('t', 'Do góry')}${I('cy', 'Środek w poziomie')}${I('b', 'Do dołu')}</div>
-    <div class="row">${I('dh', 'Rozłóż poziomo (3+)')}${I('dv', 'Rozłóż pionowo (3+)')}</div>
-    <div class="row"><label>Odstęp siatki</label><input class="in" type="number" id="matrixGap" min="0" step="1" value="${matrixGap}" style="width:52px"> px</div>
-    <div class="row"><button class="btn" data-mx="fit" title="Ułóż w tabelę i ujednolić rozmiary komórek">Macierz + rozmiar</button>
-    <button class="btn" data-mx="keep" title="Ułóż w tabelę bez zmiany rozmiarów">Macierz</button></div></div>`;
+  const I = (k, p) => `<button class="miniBtn" data-al="${k}" title="${p}"><svg viewBox="0 0 24 24">${ALICON[k]}</svg></button>`;
+  h += `<div class="grp"><h4>${t('props.align')}</h4>
+    <div class="row">${I('l', '')}${I('cx', '')}${I('r', '')}${I('t', '')}${I('cy', '')}${I('b', '')}</div>
+    <div class="row">${I('dh', '')}${I('dv', '')}</div>
+    <div class="row"><label>${t('props.gridGap')}</label><input class="in" type="number" id="matrixGap" min="0" step="1" value="${matrixGap}" style="width:52px"> px</div>
+    <div class="row"><button class="btn" data-mx="fit">${t('props.matrixFit')}</button>
+    <button class="btn" data-mx="keep">${t('props.matrix')}</button></div></div>`;
   /* kolejność */
-  h += `<div class="grp"><h4>Kolejność</h4><div class="row">
-    <button class="btn" data-z="top">Na wierzch</button><button class="btn" data-z="up">Wyżej</button>
-    <button class="btn" data-z="down">Niżej</button><button class="btn" data-z="bot">Na spód</button></div></div>`;
+  h += `<div class="grp"><h4>${t('props.order')}</h4><div class="row">
+    <button class="btn" data-z="top">${t('props.top')}</button><button class="btn" data-z="up">${t('props.up')}</button>
+    <button class="btn" data-z="down">${t('props.down')}</button><button class="btn" data-z="bot">${t('props.bot')}</button></div></div>`;
   /* grupy */
   const grouped = ss.some(a => a.g);
-  h += `<div class="grp"><h4>Grupa</h4><div class="row">
-    <button class="btn" id="pGroup" ${ss.length < 2 ? 'disabled' : ''}>Grupuj</button>
-    <button class="btn" id="pUngroup" ${!grouped ? 'disabled' : ''}>Rozgrupuj</button>
-    <button class="btn" id="pToLib">Do biblioteki</button></div></div>`;
+  h += `<div class="grp"><h4>${t('props.group')}</h4><div class="row">
+    <button class="btn" id="pGroup" ${ss.length < 2 ? 'disabled' : ''}>${t('props.doGroup')}</button>
+    <button class="btn" id="pUngroup" ${!grouped ? 'disabled' : ''}>${t('props.ungroup')}</button>
+    <button class="btn" id="pToLib">${t('props.toLib')}</button></div></div>`;
   h += `<div class="grp"><div class="row">
-    <button class="btn" id="pDup">Duplikuj</button>
-    <button class="btn" id="pDel" style="color:#ff7070">Usuń</button></div></div>`;
+    <button class="btn" id="pDup">${t('props.dup')}</button>
+    <button class="btn" id="pDel" style="color:#ff7070">${t('props.del')}</button></div></div>`;
   el.innerHTML = h;
   refreshXYWH();
 
   /* zdarzenia panelu */
   const on = (id, ev, fn) => { const n = $('#' + id); if (n) n.addEventListener(ev, fn); };
   const num = id => parseFloat($('#' + id).value);
-  on('pX', 'change', () => applyAll(a => { if (a.x !== undefined) a.x = num('pX'); }));
-  on('pY', 'change', () => applyAll(a => { if (a.y !== undefined) a.y = num('pY'); }));
-  on('pW', 'change', () => applyAll(a => { if (a.w !== undefined) a.w = Math.max(1, num('pW')); }));
-  on('pH', 'change', () => applyAll(a => { if (a.h !== undefined) a.h = Math.max(1, num('pH')); }));
+  on('pLock', 'change', () => applyAll(a => { a.locked = $('#pLock').checked; }));
+  on('pX', 'change', () => applyUnlockedAll(a => { if (a.x !== undefined) a.x = num('pX'); }));
+  on('pY', 'change', () => applyUnlockedAll(a => { if (a.y !== undefined) a.y = num('pY'); }));
+  on('pW', 'change', () => applyUnlockedAll(a => { if (a.w !== undefined) a.w = Math.max(1, num('pW')); }));
+  on('pH', 'change', () => applyUnlockedAll(a => { if (a.h !== undefined) a.h = Math.max(1, num('pH')); }));
+  on('pRot', 'change', () => applyUnlockedAll(a => { if (a.type !== 'line') a.rot = ((num('pRot') % 360) + 360) % 360; }));
   ['pX1', 'pY1', 'pX2', 'pY2'].forEach(id =>
-    on(id, 'change', () => applyAll(a => { if (a.type === 'line') a[id[1].toLowerCase() + id[2]] = num(id); })));
+    on(id, 'change', () => applyUnlockedAll(a => { if (a.type === 'line') a[id[1].toLowerCase() + id[2]] = num(id); })));
   on('pStroke', 'input', () => applyAll(a => { if (a.stroke !== undefined) { a.stroke = $('#pStroke').value; a.noStroke = false; } }));
   on('pNoStroke', 'change', () => applyAll(a => { if ('noStroke' in a || a.type === 'rect' || a.type === 'ellipse') a.noStroke = $('#pNoStroke').checked; }));
   on('pSw', 'change', () => applyAll(a => { if (a.sw !== undefined) a.sw = Math.max(0.5, num('pSw')); }));
   on('pDash', 'change', () => applyAll(a => { if (a.dash !== undefined) a.dash = $('#pDash').value; }));
   on('pFill', 'input', () => applyAll(a => { if (a.fill !== undefined) { a.fill = $('#pFill').value; a.noFill = false; } }));
   on('pNoFill', 'change', () => applyAll(a => { if (a.fill !== undefined) a.noFill = $('#pNoFill').checked; }));
+  on('pFont', 'change', () => applyAll(a => { if ('font' in a || a.fs !== undefined) a.font = $('#pFont').value; }));
   on('pFs', 'change', () => applyAll(a => { if (a.fs !== undefined) a.fs = Math.max(4, num('pFs')); }));
   on('pTc', 'input', () => applyAll(a => { if (a.tc !== undefined) a.tc = $('#pTc').value; }));
   on('pBold', 'change', () => applyAll(a => { if ('fs' in a) a.bold = $('#pBold').checked; }));
+  on('pText', 'focus', () => pushUndo());
+  on('pText', 'input', () => {
+    const v = $('#pText').value;
+    selShapes().forEach(a => { if (a.text !== undefined) a.text = v; });
+    render(); autosave();
+  });
   on('pAs', 'change', () => applyAll(a => { if (a.type === 'line') a.as = $('#pAs').checked; }));
   on('pAe', 'change', () => applyAll(a => { if (a.type === 'line') a.ae = $('#pAe').checked; }));
   $$('#tab-props [data-al]').forEach(b => b.addEventListener('click', () => alignSel(b.dataset.al)));
@@ -1083,7 +1860,8 @@ function moveShapeTo(s, nx, ny) {
 function alignSel(kind) {
   const ss = selShapes();
   if (kind === 'dh' || kind === 'dv') return distribute(kind);
-  if (ss.length < 2) return toast('Zaznacz min. 2 kształty');
+  if (ss.length < 2) return toast(t('t.min2'));
+  if (hasLockedSelection(ss)) return lockToast();
   pushUndo();
   const U = unionBBox(ss);
   for (const s of ss) {
@@ -1099,7 +1877,8 @@ function alignSel(kind) {
 }
 function distribute(kind) {
   const ss = selShapes();
-  if (ss.length < 3) return toast('Rozłożenie wymaga min. 3 kształtów');
+  if (ss.length < 3) return toast(t('t.min3'));
+  if (hasLockedSelection(ss)) return lockToast();
   pushUndo();
   const hor = kind === 'dh';
   const items = ss.map(s => ({ s, b: bboxOf(s) }))
@@ -1118,7 +1897,8 @@ function distribute(kind) {
 /* ---------- macierz: ułóż zaznaczone kształty w tabelę ---------- */
 function gridArrange(resize) {
   const ss = selShapes().filter(s => s.type !== 'line');
-  if (ss.length < 2) return toast('Zaznacz min. 2 kształty (linie pomijane)');
+  if (ss.length < 2) return toast(t('t.min2mx'));
+  if (hasLockedSelection(ss)) return lockToast();
   pushUndo();
   const items = ss.map(s => ({ s, b: bboxOf(s) }));
   const hs = items.map(i => i.b.h).sort((a, b) => a - b);
@@ -1199,13 +1979,13 @@ function groupSel() {
   const g = 'G' + Date.now().toString(36);
   selShapes().forEach(s => s.g = g);
   render(); renderProps(); autosave();
-  toast('Zgrupowano');
+  toast(t('t.grouped'));
 }
 function ungroupSel() {
   pushUndo();
   selShapes().forEach(s => delete s.g);
   render(); renderProps(); autosave();
-  toast('Rozgrupowano');
+  toast(t('t.ungrouped'));
 }
 function duplicateSel() {
   const ss = selShapes(); if (!ss.length) return;
@@ -1233,8 +2013,8 @@ function deleteSel() {
    BIBLIOTEKA GRUP
    ===================================================================== */
 function saveToLib() {
-  const ss = selShapes(); if (!ss.length) return toast('Najpierw zaznacz kształty');
-  const name = prompt('Nazwa grupy w bibliotece:', 'Linia wymiarowa');
+  const ss = selShapes(); if (!ss.length) return toast(t('t.min2'));
+  const name = prompt(t('p.libName'), t('lib.default1'));
   if (!name) return;
   const b = unionBBox(ss);
   const shapes = ss.map(s => {
@@ -1246,7 +2026,7 @@ function saveToLib() {
   });
   lib.push({ name, shapes });
   saveLib(); renderLib();
-  toast('Zapisano do biblioteki: ' + name);
+  toast(t('t.libSaved') + name);
 }
 function placeLib(item) {
   pushUndo();
@@ -1267,9 +2047,8 @@ function placeLib(item) {
 }
 function renderLib() {
   const el = $('#tab-lib');
-  let h = `<div class="hint" style="margin-bottom:10px">Zaznacz kształty i użyj „Do biblioteki"
-    w zakładce Właściwości, aby zapisać własną grupę. Kliknij miniaturę, aby wstawić.</div>`;
-  if (!lib.length) h += `<div class="empty">Biblioteka jest pusta.</div>`;
+  let h = `<div class="hint" style="margin-bottom:10px">${t('lib.hint')}</div>`;
+  if (!lib.length) h += `<div class="empty">${t('lib.empty')}</div>`;
   lib.forEach((item, i) => {
     const t = buildSVG(item.shapes, null, 6);
     h += `<div class="libItem">
@@ -1281,7 +2060,7 @@ function renderLib() {
   el.innerHTML = h;
   $$('#tab-lib [data-lib]').forEach(n => n.addEventListener('click', () => placeLib(lib[+n.dataset.lib])));
   $$('#tab-lib [data-libdel]').forEach(n => n.addEventListener('click', () => {
-    if (!confirm('Usunąć „' + lib[+n.dataset.libdel].name + '" z biblioteki?')) return;
+    if (!confirm(t('c.delLib', { n: lib[+n.dataset.libdel].name }))) return;
     lib.splice(+n.dataset.libdel, 1); saveLib(); renderLib();
   }));
 }
@@ -1307,20 +2086,65 @@ function defaultLibItems() {
 }
 function seedLib() { lib = defaultLibItems(); saveLib(); }
 
+/* ---------- kształty dodatkowe (modal) ---------- */
+const EXTRA_SHAPES = [
+  { preset: 'triangle', label: 'Trójkąt' },
+  { preset: 'rtTriangle', label: 'Trójkąt prostokątny' },
+  { preset: 'diamond', label: 'Romb' },
+  { preset: 'pentagon', label: 'Pięciokąt' },
+  { preset: 'hexagon', label: 'Sześciokąt' },
+  { preset: 'octagon', label: 'Ośmiokąt' },
+  { preset: 'star4', label: 'Gwiazda 4' },
+  { preset: 'star5', label: 'Gwiazda 5' },
+  { preset: 'star6', label: 'Gwiazda 6' },
+  { preset: 'cross', label: 'Krzyż' },
+  { preset: 'parallelogram', label: 'Równoległobok' },
+  { preset: 'trapezoid', label: 'Trapez' },
+  { preset: 'chevron', label: 'Chevron' },
+  { preset: 'rightArrow', label: 'Strzałka →' },
+  { preset: 'leftArrow', label: 'Strzałka ←' },
+  { preset: 'roundRect', label: 'Zaokrąglony prostokąt', type: 'roundRect' },
+];
+function openShapeModal() {
+  const body = $('#shapeBody'); body.innerHTML = '';
+  for (const item of EXTRA_SHAPES) {
+    const div = document.createElement('div');
+    div.className = 'xlImg';
+    const type = item.type || 'poly';
+    const prev = { id: 'prev', type, preset: item.preset, rx: 8, x: 4, y: 4, w: 92, h: 72,
+      fill: '#d1e7ff', noFill: false, stroke: '#1d5fa0', noStroke: false,
+      sw: 2, dash: 'solid', text: '', fs: 12, tc: '#111827', bold: false, font: 'Calibri' };
+    div.innerHTML = `<div style="background:#fff;height:80px;display:flex;align-items:center;justify-content:center;overflow:hidden">
+      <svg viewBox="0 0 100 80" width="100" height="80">${shapeSVG(prev, null, false)}</svg></div><div>${escXml(item.label)}</div>`;
+    div.addEventListener('click', () => {
+      pushUndo();
+      const r = cv.getBoundingClientRect();
+      const c = { x: (r.width / 2 - view.x) / view.z, y: (r.height / 2 - view.y) / view.z };
+      const s = { id: uid(), type: item.type || 'poly', preset: item.preset, rx: 8,
+        x: c.x - 60, y: c.y - 40, w: 120, h: 80,
+        fill: '#ffffff', noFill: false, stroke: '#111827', noStroke: false,
+        sw: 2, dash: 'solid', text: '', fs: 14, tc: '#111827', bold: false, font: 'Calibri', locked: false };
+      state.shapes.push(s);
+      setSelection([s.id]); setTool('select'); autosave();
+      $('#shapeModal').classList.remove('on');
+      toast(t('t.added') + item.label);
+    });
+    body.appendChild(div);
+  }
+  $('#shapeModal').classList.add('on');
+}
+
 /* =====================================================================
    WARIANTY — macierz zmiennych, generowanie zestawu PNG
    ===================================================================== */
 function renderVars() {
   const el = $('#tab-vars');
   const V = state.vars;
-  let h = `<div class="hint" style="margin-bottom:10px">
-    W tekstach kształtów wpisz <b>{NAZWA}</b> — np. <b>{A}</b>.
-    Każdy wiersz tabeli to jeden wariant. „Generuj" tworzy ZIP z plikiem PNG dla każdego wiersza:
-    <i>nazwa-projektu_nazwa-wariantu.png</i>.</div>`;
-  h += `<div class="row"><button class="btn" id="vAddCol">+ Zmienna</button>
-    <button class="btn" id="vAddRow">+ Wariant</button></div>`;
+  let h = `<div class="hint" style="margin-bottom:10px">${t('vars.hint')}</div>`;
+  h += `<div class="row"><button class="btn" id="vAddCol">${t('vars.addCol')}</button>
+    <button class="btn" id="vAddRow">${t('vars.addRow')}</button></div>`;
   if (V.cols.length || V.rows.length) {
-    h += `<table id="varTbl"><tr><th>Wariant</th>`;
+    h += `<table id="varTbl"><tr><th>${t('vars.variant')}</th>`;
     V.cols.forEach((c, ci) => h += `<th>{${escXml(c)}}<button class="delX" data-vdc="${ci}" title="Usuń zmienną">✕</button></th>`);
     h += `<th></th></tr>`;
     V.rows.forEach((r, ri) => {
@@ -1331,18 +2155,18 @@ function renderVars() {
     });
     h += `</table>`;
   }
-  h += `<div class="grp" style="margin-top:12px"><h4>Podgląd na płótnie</h4>
-    <select class="in wide" id="vPrev"><option value="-1">— wartości surowe {A} —</option>` +
+  h += `<div class="grp" style="margin-top:12px"><h4>${t('vars.preview')}</h4>
+    <select class="in wide" id="vPrev"><option value="-1">${t('vars.rawVals')}</option>` +
     V.rows.map((r, i) => `<option value="${i}" ${previewRow === i ? 'selected' : ''}>${escXml(r.name)}</option>`).join('') +
     `</select></div>`;
-  h += `<button class="btn primary" id="vGen" style="width:100%" ${!V.rows.length ? 'disabled' : ''}>Generuj wszystkie PNG (ZIP)</button>`;
+  h += `<button class="btn primary" id="vGen" style="width:100%" ${!V.rows.length ? 'disabled' : ''}>${t('vars.gen')}</button>`;
   el.innerHTML = h;
 
   $('#vAddCol').addEventListener('click', () => {
-    const n = prompt('Nazwa zmiennej (bez klamr), np. A lub DL:');
+    const n = prompt(t('p.varName'));
     if (!n) return;
     const k = n.trim().replace(/[{}]/g, '');
-    if (!k || V.cols.includes(k)) return toast('Pusta lub istniejąca nazwa');
+    if (!k || V.cols.includes(k)) return toast(t('t.badVar'));
     V.cols.push(k); renderVars(); autosave();
   });
   $('#vAddRow').addEventListener('click', () => {
@@ -1373,11 +2197,11 @@ function renderVars() {
   $('#vGen').addEventListener('click', generateVariants);
 }
 async function generateVariants() {
-  if (!state.shapes.length) return toast('Płótno jest puste');
+  if (!state.shapes.length) return toast(t('t.emptyCanvas'));
   const proj = sanitizeFile($('#projName').value);
   const files = [];
   const region = pageRegion();
-  toast('Generowanie wariantów…');
+  toast(t('t.genVariants'));
   for (const row of state.vars.rows) {
     const b = buildSVG(state.shapes, row.vals, 16, region);
     if (!b) continue;
@@ -1385,9 +2209,9 @@ async function generateVariants() {
     files.push({ name: proj + '_' + sanitizeFile(row.name) + '.png',
       data: new Uint8Array(await png.arrayBuffer()) });
   }
-  if (!files.length) return toast('Brak wariantów do wygenerowania');
+  if (!files.length) return toast(t('t.noVariants'));
   downloadBlob(makeZip(files), proj + '_warianty.zip');
-  toast('Gotowe: ' + files.length + ' plików PNG w ZIP');
+  toast(t('t.genDone', { n: files.length }));
 }
 
 /* =====================================================================
@@ -1399,17 +2223,26 @@ function projectJSON() {
     page: state.page, lib }, null, 1);
 }
 function saveProject() {
+  state.name = $('#projName').value;           /* utrzymaj nazwę projektu w synchronie */
   const name = sanitizeFile($('#projName').value);
   downloadBlob(new Blob([projectJSON()], { type: 'application/json' }), name + '.json');
-  toast('Zapisano projekt: ' + name + '.json');
+  toast(t('t.saved') + name + '.json');
 }
-function loadProject(obj) {
-  if (!obj || obj.app !== 'prodrys' || !Array.isArray(obj.shapes))
-    return toast('To nie jest plik projektu ProdRys');
+function saveProjectAs() {
+  const n = (prompt(t('p.saveAs'), $('#projName').value) || '').trim();
+  if (!n) return;
+  $('#projName').value = n; state.name = n;    /* zaktualizuj nazwę w rogu */
+  saveProject();
+}
+function loadProject(obj, fileName) {
+  if (!obj || !isProjectApp(obj.app) || !Array.isArray(obj.shapes))
+    return toast(t('t.badProj'));
   pushUndo();
-  state.name = obj.name || 'Projekt';
+  /* nazwa projektu = nazwa pliku (bez rozszerzenia), z fallbackiem na pole name */
+  const fromFile = fileName ? fileName.replace(/\.[^.]+$/, '') : '';
+  state.name = fromFile || obj.name || 'Projekt';
   $('#projName').value = state.name;
-  state.shapes = obj.shapes;
+  state.shapes = obj.shapes.map(normalizeShape);
   state.vars = obj.vars && obj.vars.cols ? obj.vars : { cols: [], rows: [] };
   state.page = obj.page && obj.page.mode ? obj.page : { mode: 'off' };
   syncPageUI(); fitPage();
@@ -1421,7 +2254,7 @@ function loadProject(obj) {
   }
   sel.clear(); previewRow = -1;
   render(); renderProps(); renderVars(); autosave();
-  toast('Wczytano projekt: ' + state.name);
+  toast(t('t.loaded') + state.name);
 }
 let autosaveTm = null;
 function autosave() {
@@ -1430,16 +2263,18 @@ function autosave() {
     try { localStorage.setItem('prodrys_auto', projectJSON()); } catch (e) {}
   }, 400);
 }
-async function exportPNG() {
+async function exportImage(fmt) {
   const region = pageRegion();
-  if (!state.shapes.length && !region) return toast('Płótno jest puste');
+  if (!state.shapes.length && !region) return toast(t('t.emptyCanvas'));
   const b = buildSVG(state.shapes, currentVals(), 16, region);
-  const png = await svgToPngBlob(b.svg, b.w, b.h, 2);
+  const mime = fmt === 'jpg' ? 'image/jpeg' : 'image/png';
+  const ext = fmt === 'jpg' ? '.jpg' : '.png';
+  const png = await svgToPngBlob(b.svg, b.w, b.h, 2, mime);
   let name = sanitizeFile($('#projName').value);
   if (previewRow >= 0 && state.vars.rows[previewRow])
     name += '_' + sanitizeFile(state.vars.rows[previewRow].name);
-  downloadBlob(png, name + '.png');
-  toast('Wyeksportowano: ' + name + '.png');
+  downloadBlob(png, name + ext);
+  toast(t('t.exported') + name + ext);
 }
 
 /* =====================================================================
@@ -1452,14 +2287,17 @@ function insertImageURL(url) {
     const maxW = 480;
     const k = img.naturalWidth > maxW ? maxW / img.naturalWidth : 1;
     const r = cv.getBoundingClientRect();
-    const c = { x: (r.width / 2 - view.x) / view.z, y: (r.height / 2 - view.y) / view.z };
+    /* kaskada — kolejne obrazy nie nakładają się na siebie */
+    const off = (imgCascade % 10) * 28 / view.z;
+    imgCascade++;
+    const c = { x: (r.width / 2 - view.x) / view.z + off, y: (r.height / 2 - view.y) / view.z + off };
     const s = { id: uid(), type: 'image', href: url,
       x: c.x - img.naturalWidth * k / 2, y: c.y - img.naturalHeight * k / 2,
       w: img.naturalWidth * k, h: img.naturalHeight * k };
     state.shapes.push(s);
     setSelection([s.id]); setTool('select'); autosave();
   };
-  img.onerror = () => toast('Nie udało się wczytać obrazu');
+  img.onerror = () => toast(t('t.imgLoadErr'));
   img.src = url;
 }
 function fileToDataURL(file) {
@@ -1478,15 +2316,28 @@ document.addEventListener('paste', async e => {
   if (imgItem) {
     e.preventDefault();
     insertImageURL(await fileToDataURL(imgItem.getAsFile()));
-    toast('Wklejono obraz ze schowka');
+    toast(t('t.pasteImg'));
     return;
+  }
+  /* obrazy w HTML ze schowka (np. kształty/zakres skopiowane z Excela) */
+  const html = e.clipboardData?.getData('text/html');
+  if (html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const srcs = [...doc.querySelectorAll('img')].map(im => im.getAttribute('src'))
+      .filter(src => src && /^data:image\//.test(src));
+    if (srcs.length) {
+      e.preventDefault();
+      srcs.forEach(src => insertImageURL(src));
+      toast(t('t.pasteImg'));
+      return;
+    }
   }
   if (clip) { e.preventDefault(); pasteClip(); }
 });
 function copySel() {
   const ss = selShapes(); if (!ss.length) return;
   clip = JSON.stringify(ss);
-  toast('Skopiowano: ' + ss.length);
+  toast(t('t.copied') + ss.length);
 }
 function pasteClip() {
   if (!clip) return;
@@ -1503,54 +2354,200 @@ function pasteClip() {
   setSelection(copies.map(c => c.id)); autosave();
 }
 /* import XLSX/XLSM — tylko osadzone obrazy (bez „śmieciowych" kształtów) */
+/* buforowana lista elementów importu XLSX (obrazy + kształty do wyboru) */
+let xlsxImportItems = [];
+function buildImageShapeFromURL(url, offset = 0) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 480;
+      const k = img.naturalWidth > maxW ? maxW / img.naturalWidth : 1;
+      const r = cv.getBoundingClientRect();
+      const c = { x: (r.width / 2 - view.x) / view.z, y: (r.height / 2 - view.y) / view.z };
+      res({ id: uid(), type: 'image', href: url,
+        x: c.x - img.naturalWidth * k / 2 + offset, y: c.y - img.naturalHeight * k / 2 + offset,
+        w: img.naturalWidth * k, h: img.naturalHeight * k });
+    };
+    img.onerror = () => rej(new Error('Image load failed'));
+    img.src = url;
+  });
+}
+function cloneShapesWithFreshIds(shapes) {
+  const gMap = {};
+  return shapes.map(s => {
+    const n = JSON.parse(JSON.stringify(s));
+    n.id = uid();
+    if (n.g) { gMap[n.g] = gMap[n.g] || ('G' + uid()); n.g = gMap[n.g]; }
+    return n;
+  });
+}
+function closeXlsxModal() {
+  $('#xlModal').classList.remove('on');
+  for (const it of xlsxImportItems) if (it.kind === 'image' && it.previewUrl) URL.revokeObjectURL(it.previewUrl);
+  xlsxImportItems = [];
+}
+function renderXlsxImportPicker(skippedEMF = 0) {
+  const body = $('#xlBody'); body.innerHTML = '';
+  const ctl = document.createElement('div');
+  ctl.style.cssText = 'grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;';
+  const allCb = document.createElement('input');
+  allCb.type = 'checkbox';
+  allCb.checked = xlsxImportItems.every(i => i.selected);
+  const allLbl = document.createElement('label');
+  allLbl.className = 'hint';
+  allLbl.style.cssText = 'display:flex;align-items:center;gap:6px;cursor:pointer;';
+  allLbl.appendChild(allCb);
+  allLbl.appendChild(document.createTextNode(t('xl.selectAll')));
+  const importBtn = document.createElement('button');
+  importBtn.className = 'btn primary';
+  importBtn.textContent = t('xl.importSel');
+  importBtn.addEventListener('click', applySelectedXlsxItems);
+  ctl.appendChild(allLbl); ctl.appendChild(importBtn);
+  body.appendChild(ctl);
+  allCb.addEventListener('change', () => {
+    xlsxImportItems.forEach(i => i.selected = allCb.checked);
+    renderXlsxImportPicker(skippedEMF);
+  });
+  xlsxImportItems.forEach((it, idx) => {
+    const d = document.createElement('div');
+    d.className = 'xlImg';
+    const checked = it.selected ? 'checked' : '';
+    if (it.kind === 'image') {
+      d.innerHTML = `<div class="xlSel"><label><input type="checkbox" data-xlpick="${idx}" ${checked}> ${t('xl.image')}</label></div><img src="${it.previewUrl}"><div>${escXml(it.name)}</div>`;
+    } else {
+      d.innerHTML = `<div class="xlSel"><label><input type="checkbox" data-xlpick="${idx}" ${checked}> ${t('xl.shape')}</label></div><div class="xlShapePrev"><svg viewBox="0 0 120 90">${shapeSVG(it.shape, null, false)}</svg></div><div>${escXml(it.name)}</div>`;
+    }
+    body.appendChild(d);
+  });
+  $$('#xlBody [data-xlpick]').forEach(cb => cb.addEventListener('change', e => {
+    xlsxImportItems[+e.target.dataset.xlpick].selected = e.target.checked;
+  }));
+  if (skippedEMF) {
+    const w = document.createElement('div');
+    w.className = 'hint'; w.style.gridColumn = '1/-1';
+    w.textContent = t('t.emfHint', { n: skippedEMF });
+    body.appendChild(w);
+  }
+}
+async function applySelectedXlsxItems() {
+  const selected = xlsxImportItems.filter(i => i.selected);
+  if (!selected.length) return toast(t('xl.nothing'));
+  state.page = { mode: 'off' };
+  syncPageUI();
+  pushUndo();
+  const add = [];
+  let imageN = 0, shapeN = 0;
+  for (const it of selected) {
+    if (it.kind === 'shape') {
+      add.push(...cloneShapesWithFreshIds([it.shape]));
+      shapeN++;
+    } else {
+      try {
+        const dataUrl = await fileToDataURL(new Blob([it.data], { type: it.mime }));
+        if (it.anchored) add.push({ id: uid(), type: 'image', href: dataUrl, x: it.x, y: it.y, w: it.w, h: it.h });
+        else add.push(await buildImageShapeFromURL(dataUrl, imageN * 18));
+        imageN++;
+      } catch (e) {}
+    }
+  }
+  if (!add.length) return toast(t('xl.fail'));
+  state.shapes.push(...add.map(normalizeShape));
+  setSelection(add.map(a => a.id));
+  render(); renderProps(); autosave();
+  closeXlsxModal();
+  toast(t('xl.done', { i: imageN, s: shapeN }));
+}
+/* import XLSX/XLSM — obrazy + kształty wektorowe (z pozycjami z arkusza) */
 async function importXlsx(file) {
   try {
-    if (typeof DecompressionStream === 'undefined')
-      return toast('Przeglądarka nie wspiera dekompresji — użyj Chrome/Edge');
-    toast('Odczytywanie pliku…');
-    const media = await readZipMedia(await file.arrayBuffer());
-    const imgs = media.filter(m => /\.(png|jpe?g|gif|bmp|webp)$/i.test(m.name));
-    const skipped = media.length - imgs.length;
-    if (!imgs.length)
-      return toast('Brak obrazów PNG/JPG w pliku' + (skipped ? ` (${skipped} w formacie EMF/WMF — niewspierane)` : ''));
-    const body = $('#xlBody'); body.innerHTML = '';
-    for (const m of imgs) {
-      const ext = m.name.split('.').pop().toLowerCase();
-      const mime = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif'
-        : ext === 'bmp' ? 'image/bmp' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-      const url = await fileToDataURL(new Blob([m.data], { type: mime }));
-      const d = document.createElement('div');
-      d.className = 'xlImg';
-      d.innerHTML = `<img src="${url}"><div>${escXml(m.name.replace('xl/media/', ''))}</div>`;
-      d.addEventListener('click', () => {
-        insertImageURL(url);
-        $('#xlModal').classList.remove('on');
-        toast('Wstawiono obraz z XLSX');
-      });
-      body.appendChild(d);
+    if (typeof DecompressionStream === 'undefined') return toast(t('t.noDecomp'));
+    toast(t('t.reading'));
+    const buf = await file.arrayBuffer();
+    const allFiles = await readZipAll(buf);
+    const td = new TextDecoder();
+    const mediaFiles = allFiles.filter(f => /^xl\/media\//i.test(f.name) && /\.(png|jpe?g|gif|bmp|webp)$/i.test(f.name));
+    const mediaMap = {};
+    mediaFiles.forEach(m => mediaMap[m.name] = { data: m.data, mime: mediaMimeFromName(m.name) });
+    const sheetFile = allFiles.find(f => /^xl\/worksheets\/sheet\d+\.xml$/i.test(f.name));
+    const dims = parseSheetDims(sheetFile ? td.decode(sheetFile.data) : '');
+    const drawingFiles = allFiles.filter(f => /^xl\/drawings\/drawing\d+\.xml$/i.test(f.name));
+    const importedShapes = [];
+    const anchoredPictures = [];
+    let unsupportedFallbacks = 0;
+    for (const df of drawingFiles) {
+      const relPath = df.name.replace(/^xl\/drawings\//i, 'xl/drawings/_rels/') + '.rels';
+      const relFile = allFiles.find(f => f.name === relPath);
+      const relMap = relFile ? parseDrawingRels(td.decode(relFile.data), df.name) : {};
+      const parsed = parseDrawingShapes(td.decode(df.data), dims, relMap, mediaMap);
+      importedShapes.push(...parsed.shapes);
+      anchoredPictures.push(...parsed.pictures.map(p => ({ ...p, anchored: true })));
+      unsupportedFallbacks += parsed.unsupportedFallbacks || 0;
     }
-    if (skipped) {
+    const skippedEMF = allFiles.filter(f => /^xl\/media\//i.test(f.name) && /\.(emf|wmf)$/i.test(f.name)).length;
+    if (!mediaFiles.length && !importedShapes.length && !anchoredPictures.length)
+      return toast(t('xl.none') + (skippedEMF ? t('xl.emf', { n: skippedEMF }) : ''));
+    closeXlsxModal();
+    xlsxImportItems = [];
+    const usedAnchored = new Set(anchoredPictures.map(p => 'xl/media/' + p.name.replace(/^xl\/media\//i, '')));
+    for (const p of anchoredPictures) {
+      xlsxImportItems.push({ kind: 'image', name: p.name, data: p.data, mime: p.mime, anchored: true,
+        x: p.x, y: p.y, w: p.w, h: p.h,
+        previewUrl: URL.createObjectURL(new Blob([p.data], { type: p.mime })), selected: true });
+    }
+    for (const m of mediaFiles) {
+      if (usedAnchored.has(m.name)) continue;
+      const mime = mediaMimeFromName(m.name);
+      xlsxImportItems.push({ kind: 'image', name: m.name.replace('xl/media/', ''), data: m.data, mime, anchored: false,
+        previewUrl: URL.createObjectURL(new Blob([m.data], { type: mime })), selected: true });
+    }
+    importedShapes.forEach((s, i) => xlsxImportItems.push({ kind: 'shape', name: `${s.type}_${i + 1}`, shape: s, selected: true }));
+    const imgN = xlsxImportItems.filter(i => i.kind === 'image').length;
+    const shapeN = xlsxImportItems.length - imgN;
+    $('#xlModal').querySelector('h3').textContent = t('xl.count', { i: imgN, s: shapeN });
+    renderXlsxImportPicker(skippedEMF);
+    if (unsupportedFallbacks) {
       const w = document.createElement('div');
       w.className = 'hint'; w.style.gridColumn = '1/-1';
-      w.textContent = `Pominięto ${skipped} obrazów EMF/WMF (format wektorowy Excela — niewspierany w przeglądarce). W CATII/Excelu wklejaj zrzuty jako bitmapę.`;
-      body.appendChild(w);
+      w.textContent = t('xl.fallback', { n: unsupportedFallbacks });
+      $('#xlBody').appendChild(w);
     }
     $('#xlModal').classList.add('on');
-  } catch (err) {
-    toast('Błąd importu: ' + err.message);
-  }
+  } catch (err) { toast(t('t.importErr') + err.message); }
 }
 
 /* =====================================================================
    PASEK GÓRNY, NARZĘDZIA, KLAWIATURA, INICJALIZACJA
    ===================================================================== */
-function setTool(t) {
-  tool = t;
-  $$('.tool').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
-  cv.setAttribute('class', 't-' + t);
+function setTool(name) {
+  tool = name;
+  $$('.tool').forEach(b => b.classList.toggle('on', b.dataset.tool === name));
+  cv.setAttribute('class', 't-' + name);
+}
+/* pipeta — pobiera kolor z ekranu (EyeDropper API; brak w Firefoksie) */
+async function startEyedropper() {
+  if (!window.EyeDropper) return toast(t('t.noEyedropper'));
+  try {
+    const res = await new EyeDropper().open();
+    applyPickedColor(res.sRGBHex);
+  } catch (e) { /* użytkownik anulował */ }
+}
+function applyPickedColor(color) {
+  const ss = selShapes();
+  if (ss.length) {
+    pushUndo();
+    ss.forEach(a => {
+      if (['rect', 'ellipse', 'poly', 'roundRect'].includes(a.type)) { a.fill = color; a.noFill = false; }
+      else if (a.type === 'line') a.stroke = color;
+      else if (a.type === 'text') a.tc = color;
+    });
+    render(); renderProps(); autosave();
+  }
+  toast(t('t.picked') + color);
 }
 $$('.tool').forEach(b => b.addEventListener('click', () => {
   if (b.dataset.tool === 'image') { $('#fImg').click(); return; }
+  if (b.dataset.tool === 'eyedrop') { startEyedropper(); return; }
+  if (b.dataset.tool === 'shapes') { openShapeModal(); return; }
   setTool(b.dataset.tool);
 }));
 $$('.tab').forEach(b => b.addEventListener('click', () => {
@@ -1587,29 +2584,17 @@ function templateShapes(W, H) {
     { id: uid(), g, type: 'text', x: 62, y: H - 74, text: 'PRZÓD', fs: 15, tc: '#111827', bold: true }
   ];
 }
-function newFromTemplate() {
-  let loaded = false;
-  try {
-    const tmpl = localStorage.getItem('prodrys_template');
-    if (tmpl) {
-      const obj = JSON.parse(tmpl);
-      if (obj.app === 'prodrys' && Array.isArray(obj.shapes)) {
-        state = {
-          name: 'Instrukcja_01',
-          shapes: JSON.parse(JSON.stringify(obj.shapes)),
-          vars: obj.vars && obj.vars.cols ? JSON.parse(JSON.stringify(obj.vars)) : { cols: [], rows: [] },
-          page: obj.page && obj.page.mode ? JSON.parse(JSON.stringify(obj.page)) : { mode: 'a4l', w: PAGES.a4l.w, h: PAGES.a4l.h }
-        };
-        /* assign fresh IDs so each project is independent */
-        state.shapes.forEach(s => { s.id = uid(); });
-        loaded = true;
-      }
-    }
-  } catch (e) {}
-  if (!loaded) {
-    state = { name: 'Instrukcja_01', shapes: [], vars: { cols: [], rows: [] },
-      page: { mode: 'a4l', w: PAGES.a4l.w, h: PAGES.a4l.h } };
+/* utwórz nowy projekt z wybranego szablonu (null=pusty, 'builtin'=wbudowany) */
+function projectFromTemplate(tmpl) {
+  state = { name: 'Instrukcja_01', shapes: [], vars: { cols: [], rows: [] },
+    page: { mode: 'a4l', w: PAGES.a4l.w, h: PAGES.a4l.h } };
+  if (tmpl === 'builtin') {
     state.shapes = templateShapes(state.page.w, state.page.h);
+  } else if (tmpl && Array.isArray(tmpl.shapes)) {
+    state.shapes = JSON.parse(JSON.stringify(tmpl.shapes)).map(normalizeShape);
+    state.vars = tmpl.vars && tmpl.vars.cols ? JSON.parse(JSON.stringify(tmpl.vars)) : { cols: [], rows: [] };
+    state.page = tmpl.page && tmpl.page.mode ? JSON.parse(JSON.stringify(tmpl.page)) : { mode: 'a4l', w: PAGES.a4l.w, h: PAGES.a4l.h };
+    state.shapes.forEach(s => { s.id = uid(); });   /* świeże ID = niezależny projekt */
   }
   $('#projName').value = state.name;
   sel.clear(); previewRow = -1;
@@ -1617,34 +2602,115 @@ function newFromTemplate() {
   syncPageUI(); fitPage();
   render(); renderProps(); renderVars(); autosave();
 }
+/* modal wyboru szablonu (jak przy imporcie obrazów) */
+function openTemplatePicker() {
+  const body = $('#tmplBody'); body.innerHTML = '';
+  const cards = [
+    { label: t('tmpl.blank'), tmpl: null, blank: true },
+    { label: t('tmpl.default'), tmpl: 'builtin' }
+  ];
+  templates.forEach((tm, i) => cards.push({ label: tm.name, tmpl: tm, idx: i }));
+  for (const card of cards) {
+    const d = document.createElement('div');
+    d.className = 'tmplCard' + (card.blank ? ' blank' : '');
+    let thumb = '';
+    const shapes = card.tmpl === 'builtin' ? templateShapes(1123, 794)
+      : (card.tmpl && card.tmpl.shapes) ? card.tmpl.shapes : null;
+    if (shapes) { const b = buildSVG(shapes, null, 20); thumb = b ? b.svg : ''; }
+    d.innerHTML = (thumb || '<svg viewBox="0 0 100 60"></svg>') + `<div class="cap">${escXml(card.label)}</div>`;
+    if (card.idx !== undefined) {
+      const del = document.createElement('button');
+      del.className = 'tdel'; del.textContent = '✕';
+      del.addEventListener('click', ev => {
+        ev.stopPropagation();
+        if (!confirm(t('c.delTmpl', { n: card.label }))) return;
+        templates.splice(card.idx, 1); saveTemplatesLS(); openTemplatePicker();
+      });
+      d.appendChild(del);
+    }
+    d.addEventListener('click', () => { $('#tmplModal').classList.remove('on'); projectFromTemplate(card.tmpl); });
+    body.appendChild(d);
+  }
+  $('#tmplModal').classList.add('on');
+}
 function saveAsTemplate() {
-  if (!confirm('Zapisać bieżący projekt jako domyślny szablon dla nowych projektów?')) return;
-  try {
-    const tmpl = { app: 'prodrys', version: 2,
-      shapes: JSON.parse(JSON.stringify(state.shapes)),
-      vars: JSON.parse(JSON.stringify(state.vars)),
-      page: JSON.parse(JSON.stringify(state.page)) };
-    localStorage.setItem('prodrys_template', JSON.stringify(tmpl));
-    toast('Zapisano jako domyślny szablon — użyty przy następnym „Nowy"');
-  } catch (e) { toast('Błąd zapisu szablonu'); }
+  const name = (prompt(t('p.tmplName'), $('#projName').value || 'Szablon') || '').trim();
+  if (!name) return;
+  const tmpl = { name,
+    shapes: JSON.parse(JSON.stringify(state.shapes)),
+    vars: JSON.parse(JSON.stringify(state.vars)),
+    page: JSON.parse(JSON.stringify(state.page)) };
+  const i = templates.findIndex(x => x.name === name);
+  if (i >= 0) templates[i] = tmpl; else templates.push(tmpl);
+  saveTemplatesLS();
+  toast(t('t.tmplSaved') + name);
 }
-function exportSettings() {
-  const settings = { app: 'prodrys-settings', version: 1, lib: JSON.parse(JSON.stringify(lib)) };
-  try { const t = localStorage.getItem('prodrys_template'); if (t) settings.template = JSON.parse(t); } catch (e) {}
-  downloadBlob(new Blob([JSON.stringify(settings, null, 1)], { type: 'application/json' }), 'prodrys_ustawienia.json');
-  toast('Wyeksportowano ustawienia (biblioteka + szablon)');
+function saveSettingsLS() { try { localStorage.setItem('prodrys_settings', JSON.stringify(settings)); } catch (e) {} }
+function saveTemplatesLS() { try { localStorage.setItem('prodrys_templates', JSON.stringify(templates)); } catch (e) {} }
+/* konfiguracja = ustawienia + biblioteka + szablony (jeden plik) */
+function buildConfig() {
+  return { app: 'prodrys-config', version: 1,
+    settings: JSON.parse(JSON.stringify(settings)),
+    lib: JSON.parse(JSON.stringify(lib)),
+    templates: JSON.parse(JSON.stringify(templates)) };
 }
-function importSettings(obj) {
-  if (!obj || obj.app !== 'prodrys-settings') return toast('Nieprawidłowy plik ustawień');
-  let added = 0;
+function exportConfig() {
+  downloadBlob(new Blob([JSON.stringify(buildConfig(), null, 1)], { type: 'application/json' }), 'prodrys_konfig.json');
+  toast(t('t.cfgSaved'));
+}
+function importConfig(obj) {
+  if (!obj || (obj.app !== 'prodrys-config' && obj.app !== 'prodrys-settings'))
+    return toast(t('t.cfgBad'));
+  if (obj.settings) { settings = Object.assign(settings, obj.settings); saveSettingsLS(); }
   if (Array.isArray(obj.lib)) {
-    for (const it of obj.lib) if (!lib.some(l => l.name === it.name)) { lib.push(it); added++; }
-    saveLib(); renderLib();
+    for (const it of obj.lib) if (!lib.some(l => l.name === it.name)) lib.push(it);
+    saveLib();
   }
-  if (obj.template) {
-    try { localStorage.setItem('prodrys_template', JSON.stringify(obj.template)); } catch (e) {}
+  if (Array.isArray(obj.templates)) {
+    for (const it of obj.templates) {
+      const i = templates.findIndex(x => x.name === it.name);
+      if (i >= 0) templates[i] = it; else templates.push(it);
+    }
+    saveTemplatesLS();
+  } else if (obj.template) {          /* zgodność ze starym plikiem ustawień */
+    templates.push({ name: t('tmpl.default'), shapes: obj.template.shapes || [],
+      vars: obj.template.vars || { cols: [], rows: [] }, page: obj.template.page || { mode: 'a4l', w: 1123, h: 794 } });
+    saveTemplatesLS();
   }
-  toast('Zaimportowano ustawienia' + (added ? ` (+${added} do biblioteki)` : '') + (obj.template ? ' + szablon' : ''));
+  applySettings();
+  toast(t('t.cfgLoaded'));
+}
+/* zastosuj ustawienia do UI (język, szerokość panelu) i odśwież */
+function applySettings() {
+  document.documentElement.style.setProperty('--sideW', settings.sideW + 'px');
+  applyI18n();
+  render(); renderProps(); renderVars(); renderLib(); renderSettings();
+}
+function renderSettings() {
+  const el = $('#tab-settings');
+  el.innerHTML = `
+    <div class="grp"><h4>${t('set.language')}</h4>
+      <div class="setRow"><select class="in wide" id="setLang">
+        <option value="pl" ${settings.lang === 'pl' ? 'selected' : ''}>Polski</option>
+        <option value="en" ${settings.lang === 'en' ? 'selected' : ''}>English</option>
+        <option value="de" ${settings.lang === 'de' ? 'selected' : ''}>Deutsch</option>
+      </select></div></div>
+    <div class="grp"><h4>${t('set.zoom')}</h4>
+      <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setMx" ${settings.mxMaster ? 'checked' : ''}> ${t('set.mxMaster')}</label></div>
+      <div class="hint" style="margin-bottom:8px">${t('set.mxMasterHint')}</div>
+      <div class="row"><label>${t('set.zoomDiv')}</label><input class="in" type="number" id="setZoomDiv" min="1" max="20" step="1" value="${settings.zoomDiv}"></div>
+    </div>
+    <div class="grp"><h4>${t('set.panel')}</h4>
+      <div class="row"><label>${t('set.panelWidth')}</label><input class="in" type="number" id="setSideW" min="200" max="640" step="10" value="${settings.sideW}"></div>
+    </div>
+    <div class="grp"><div class="hint">${t('set.about')}</div></div>`;
+  $('#setLang').addEventListener('change', e => { settings.lang = e.target.value; saveSettingsLS(); applySettings(); });
+  $('#setMx').addEventListener('change', e => { settings.mxMaster = e.target.checked; saveSettingsLS(); });
+  $('#setZoomDiv').addEventListener('change', e => { settings.zoomDiv = clamp(parseFloat(e.target.value) || 4, 1, 20); saveSettingsLS(); });
+  $('#setSideW').addEventListener('change', e => {
+    settings.sideW = clamp(parseInt(e.target.value) || 272, 200, 640); saveSettingsLS();
+    document.documentElement.style.setProperty('--sideW', settings.sideW + 'px'); render();
+  });
 }
 $('#pageSel').addEventListener('change', () => {
   const m = $('#pageSel').value;
@@ -1662,28 +2728,38 @@ $('#pageSel').addEventListener('change', () => {
   state.page.h = Math.max(50, +$('#pageH').value || 794);
   fitPage(); render(); autosave();
 }));
-$('#bNew').addEventListener('click', () => {
-  if (!confirm('Nowy projekt z szablonu? Niezapisane zmiany zostaną utracone.')) return;
-  newFromTemplate();
-});
+/* ---------- menu rozwijane ---------- */
+function closeMenus() { $$('.menu.open').forEach(m => m.classList.remove('open')); }
+$$('.menu > [data-menu]').forEach(btn => btn.addEventListener('click', e => {
+  e.stopPropagation();
+  const m = btn.parentElement, wasOpen = m.classList.contains('open');
+  closeMenus();
+  if (!wasOpen) m.classList.add('open');
+}));
+$$('.menuItem').forEach(it => it.addEventListener('click', closeMenus));
+document.addEventListener('click', closeMenus);
+
+$('#bNew').addEventListener('click', openTemplatePicker);
 $('#bTmpl').addEventListener('click', saveAsTemplate);
-$('#bExpSet').addEventListener('click', exportSettings);
+$('#bExpSet').addEventListener('click', exportConfig);
 $('#bImpSet').addEventListener('click', () => $('#fSettings').click());
 $('#fSettings').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (!f) return;
-  try { importSettings(JSON.parse(await f.text())); }
-  catch (err) { toast('Nieprawidłowy plik ustawień'); }
+  try { importConfig(JSON.parse(await f.text())); }
+  catch (err) { toast(t('t.cfgBad')); }
 });
 $('#bSave').addEventListener('click', saveProject);
+$('#bSaveAs').addEventListener('click', saveProjectAs);
 $('#bOpen').addEventListener('click', () => $('#fOpen').click());
 $('#fOpen').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (!f) return;
-  try { loadProject(JSON.parse(await f.text())); }
-  catch (err) { toast('Nieprawidłowy plik projektu'); }
+  try { loadProject(JSON.parse(await f.text()), f.name); }
+  catch (err) { toast(t('t.badFile')); }
 });
 $('#bXlsx').addEventListener('click', () => $('#fXlsx').click());
+$('#bImg').addEventListener('click', () => $('#fImg').click());
 $('#fXlsx').addEventListener('change', e => {
   const f = e.target.files[0]; e.target.value = '';
   if (f) importXlsx(f);
@@ -1692,12 +2768,52 @@ $('#fImg').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (f) insertImageURL(await fileToDataURL(f));
 });
-$('#xlClose').addEventListener('click', () => $('#xlModal').classList.remove('on'));
-$('#bPng').addEventListener('click', exportPNG);
+$('#xlClose').addEventListener('click', closeXlsxModal);
+$('#shapeClose').addEventListener('click', () => $('#shapeModal').classList.remove('on'));
+$('#bZoomOut').addEventListener('click', () => zoomAtCenter(1 / 1.25));
+$('#bZoomIn').addEventListener('click', () => zoomAtCenter(1.25));
+$('#tmplClose').addEventListener('click', () => $('#tmplModal').classList.remove('on'));
+$('#bPng').addEventListener('click', () => exportImage('png'));
+$('#bJpg').addEventListener('click', () => exportImage('jpg'));
+$('#bPngQuick').addEventListener('click', () => exportImage('png'));
 $('#bUndo').addEventListener('click', undo);
 $('#bRedo').addEventListener('click', redo);
-$('#projName').addEventListener('change', autosave);
+$('#projName').addEventListener('change', () => { state.name = $('#projName').value; autosave(); });
 $('#gridSize').addEventListener('change', render);
+
+/* ---------- przeciągnij i upuść pliki na okno ---------- */
+window.addEventListener('dragover', e => { e.preventDefault(); });
+window.addEventListener('drop', async e => {
+  e.preventDefault();
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (!f) return;
+  if (/\.(json|prodrys)$/i.test(f.name)) {
+    try {
+      const obj = JSON.parse(await f.text());
+      if (obj.app === 'prodrys-config' || obj.app === 'prodrys-settings') importConfig(obj);
+      else loadProject(obj, f.name);
+    } catch (err) { toast(t('t.badFile')); }
+  } else if (/\.(xlsx|xlsm)$/i.test(f.name)) {
+    importXlsx(f);
+  } else if (f.type.startsWith('image/')) {
+    insertImageURL(await fileToDataURL(f));
+  }
+});
+
+/* ---------- suwak szerokości panelu bocznego ---------- */
+(function () {
+  const rz = $('#sideResizer'); if (!rz) return;
+  let dragging = false;
+  rz.addEventListener('pointerdown', e => { dragging = true; rz.setPointerCapture(e.pointerId); e.preventDefault(); });
+  rz.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const w = clamp(window.innerWidth - e.clientX, 200, 640);
+    settings.sideW = Math.round(w);
+    document.documentElement.style.setProperty('--sideW', settings.sideW + 'px');
+    render();
+  });
+  rz.addEventListener('pointerup', () => { if (dragging) { dragging = false; saveSettingsLS(); renderSettings(); } });
+})();
 
 document.addEventListener('keydown', e => {
   const inField = document.activeElement &&
@@ -1709,6 +2825,7 @@ document.addEventListener('keydown', e => {
     if (K === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if (K === 'y') { e.preventDefault(); redo(); }
     else if (K === 's') { e.preventDefault(); saveProject(); }
+    else if (K === 'o') { e.preventDefault(); $('#fOpen').click(); }
     else if (K === 'c') { e.preventDefault(); copySel(); }
     else if (K === 'd') { e.preventDefault(); duplicateSel(); }
     else if (K === 'a') { e.preventDefault(); setSelection(state.shapes.map(s => s.id)); }
@@ -1723,8 +2840,13 @@ document.addEventListener('keydown', e => {
   else if (K === 'l') setTool('line');
   else if (K === 'a') setTool('arrow');
   else if (K === 't') setTool('text');
+  else if (K === 's') openShapeModal();
   else if (K === 'i') $('#fImg').click();
+  else if (K === 'k') startEyedropper();
+  else if (e.key === '=' || e.key === '+') { e.preventDefault(); zoomAtCenter(1.25); }
+  else if (e.key === '-' || e.key === '_') { e.preventDefault(); zoomAtCenter(1 / 1.25); }
   else if (e.key.startsWith('Arrow') && sel.size) {
+    if (hasLockedSelection()) { e.preventDefault(); return lockToast(); }
     e.preventDefault(); pushUndo();
     const d = e.shiftKey ? 10 : 1;
     const dx = e.key === 'ArrowLeft' ? -d : e.key === 'ArrowRight' ? d : 0;
@@ -1745,6 +2867,13 @@ window.addEventListener('beforeunload', () => {
 
 /* ---------- start ---------- */
 (function init() {
+  /* ustawienia aplikacji */
+  try { const st = localStorage.getItem('prodrys_settings');
+    if (st) settings = Object.assign(settings, JSON.parse(st)); } catch (e) {}
+  if (!I18N[settings.lang]) settings.lang = 'pl';
+  document.documentElement.style.setProperty('--sideW', settings.sideW + 'px');
+  applyI18n();
+  /* biblioteka */
   try { const l = localStorage.getItem('prodrys_lib');
     lib = l ? JSON.parse(l) : null; } catch (e) { lib = null; }
   if (!Array.isArray(lib) || !lib.length) seedLib();
@@ -1754,25 +2883,40 @@ window.addEventListener('beforeunload', () => {
     if (i >= 0) lib[i] = d; else lib.unshift(d);
   }
   saveLib();
+  /* szablony (z migracją starego pojedynczego szablonu) */
+  try { const tp = localStorage.getItem('prodrys_templates');
+    templates = tp ? JSON.parse(tp) : []; } catch (e) { templates = []; }
+  if (!Array.isArray(templates)) templates = [];
+  try {
+    const oldT = localStorage.getItem('prodrys_template');
+    if (oldT && !templates.length) {
+      const o = JSON.parse(oldT);
+      if (o && Array.isArray(o.shapes))
+        templates.push({ name: t('tmpl.default'), shapes: o.shapes,
+          vars: o.vars || { cols: [], rows: [] }, page: o.page || { mode: 'a4l', w: 1123, h: 794 } });
+      saveTemplatesLS();
+    }
+  } catch (e) {}
   let restored = false;
   try {
     const a = localStorage.getItem('prodrys_auto');
     if (a) {
       const obj = JSON.parse(a);
-      if (obj.app === 'prodrys' && Array.isArray(obj.shapes) && obj.shapes.length) {
+      if (isProjectApp(obj.app) && Array.isArray(obj.shapes) && obj.shapes.length) {
         state.name = obj.name || state.name;
         $('#projName').value = state.name;
-        state.shapes = obj.shapes;
+        state.shapes = obj.shapes.map(normalizeShape);
         state.vars = obj.vars && obj.vars.cols ? obj.vars : { cols: [], rows: [] };
         state.page = obj.page && obj.page.mode ? obj.page : { mode: 'off' };
         restored = true;
-        toast('Przywrócono autozapis');
+        toast(t('t.autorestore'));
       }
     }
   } catch (e) {}
   if (restored) { syncPageUI(); fitPage(); render(); renderProps(); renderVars(); }
-  else newFromTemplate();
+  else projectFromTemplate('builtin');
   renderLib();
+  renderSettings();
 })();
 </script>
 </body>
