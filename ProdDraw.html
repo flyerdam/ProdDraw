@@ -48,12 +48,14 @@ body{
 /* ---------- canvas ---------- */
 .canvasWrap{grid-area:canvas;position:relative;overflow:hidden;background:var(--canvas);}
 #cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;}
+#cv text{-webkit-user-select:none;user-select:none;}
 #cv.t-select{cursor:default;} #cv.t-pan{cursor:grab;} #cv.panning{cursor:grabbing;}
 #cv.t-rect,#cv.t-ellipse,#cv.t-line,#cv.t-arrow{cursor:crosshair;}
 #cv.t-text{cursor:text;}
 #txtEd{position:absolute;display:none;background:#fff;border:1.5px solid var(--sel);
   font-family:Arial,sans-serif;resize:none;overflow:hidden;padding:2px 4px;line-height:1.25;
   box-shadow:0 2px 10px rgba(0,0,0,.25);z-index:20;}
+#txtEd.editing{border:2px solid var(--acc);box-shadow:0 0 0 3px rgba(255,176,32,.2),0 8px 18px rgba(0,0,0,.35);}
 /* ---------- side panel ---------- */
 .side{grid-area:side;background:var(--panel);border-left:1px solid var(--line);
   display:flex;flex-direction:column;min-height:0;}
@@ -582,6 +584,7 @@ function parseShapeNode(nodeXml, box) {
     irregularSeal2: 'star6', rightArrow: 'rightArrow', leftArrow: 'leftArrow',
     parallelogram: 'parallelogram', trapezoid: 'trapezoid', chevron: 'chevron', homePlate: 'chevron'
   };
+  const knownPrst = new Set(['rect', 'roundRect', 'ellipse', ...Object.keys(polyPrests)]);
   const s = {
     id: uid(), type: 'rect', x: box.x, y: box.y, w: box.w, h: box.h,
     fill, noFill, stroke, noStroke, sw, dash: 'solid', text, fs, tc, bold, font: 'Calibri'
@@ -589,6 +592,9 @@ function parseShapeNode(nodeXml, box) {
   if (prst === 'ellipse') s.type = 'ellipse';
   else if (prst === 'roundRect') { s.type = 'roundRect'; s.rx = 8; }
   else if (polyPrests[prst]) { s.type = 'poly'; s.preset = polyPrests[prst]; }
+  const rid = nodeXml.match(/<a:blip[^>]*r:embed="([^"]+)"/)?.[1] || null;
+  s._unsupported = !knownPrst.has(prst);
+  s._embedRid = rid;
   return s;
 }
 function parseConnectorNode(nodeXml, box) {
@@ -610,11 +616,13 @@ function parseConnectorNode(nodeXml, box) {
     stroke, sw, dash: 'solid', as: false, ae
   };
 }
-function parseGroupedShapes(aXml, anchorBox) {
+function parseGroupedShapes(aXml, anchorBox, relMap = {}, mediaMap = {}) {
   const out = [];
+  const pictures = [];
+  let unsupportedFallbacks = 0;
   const groupId = 'G' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
   const grpXml = aXml.match(/<xdr:grpSp[\s>][\s\S]*?<\/xdr:grpSp>/)?.[0];
-  if (!grpXml) return out;
+  if (!grpXml) return { shapes: out, pictures, unsupportedFallbacks };
   const gx = parseNodeXfrm(grpXml);
   const chW = gx?.chExtX || gx?.extX || 1;
   const chH = gx?.chExtY || gx?.extY || 1;
@@ -633,6 +641,12 @@ function parseGroupedShapes(aXml, anchorBox) {
     const spXml = sm[0];
     const box = mapBox(parseNodeXfrm(spXml));
     const s = parseShapeNode(spXml, box);
+    if (s._unsupported && s._embedRid && relMap[s._embedRid] && mediaMap[relMap[s._embedRid]]) {
+      pictures.push({ ...box, ...mediaMap[relMap[s._embedRid]], name: relMap[s._embedRid].replace(/^xl\/media\//i, '') });
+      unsupportedFallbacks++;
+      continue;
+    }
+    delete s._unsupported; delete s._embedRid;
     s.g = groupId;
     out.push(s);
   }
@@ -643,10 +657,19 @@ function parseGroupedShapes(aXml, anchorBox) {
     s.g = groupId;
     out.push(s);
   }
-  return out;
+  for (const pm of grpXml.matchAll(/<xdr:pic[\s>][\s\S]*?<\/xdr:pic>/g)) {
+    const pXml = pm[0];
+    const box = mapBox(parseNodeXfrm(pXml));
+    const rid = pXml.match(/<a:blip[^>]*r:embed="([^"]+)"/)?.[1];
+    const mediaPath = rid ? relMap[rid] : null;
+    if (mediaPath && mediaMap[mediaPath]) pictures.push({ ...box, ...mediaMap[mediaPath], name: mediaPath.replace(/^xl\/media\//i, '') });
+  }
+  return { shapes: out, pictures, unsupportedFallbacks };
 }
-function parseDrawingShapes(xml, dims) {
+function parseDrawingShapes(xml, dims, relMap = {}, mediaMap = {}) {
   const shapes = [];
+  const pictures = [];
+  let unsupportedFallbacks = 0;
   const EPX = 9525;
   const anchorRe = /<xdr:(absoluteAnchor|twoCellAnchor|oneCellAnchor)>([\s\S]*?)<\/xdr:\1>/g;
   let am;
@@ -684,18 +707,65 @@ function parseDrawingShapes(xml, dims) {
     if (!w || !h || w < 2 || h < 2) continue;
     const box = { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) };
     if (/<xdr:grpSp[\s>]/.test(aXml)) {
-      const gShapes = parseGroupedShapes(aXml, box);
-      if (gShapes.length) { shapes.push(...gShapes); continue; }
+      const g = parseGroupedShapes(aXml, box, relMap, mediaMap);
+      if (g.shapes.length || g.pictures.length) {
+        shapes.push(...g.shapes);
+        pictures.push(...g.pictures);
+        unsupportedFallbacks += g.unsupportedFallbacks;
+        continue;
+      }
     }
     if (/<xdr:sp[\s>]/.test(aXml)) {
       const spXml = aXml.match(/<xdr:sp[\s>][\s\S]*?<\/xdr:sp>/)?.[0];
-      if (spXml) shapes.push(parseShapeNode(spXml, box));
+      if (spXml) {
+        const s = parseShapeNode(spXml, box);
+        if (s._unsupported && s._embedRid && relMap[s._embedRid] && mediaMap[relMap[s._embedRid]]) {
+          pictures.push({ ...box, ...mediaMap[relMap[s._embedRid]], name: relMap[s._embedRid].replace(/^xl\/media\//i, '') });
+          unsupportedFallbacks++;
+        } else {
+          delete s._unsupported; delete s._embedRid;
+          shapes.push(s);
+        }
+      }
     } else if (/<xdr:cxnSp[\s>]/.test(aXml)) {
       const cxnXml = aXml.match(/<xdr:cxnSp[\s>][\s\S]*?<\/xdr:cxnSp>/)?.[0];
       if (cxnXml) shapes.push(parseConnectorNode(cxnXml, box));
+    } else if (/<xdr:pic[\s>]/.test(aXml)) {
+      const picXml = aXml.match(/<xdr:pic[\s>][\s\S]*?<\/xdr:pic>/)?.[0];
+      if (picXml) {
+        const rid = picXml.match(/<a:blip[^>]*r:embed="([^"]+)"/)?.[1];
+        const mediaPath = rid ? relMap[rid] : null;
+        if (mediaPath && mediaMap[mediaPath]) pictures.push({ ...box, ...mediaMap[mediaPath], name: mediaPath.replace(/^xl\/media\//i, '') });
+      }
     }
   }
-  return shapes;
+  return { shapes, pictures, unsupportedFallbacks };
+}
+function resolveRelTarget(basePath, target) {
+  if (!target) return null;
+  if (/^\/xl\//i.test(target)) return target.replace(/^\//, '');
+  if (/^xl\//i.test(target)) return target;
+  const baseParts = basePath.split('/'); baseParts.pop();
+  for (const seg of target.split('/')) {
+    if (!seg || seg === '.') continue;
+    if (seg === '..') baseParts.pop();
+    else baseParts.push(seg);
+  }
+  return baseParts.join('/');
+}
+function parseDrawingRels(relXml, drawingPath) {
+  const map = {};
+  for (const m of relXml.matchAll(/<Relationship\b[^>]*\bId="([^"]+)"[^>]*\bTarget="([^"]+)"/g))
+    map[m[1]] = resolveRelTarget(drawingPath, m[2]);
+  return map;
+}
+function mediaMimeFromName(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  if (ext === 'png') return 'image/png';
+  if (ext === 'gif') return 'image/gif';
+  if (ext === 'bmp') return 'image/bmp';
+  if (ext === 'webp') return 'image/webp';
+  return 'image/jpeg';
 }
 
 function downloadBlob(blob, name) {
@@ -727,10 +797,11 @@ function textBlockSVG(cx, cy, text, fs, color, bold, vals, font = 'Calibri') {
   const lines = subst(text, vals).split('\n');
   if (!lines.join('')) return '';
   const lh = fs * 1.25;
-  const y0 = cy - (lines.length - 1) * lh / 2;
+  /* baseline compensation for capitals: visual center stays in geometric center */
+  const y0 = cy - (lines.length - 1) * lh / 2 + fs * 0.35;
   const ts = lines.map((l, i) =>
     `<tspan x="${cx}" y="${y0 + i * lh}">${escXml(l)}</tspan>`).join('');
-  return `<text text-anchor="middle" dominant-baseline="middle" font-family="${escXml(font || 'Calibri')},Arial,sans-serif" font-size="${fs}" ${bold ? 'font-weight="bold"' : ''} fill="${color}">${ts}</text>`;
+  return `<text text-anchor="middle" font-family="${escXml(font || 'Calibri')},Arial,sans-serif" font-size="${fs}" ${bold ? 'font-weight="bold"' : ''} fill="${color}">${ts}</text>`;
 }
 function arrowHeadSVG(fromX, fromY, tipX, tipY, sw, color) {
   const a = Math.atan2(tipY - fromY, tipX - fromX);
@@ -1026,6 +1097,7 @@ function setSelection(ids) {
 }
 cv.addEventListener('pointerdown', e => {
   if (txtEd.style.display === 'block') commitEdit();
+  if (window.getSelection) window.getSelection().removeAllRanges();
   cv.setPointerCapture(e.pointerId);
   const p = worldPt(e);
   /* pan */
@@ -1302,12 +1374,14 @@ function startEdit(s) {
   txtEd.style.fontFamily = (s.font || 'Calibri') + ',Arial,sans-serif';
   txtEd.style.textAlign = s.type === 'text' ? 'left' : 'center';
   txtEd.value = s.text || '';
+  txtEd.classList.add('editing');
   txtEd.focus(); txtEd.select();
 }
 function commitEdit() {
   if (!editShape) return;
   editShape.text = txtEd.value;
   txtEd.style.display = 'none';
+  txtEd.classList.remove('editing');
   editShape = null;
   render(); autosave();
 }
@@ -1966,7 +2040,7 @@ function pasteClip() {
 }
 function closeXlsxModal() {
   $('#xlModal').classList.remove('on');
-  for (const it of xlsxImportItems) if (it.kind === 'image' && it.url) URL.revokeObjectURL(it.url);
+  for (const it of xlsxImportItems) if (it.kind === 'image' && it.previewUrl) URL.revokeObjectURL(it.previewUrl);
   xlsxImportItems = [];
 }
 function renderXlsxImportPicker(skippedEMF = 0) {
@@ -1997,7 +2071,7 @@ function renderXlsxImportPicker(skippedEMF = 0) {
     d.className = 'xlImg';
     const checked = it.selected ? 'checked' : '';
     if (it.kind === 'image') {
-      d.innerHTML = `<div class="xlSel"><label><input type="checkbox" data-xlpick="${idx}" ${checked}> Image</label></div><img src="${it.url}"><div>${escXml(it.name)}</div>`;
+      d.innerHTML = `<div class="xlSel"><label><input type="checkbox" data-xlpick="${idx}" ${checked}> Image</label></div><img src="${it.previewUrl}"><div>${escXml(it.name)}</div>`;
     } else {
       d.innerHTML = `<div class="xlSel"><label><input type="checkbox" data-xlpick="${idx}" ${checked}> Shape</label></div><div class="xlShapePrev"><svg viewBox="0 0 120 90">${shapeSVG(it.shape, null, false)}</svg></div><div>${escXml(it.name)}</div>`;
     }
@@ -2037,7 +2111,12 @@ async function applySelectedXlsxItems() {
       shapeN++;
     } else {
       try {
-        add.push(await buildImageShapeFromURL(it.url, imageN * 18));
+        const dataUrl = await fileToDataURL(new Blob([it.data], { type: it.mime }));
+        if (it.anchored) {
+          add.push({ id: uid(), type: 'image', href: dataUrl, x: it.x, y: it.y, w: it.w, h: it.h });
+        } else {
+          add.push(await buildImageShapeFromURL(dataUrl, imageN * 18));
+        }
         imageN++;
       } catch (e) {}
     }
@@ -2059,24 +2138,52 @@ async function importXlsx(file) {
     const allFiles = await readZipAll(buf);
     const td = new TextDecoder();
     const mediaFiles = allFiles.filter(f => /^xl\/media\//i.test(f.name) && /\.(png|jpe?g|gif|bmp|webp)$/i.test(f.name));
+    const mediaMap = {};
+    mediaFiles.forEach(m => mediaMap[m.name] = { data: m.data, mime: mediaMimeFromName(m.name) });
     const sheetFile = allFiles.find(f => /^xl\/worksheets\/sheet\d+\.xml$/i.test(f.name));
     const sheetXml = sheetFile ? td.decode(sheetFile.data) : '';
     const dims = parseSheetDims(sheetXml);
     const drawingFiles = allFiles.filter(f => /^xl\/drawings\/drawing\d+\.xml$/i.test(f.name));
     const importedShapes = [];
-    for (const df of drawingFiles) importedShapes.push(...parseDrawingShapes(td.decode(df.data), dims));
+    const anchoredPictures = [];
+    let unsupportedFallbacks = 0;
+    for (const df of drawingFiles) {
+      const relPath = df.name.replace(/^xl\/drawings\//i, 'xl/drawings/_rels/') + '.rels';
+      const relFile = allFiles.find(f => f.name === relPath);
+      const relMap = relFile ? parseDrawingRels(td.decode(relFile.data), df.name) : {};
+      const parsed = parseDrawingShapes(td.decode(df.data), dims, relMap, mediaMap);
+      importedShapes.push(...parsed.shapes);
+      anchoredPictures.push(...parsed.pictures.map(p => ({ ...p, anchored: true })));
+      unsupportedFallbacks += parsed.unsupportedFallbacks || 0;
+    }
     const skippedEMF = allFiles.filter(f => /^xl\/media\//i.test(f.name) && /\.(emf|wmf)$/i.test(f.name)).length;
-    if (!mediaFiles.length && !importedShapes.length)
+    if (!mediaFiles.length && !importedShapes.length && !anchoredPictures.length)
       return toast('No supported images or shapes found in file' + (skippedEMF ? ` (${skippedEMF} EMF/WMF skipped)` : ''));
     closeXlsxModal();
     xlsxImportItems = [];
+    const usedAnchored = new Set(anchoredPictures.map(p => 'xl/media/' + p.name.replace(/^xl\/media\//i, '')));
+    for (const p of anchoredPictures) {
+      xlsxImportItems.push({
+        kind: 'image',
+        name: p.name,
+        data: p.data,
+        mime: p.mime,
+        anchored: true,
+        x: p.x, y: p.y, w: p.w, h: p.h,
+        previewUrl: URL.createObjectURL(new Blob([p.data], { type: p.mime })),
+        selected: true
+      });
+    }
     for (const m of mediaFiles) {
-      const ext = m.name.split('.').pop().toLowerCase();
-      const mime = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : ext === 'bmp' ? 'image/bmp' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+      if (usedAnchored.has(m.name)) continue;
+      const mime = mediaMimeFromName(m.name);
       xlsxImportItems.push({
         kind: 'image',
         name: m.name.replace('xl/media/', ''),
-        url: URL.createObjectURL(new Blob([m.data], { type: mime })),
+        data: m.data,
+        mime,
+        anchored: false,
+        previewUrl: URL.createObjectURL(new Blob([m.data], { type: mime })),
         selected: true
       });
     }
@@ -2085,6 +2192,12 @@ async function importXlsx(file) {
     const shapeN = xlsxImportItems.length - imgN;
     $('#xlModal').querySelector('h3').textContent = `XLSX Import — ${imgN} images + ${shapeN} shapes`;
     renderXlsxImportPicker(skippedEMF);
+    if (unsupportedFallbacks) {
+      const w = document.createElement('div');
+      w.className = 'hint'; w.style.gridColumn = '1/-1';
+      w.textContent = `Fallback: ${unsupportedFallbacks} unsupported Office shapes imported as images.`;
+      $('#xlBody').appendChild(w);
+    }
     $('#xlModal').classList.add('on');
   } catch (err) { toast('Import error: ' + err.message); }
 }
