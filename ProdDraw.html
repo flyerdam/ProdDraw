@@ -240,7 +240,7 @@ let guides = [];                 // linie pomocnicze przyciągania
 let previewRow = -1;             // -1 = brak podglądu wariantu
 let clip = null;                 // wewnętrzny schowek kształtów
 let spaceDown = false;
-let mxGap = 0;          // odstęp w układzie macierzowym
+let matrixGap = 0;          // odstęp w układzie macierzowym
 
 let uidN = 1;
 const uid = () => 'S' + (uidN++) + '_' + Date.now().toString(36);
@@ -1017,7 +1017,7 @@ function renderProps() {
   h += `<div class="grp"><h4>Wyrównanie (min. 2 kształty)</h4>
     <div class="row">${I('l', 'Do lewej')}${I('cx', 'Środek w pionie')}${I('r', 'Do prawej')}${I('t', 'Do góry')}${I('cy', 'Środek w poziomie')}${I('b', 'Do dołu')}</div>
     <div class="row">${I('dh', 'Rozłóż poziomo (3+)')}${I('dv', 'Rozłóż pionowo (3+)')}</div>
-    <div class="row"><label>Odstęp siatki</label><input class="in" type="number" id="mxGap" min="0" step="1" value="${mxGap}" style="width:52px"> px</div>
+    <div class="row"><label>Odstęp siatki</label><input class="in" type="number" id="matrixGap" min="0" step="1" value="${matrixGap}" style="width:52px"> px</div>
     <div class="row"><button class="btn" data-mx="fit" title="Ułóż w tabelę i ujednolić rozmiary komórek">Macierz + rozmiar</button>
     <button class="btn" data-mx="keep" title="Ułóż w tabelę bez zmiany rozmiarów">Macierz</button></div></div>`;
   /* kolejność */
@@ -1057,7 +1057,7 @@ function renderProps() {
   on('pAs', 'change', () => applyAll(a => { if (a.type === 'line') a.as = $('#pAs').checked; }));
   on('pAe', 'change', () => applyAll(a => { if (a.type === 'line') a.ae = $('#pAe').checked; }));
   $$('#tab-props [data-al]').forEach(b => b.addEventListener('click', () => alignSel(b.dataset.al)));
-  on('mxGap', 'change', () => { mxGap = Math.max(0, parseFloat($('#mxGap').value) || 0); });
+  on('matrixGap', 'change', () => { matrixGap = Math.max(0, parseFloat($('#matrixGap').value) || 0); });
   $$('#tab-props [data-mx]').forEach(b => b.addEventListener('click', () => gridArrange(b.dataset.mx === 'fit')));
   $$('#tab-props [data-z]').forEach(b => b.addEventListener('click', () => zOrder(b.dataset.z)));
   on('pGroup', 'click', groupSel);
@@ -1134,7 +1134,7 @@ function gridArrange(resize) {
   }
   rows.forEach(r => r.items.sort((a, b) => a.b.x - b.b.x));
   const U = unionBBox(ss);
-  const gap = mxGap;
+  const gap = matrixGap;
   if (resize) {
     /* Per-row: uniform height = max height in that row */
     for (const row of rows) {
@@ -1143,8 +1143,8 @@ function gridArrange(resize) {
         if (it.s.h !== undefined) { it.s.h = rowH; it.b = bboxOf(it.s); }
     }
     /* Per-column: uniform width = max width in that column */
-    const nTmpCols = Math.max(...rows.map(r => r.items.length));
-    for (let j = 0; j < nTmpCols; j++) {
+    const numColumns = Math.max(...rows.map(r => r.items.length));
+    for (let j = 0; j < numColumns; j++) {
       const cw = Math.max(...rows.map(r => r.items[j] ? r.items[j].b.w : 0));
       for (const row of rows)
         if (row.items[j] && row.items[j].s.w !== undefined) {
