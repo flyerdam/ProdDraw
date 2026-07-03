@@ -136,6 +136,10 @@ input[type=checkbox]{accent-color:var(--acc);}
   <button class="btn" id="bSave">Zapisz projekt</button>
   <button class="btn" id="bXlsx">Import XLSX</button>
   <div class="sep"></div>
+  <button class="btn" id="bTmpl" title="Zapisz bieżący projekt jako domyślny szablon nowych projektów">Szablon ↓</button>
+  <button class="btn" id="bExpSet" title="Eksportuj bibliotekę i szablon do pliku (przeniesienie między przeglądarkami)">Ustaw. ↓</button>
+  <button class="btn" id="bImpSet" title="Importuj bibliotekę i szablon z pliku">Ustaw. ↑</button>
+  <div class="sep"></div>
   <button class="btn primary" id="bPng">Eksport PNG</button>
   <div class="spacer"></div>
   <button class="btn" id="bUndo" title="Cofnij (Ctrl+Z)">&#x21B6;</button>
@@ -206,6 +210,7 @@ input[type=checkbox]{accent-color:var(--acc);}
 <input type="file" id="fOpen" accept=".json,.prodrys" hidden>
 <input type="file" id="fXlsx" accept=".xlsx,.xlsm" hidden>
 <input type="file" id="fImg" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" hidden>
+<input type="file" id="fSettings" accept=".json" hidden>
 
 <script>
 "use strict";
@@ -235,6 +240,7 @@ let guides = [];                 // linie pomocnicze przyciągania
 let previewRow = -1;             // -1 = brak podglądu wariantu
 let clip = null;                 // wewnętrzny schowek kształtów
 let spaceDown = false;
+let mxGap = 0;          // odstęp w układzie macierzowym
 
 let uidN = 1;
 const uid = () => 'S' + (uidN++) + '_' + Date.now().toString(36);
@@ -894,10 +900,16 @@ cwrap.addEventListener('wheel', e => {
 let editShape = null;
 cv.addEventListener('dblclick', e => {
   const el = e.target.closest('[data-id]');
-  if (!el) return;
-  const s = state.shapes.find(a => a.id === el.dataset.id);
+  let s = el ? state.shapes.find(a => a.id === el.dataset.id) : null;
+  /* Fallback: render() in pointerdown can detach DOM nodes before dblclick fires.
+     In that case, look for a selected shape that supports text editing. */
+  if (!s) {
+    for (const id of sel) {
+      const c = state.shapes.find(a => a.id === id);
+      if (c && (c.type === 'rect' || c.type === 'ellipse' || c.type === 'text')) { s = c; break; }
+    }
+  }
   if (s && (s.type === 'rect' || s.type === 'ellipse' || s.type === 'text')) {
-    if (s.g) { /* w grupie — edytuj mimo to */ }
     setSelection([s.id]);
     startEdit(s);
   }
@@ -1005,6 +1017,7 @@ function renderProps() {
   h += `<div class="grp"><h4>Wyrównanie (min. 2 kształty)</h4>
     <div class="row">${I('l', 'Do lewej')}${I('cx', 'Środek w pionie')}${I('r', 'Do prawej')}${I('t', 'Do góry')}${I('cy', 'Środek w poziomie')}${I('b', 'Do dołu')}</div>
     <div class="row">${I('dh', 'Rozłóż poziomo (3+)')}${I('dv', 'Rozłóż pionowo (3+)')}</div>
+    <div class="row"><label>Odstęp siatki</label><input class="in" type="number" id="mxGap" min="0" step="1" value="${mxGap}" style="width:52px"> px</div>
     <div class="row"><button class="btn" data-mx="fit" title="Ułóż w tabelę i ujednolić rozmiary komórek">Macierz + rozmiar</button>
     <button class="btn" data-mx="keep" title="Ułóż w tabelę bez zmiany rozmiarów">Macierz</button></div></div>`;
   /* kolejność */
@@ -1044,6 +1057,7 @@ function renderProps() {
   on('pAs', 'change', () => applyAll(a => { if (a.type === 'line') a.as = $('#pAs').checked; }));
   on('pAe', 'change', () => applyAll(a => { if (a.type === 'line') a.ae = $('#pAe').checked; }));
   $$('#tab-props [data-al]').forEach(b => b.addEventListener('click', () => alignSel(b.dataset.al)));
+  on('mxGap', 'change', () => { mxGap = Math.max(0, parseFloat($('#mxGap').value) || 0); });
   $$('#tab-props [data-mx]').forEach(b => b.addEventListener('click', () => gridArrange(b.dataset.mx === 'fit')));
   $$('#tab-props [data-z]').forEach(b => b.addEventListener('click', () => zOrder(b.dataset.z)));
   on('pGroup', 'click', groupSel);
@@ -1120,12 +1134,23 @@ function gridArrange(resize) {
   }
   rows.forEach(r => r.items.sort((a, b) => a.b.x - b.b.x));
   const U = unionBBox(ss);
-  const gap = +$('#gridSize').value || 10;
+  const gap = mxGap;
   if (resize) {
-    const W = Math.max(...items.map(i => i.b.w));
-    const H = Math.max(...items.map(i => i.b.h));
-    for (const it of items)
-      if (it.s.w !== undefined) { it.s.w = W; it.s.h = H; it.b = bboxOf(it.s); }
+    /* Per-row: uniform height = max height in that row */
+    for (const row of rows) {
+      const rowH = Math.max(...row.items.map(i => i.b.h));
+      for (const it of row.items)
+        if (it.s.h !== undefined) { it.s.h = rowH; it.b = bboxOf(it.s); }
+    }
+    /* Per-column: uniform width = max width in that column */
+    const nTmpCols = Math.max(...rows.map(r => r.items.length));
+    for (let j = 0; j < nTmpCols; j++) {
+      const cw = Math.max(...rows.map(r => r.items[j] ? r.items[j].b.w : 0));
+      for (const row of rows)
+        if (row.items[j] && row.items[j].s.w !== undefined) {
+          row.items[j].s.w = cw; row.items[j].b = bboxOf(row.items[j].s);
+        }
+    }
   }
   const nCols = Math.max(...rows.map(r => r.items.length));
   const colW = [];
@@ -1563,14 +1588,63 @@ function templateShapes(W, H) {
   ];
 }
 function newFromTemplate() {
-  state = { name: 'Instrukcja_01', shapes: [], vars: { cols: [], rows: [] },
-    page: { mode: 'a4l', w: PAGES.a4l.w, h: PAGES.a4l.h } };
-  state.shapes = templateShapes(state.page.w, state.page.h);
+  let loaded = false;
+  try {
+    const tmpl = localStorage.getItem('prodrys_template');
+    if (tmpl) {
+      const obj = JSON.parse(tmpl);
+      if (obj.app === 'prodrys' && Array.isArray(obj.shapes)) {
+        state = {
+          name: 'Instrukcja_01',
+          shapes: JSON.parse(JSON.stringify(obj.shapes)),
+          vars: obj.vars && obj.vars.cols ? JSON.parse(JSON.stringify(obj.vars)) : { cols: [], rows: [] },
+          page: obj.page && obj.page.mode ? JSON.parse(JSON.stringify(obj.page)) : { mode: 'a4l', w: PAGES.a4l.w, h: PAGES.a4l.h }
+        };
+        /* assign fresh IDs so each project is independent */
+        state.shapes.forEach(s => { s.id = uid(); });
+        loaded = true;
+      }
+    }
+  } catch (e) {}
+  if (!loaded) {
+    state = { name: 'Instrukcja_01', shapes: [], vars: { cols: [], rows: [] },
+      page: { mode: 'a4l', w: PAGES.a4l.w, h: PAGES.a4l.h } };
+    state.shapes = templateShapes(state.page.w, state.page.h);
+  }
   $('#projName').value = state.name;
   sel.clear(); previewRow = -1;
   undoStack.length = 0; redoStack.length = 0;
   syncPageUI(); fitPage();
   render(); renderProps(); renderVars(); autosave();
+}
+function saveAsTemplate() {
+  if (!confirm('Zapisać bieżący projekt jako domyślny szablon dla nowych projektów?')) return;
+  try {
+    const tmpl = { app: 'prodrys', version: 2,
+      shapes: JSON.parse(JSON.stringify(state.shapes)),
+      vars: JSON.parse(JSON.stringify(state.vars)),
+      page: JSON.parse(JSON.stringify(state.page)) };
+    localStorage.setItem('prodrys_template', JSON.stringify(tmpl));
+    toast('Zapisano jako domyślny szablon — użyty przy następnym „Nowy"');
+  } catch (e) { toast('Błąd zapisu szablonu'); }
+}
+function exportSettings() {
+  const settings = { app: 'prodrys-settings', version: 1, lib: JSON.parse(JSON.stringify(lib)) };
+  try { const t = localStorage.getItem('prodrys_template'); if (t) settings.template = JSON.parse(t); } catch (e) {}
+  downloadBlob(new Blob([JSON.stringify(settings, null, 1)], { type: 'application/json' }), 'prodrys_ustawienia.json');
+  toast('Wyeksportowano ustawienia (biblioteka + szablon)');
+}
+function importSettings(obj) {
+  if (!obj || obj.app !== 'prodrys-settings') return toast('Nieprawidłowy plik ustawień');
+  let added = 0;
+  if (Array.isArray(obj.lib)) {
+    for (const it of obj.lib) if (!lib.some(l => l.name === it.name)) { lib.push(it); added++; }
+    saveLib(); renderLib();
+  }
+  if (obj.template) {
+    try { localStorage.setItem('prodrys_template', JSON.stringify(obj.template)); } catch (e) {}
+  }
+  toast('Zaimportowano ustawienia' + (added ? ` (+${added} do biblioteki)` : '') + (obj.template ? ' + szablon' : ''));
 }
 $('#pageSel').addEventListener('change', () => {
   const m = $('#pageSel').value;
@@ -1591,6 +1665,15 @@ $('#pageSel').addEventListener('change', () => {
 $('#bNew').addEventListener('click', () => {
   if (!confirm('Nowy projekt z szablonu? Niezapisane zmiany zostaną utracone.')) return;
   newFromTemplate();
+});
+$('#bTmpl').addEventListener('click', saveAsTemplate);
+$('#bExpSet').addEventListener('click', exportSettings);
+$('#bImpSet').addEventListener('click', () => $('#fSettings').click());
+$('#fSettings').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  try { importSettings(JSON.parse(await f.text())); }
+  catch (err) { toast('Nieprawidłowy plik ustawień'); }
 });
 $('#bSave').addEventListener('click', saveProject);
 $('#bOpen').addEventListener('click', () => $('#fOpen').click());
