@@ -12,6 +12,9 @@
   font-size:14px;
 }
 *{box-sizing:border-box; margin:0; padding:0;}
+/* brak zaznaczania tekstu UI (np. przy przeciąganiu w Edge); tylko pola i edytor tekstu */
+body{-webkit-user-select:none; user-select:none;}
+input, textarea, #txtEd, [contenteditable]{-webkit-user-select:text; user-select:text;}
 html,body{height:100%; overflow:hidden;}
 body{
   font-family:"Segoe UI",system-ui,-apple-system,sans-serif;
@@ -94,6 +97,18 @@ input[type=checkbox]{accent-color:var(--acc);}
 .libThumb svg{width:92%;height:56px;}
 .libRow{display:flex;align-items:center;padding:4px 6px;gap:4px;}
 .libRow span{flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* biblioteka: kafelki auto-dopasowane do szerokości + foldery */
+.libGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;margin-bottom:12px;}
+.libTile{border:1px solid var(--line);border-radius:5px;background:var(--panel2);overflow:hidden;display:flex;flex-direction:column;}
+.libTile .libThumb{height:56px;}.libTile .libThumb svg{height:48px;}
+.libTile .cap{font-size:11px;color:var(--txt);padding:3px 4px 0;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.libTile .tileBar{display:flex;gap:2px;padding:2px 3px 3px;align-items:center;}
+.libTile select{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--txt);font-size:10px;border-radius:3px;padding:1px;min-width:0;}
+.libTile .miniBtn{width:22px;height:22px;min-width:22px;padding:0;}
+.libFolderHead{display:flex;align-items:center;gap:6px;margin:10px 0 4px;font-size:11px;text-transform:uppercase;
+  letter-spacing:.6px;color:var(--acc);font-weight:600;}
+.libFolderHead .fdel{margin-left:auto;background:none;border:none;color:var(--txt2);cursor:pointer;font-size:12px;}
+.libFolderHead .fdel:hover{color:#ff5555;}
 /* variants */
 #varTbl{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px;}
 #varTbl th,#varTbl td{border:1px solid var(--line);padding:0;}
@@ -129,7 +144,8 @@ input[type=checkbox]{accent-color:var(--acc);}
 /* toast */
 #toast{position:fixed;bottom:44px;left:50%;transform:translateX(-50%);
   background:#111;color:#fff;padding:8px 18px;border-radius:4px;font-size:13px;
-  opacity:0;transition:opacity .25s;pointer-events:none;z-index:60;border:1px solid var(--acc);}
+  opacity:0;transition:opacity .5s;pointer-events:none;z-index:60;border:1px solid var(--acc);
+  max-width:70vw;text-align:center;word-break:break-all;}
 #toast.on{opacity:1;}
 ::-webkit-scrollbar{width:9px;height:9px;} ::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px;}
 /* ---------- dropdown menus ---------- */
@@ -197,16 +213,6 @@ body{grid-template-columns:46px 1fr var(--sideW,272px);}
     </div>
   </div>
 
-  <div class="menu" id="mConfig">
-    <button class="btn" data-menu><span data-i18n="menu.config">Konfig</span><span class="caret">▼</span></button>
-    <div class="menuPop">
-      <button class="menuItem" id="bTmpl"><span data-i18n="config.saveTmpl">Zapisz jako szablon…</span></button>
-      <div class="menuSep"></div>
-      <button class="menuItem" id="bExpSet"><span data-i18n="config.save">Zapisz konfig (plik)</span></button>
-      <button class="menuItem" id="bImpSet"><span data-i18n="config.load">Wczytaj konfig (plik)</span></button>
-    </div>
-  </div>
-
   <div class="sep"></div>
   <button class="btn primary" id="bJpgQuick" data-i18n="export.jpgQuick">Eksport JPG</button>
   <div class="spacer"></div>
@@ -224,7 +230,6 @@ body{grid-template-columns:46px 1fr var(--sideW,272px);}
   <button class="tool" data-tool="text" data-i18n-title="tt.tool.text"><svg viewBox="0 0 24 24"><path d="M5 6h14M12 6v13"/></svg></button>
   <button class="tool" data-tool="shapes" data-i18n-title="tt.tool.shapes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><polygon points="12,3 22,21 2,21"/></svg></button>
   <button class="tool" data-tool="image" data-i18n-title="tt.tool.image"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14"/><path d="M4 15l5-5 4 4 3-3 4 4"/><circle cx="9" cy="9" r="1.4"/></svg></button>
-  <button class="tool" data-tool="eyedrop" data-i18n-title="tt.tool.eyedrop"><svg viewBox="0 0 24 24"><path d="M18 3a2.5 2.5 0 0 1 3 3l-8 8-4 1 1-4z"/><path d="M9 11l-4 4v4h4l4-4"/></svg></button>
 </div>
 
 <!-- ======= CANVAS ======= -->
@@ -336,12 +341,14 @@ let previewRow = -1;             // -1 = brak podglądu wariantu
 let clip = null;                 // wewnętrzny schowek kształtów
 let spaceDown = false;
 let matrixGap = 0;          // odstęp w układzie macierzowym
-let rotStepOn = false;      // skokowe obracanie (co ROT_STEP°)
+let rotStepOn = true;       // skokowe obracanie (co ROT_STEP°) — domyślnie włączone
+let libFolders = [];        // nazwy folderów biblioteki (do segregacji)
 const ROT_STEP = 10;        // krok skokowego obrotu
 let currentProjectHandle = null;  // uchwyt pliku (zapis w miejscu, File System Access API)
 
 /* ---------- ustawienia aplikacji + szablony ---------- */
-let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, sideW: 272 };
+let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, sideW: 272,
+  defaults: { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' } };
 let templates = [];         // [{name, shapes, vars, page}]
 let imgCascade = 0;         // przesunięcie kolejnych wstawianych obrazów
 
@@ -367,9 +374,14 @@ const I18N = {
     'xlsx.title':'Obrazy znalezione w pliku — kliknij, aby wstawić','xlsx.insertAll':'Wstaw wszystkie',
     'btn.close':'Zamknij','btn.cancel':'Anuluj',
     'tmpl.title':'Wybierz szablon nowego projektu','tmpl.blank':'Pusty projekt','tmpl.default':'Domyślny szablon',
-    'set.language':'Język','set.zoom':'Sterowanie zoomem','set.mxMaster':'Tryb MX Master (wolniejszy zoom)',
+    'set.language':'Język','set.zoom':'Sterowanie zoomem','set.mxMaster':'Wolniejszy zoom',
     'set.mxMasterHint':'Włącz, jeśli kółko myszy przewija zbyt szybko. Wyższy dzielnik = wolniejszy zoom.',
     'set.zoomDiv':'Dzielnik zoomu','set.panel':'Panel','set.panelWidth':'Szerokość panelu (px)',
+    'set.defaults':'Domyślne nowych kształtów','set.config':'Konfiguracja',
+    'props.flip':'Odbicie','props.flipH':'Odbij w poziomie','props.flipV':'Odbij w pionie',
+    'props.crop':'Przycięcie (%)','props.cropLT':'Lewa / Góra','props.cropRB':'Prawa / Dół','props.cropReset':'Resetuj przycięcie',
+    'lib.newFolder':'+ Folder','lib.folder':'Folder','lib.folderName':'Nazwa folderu:','lib.emptyFolder':'(pusty folder)','lib.insertHint':'Kliknij, aby wstawić',
+    'c.tmplOverwrite':'Szablon „{n}" już istnieje. Nadpisać?','c.delFolder':'Usunąć folder „{n}"? Elementy trafią do korzenia.',
     'set.about':'ProdRys — edytor instrukcji produkcyjnych.',
     'props.none':'Nic nie zaznaczono.','props.noneHint':'Narysuj kształt narzędziami po lewej, wklej zrzut (Ctrl+V) lub zaimportuj obraz z pliku XLSX.',
     'props.selected':'Zaznaczone','props.posSize':'Pozycja i rozmiar','props.linePts':'Punkty linii',
@@ -430,8 +442,13 @@ const I18N = {
     'xlsx.title':'Images found in file — click to insert','xlsx.insertAll':'Insert all',
     'btn.close':'Close','btn.cancel':'Cancel',
     'tmpl.title':'Choose a template for the new project','tmpl.blank':'Blank project','tmpl.default':'Default template',
-    'set.language':'Language','set.zoom':'Zoom control','set.mxMaster':'MX Master mode (slower zoom)',
+    'set.language':'Language','set.zoom':'Zoom control','set.mxMaster':'Slower zoom',
     'set.mxMasterHint':'Enable if the mouse wheel zooms too fast. Higher divider = slower zoom.',
+    'set.defaults':'Defaults for new shapes','set.config':'Configuration',
+    'props.flip':'Flip','props.flipH':'Flip horizontally','props.flipV':'Flip vertically',
+    'props.crop':'Crop (%)','props.cropLT':'Left / Top','props.cropRB':'Right / Bottom','props.cropReset':'Reset crop',
+    'lib.newFolder':'+ Folder','lib.folder':'Folder','lib.folderName':'Folder name:','lib.emptyFolder':'(empty folder)','lib.insertHint':'Click to insert',
+    'c.tmplOverwrite':'Template “{n}" already exists. Overwrite?','c.delFolder':'Delete folder “{n}"? Items move to root.',
     'set.zoomDiv':'Zoom divider','set.panel':'Panel','set.panelWidth':'Panel width (px)',
     'set.about':'ProdRys — production-instruction editor.',
     'props.none':'Nothing selected.','props.noneHint':'Draw a shape with the tools on the left, paste a screenshot (Ctrl+V) or import an image from an XLSX file.',
@@ -493,8 +510,13 @@ const I18N = {
     'xlsx.title':'Bilder in der Datei — zum Einfügen klicken','xlsx.insertAll':'Alle einfügen',
     'btn.close':'Schließen','btn.cancel':'Abbrechen',
     'tmpl.title':'Vorlage für das neue Projekt wählen','tmpl.blank':'Leeres Projekt','tmpl.default':'Standardvorlage',
-    'set.language':'Sprache','set.zoom':'Zoom-Steuerung','set.mxMaster':'MX-Master-Modus (langsamerer Zoom)',
+    'set.language':'Sprache','set.zoom':'Zoom-Steuerung','set.mxMaster':'Langsamerer Zoom',
     'set.mxMasterHint':'Aktivieren, wenn das Mausrad zu schnell zoomt. Höherer Teiler = langsamerer Zoom.',
+    'set.defaults':'Vorgaben für neue Formen','set.config':'Konfiguration',
+    'props.flip':'Spiegeln','props.flipH':'Horizontal spiegeln','props.flipV':'Vertikal spiegeln',
+    'props.crop':'Zuschnitt (%)','props.cropLT':'Links / Oben','props.cropRB':'Rechts / Unten','props.cropReset':'Zuschnitt zurücksetzen',
+    'lib.newFolder':'+ Ordner','lib.folder':'Ordner','lib.folderName':'Ordnername:','lib.emptyFolder':'(leerer Ordner)','lib.insertHint':'Zum Einfügen klicken',
+    'c.tmplOverwrite':'Vorlage „{n}" existiert bereits. Überschreiben?','c.delFolder':'Ordner „{n}" löschen? Elemente wandern in die Wurzel.',
     'set.zoomDiv':'Zoom-Teiler','set.panel':'Panel','set.panelWidth':'Panelbreite (px)',
     'set.about':'ProdRys — Editor für Produktionsanweisungen.',
     'props.none':'Nichts ausgewählt.','props.noneHint':'Zeichnen Sie eine Form mit den Werkzeugen links, fügen Sie einen Screenshot ein (Strg+V) oder importieren Sie ein Bild aus einer XLSX-Datei.',
@@ -585,9 +607,9 @@ function redo() {
 }
 
 /* ---------- narzędzia pomocnicze ---------- */
-function toast(msg) {
+function toast(msg, ms = 2600) {
   const t = $('#toast'); t.textContent = msg; t.classList.add('on');
-  clearTimeout(t._tm); t._tm = setTimeout(() => t.classList.remove('on'), 2600);
+  clearTimeout(t._tm); t._tm = setTimeout(() => t.classList.remove('on'), ms);
 }
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 /* obrót punktu (px,py) wokół (cx,cy) o deg stopni */
@@ -1105,11 +1127,19 @@ function shapeCenter(s) {
   const b = bboxOf(s);
   return { x: b.x + b.w / 2, y: b.y + b.h / 2 };
 }
-/* atrybut transform rotate() dla kształtu (linie się nie obracają tym mechanizmem) */
+/* transform: obrót + odbicie lustrzane wokół środka (linie: brak) */
 function rotAttr(s) {
-  if (!s.rot || s.type === 'line') return '';
+  if (s.type === 'line') return '';
+  const hasFlip = s.flipH || s.flipV;
+  if (!s.rot && !hasFlip) return '';
   const c = shapeCenter(s);
-  return ` transform="rotate(${s.rot} ${c.x} ${c.y})"`;
+  let tr = '';
+  if (s.rot) tr += `rotate(${s.rot} ${c.x} ${c.y}) `;
+  if (hasFlip) {
+    const sx = s.flipH ? -1 : 1, sy = s.flipV ? -1 : 1;
+    tr += `translate(${c.x} ${c.y}) scale(${sx} ${sy}) translate(${-c.x} ${-c.y})`;
+  }
+  return ` transform="${tr.trim()}"`;
 }
 /* kształt -> SVG string. live=true dodaje data-id (interakcja) */
 function shapeSVG(s, vals, live) {
@@ -1162,6 +1192,17 @@ function shapeSVG(s, vals, live) {
     return out + '</g>';
   }
   if (s.type === 'image') {
+    const cr = s.crop;
+    if (cr && (cr.l || cr.t || cr.r || cr.b)) {
+      const cw = Math.max(0.02, 1 - (cr.l || 0) - (cr.r || 0));
+      const ch = Math.max(0.02, 1 - (cr.t || 0) - (cr.b || 0));
+      const dw = s.w / cw, dh = s.h / ch;
+      const ix = s.x - (cr.l || 0) * dw, iy = s.y - (cr.t || 0) * dh;
+      const cid = 'clip_' + s.id;
+      return `<g${did}><clipPath id="${cid}"><rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}"/></clipPath>` +
+        `<image x="${ix}" y="${iy}" width="${dw}" height="${dh}" href="${s.href}" preserveAspectRatio="none" clip-path="url(#${cid})"/>` +
+        (live ? `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="transparent"/>` : '') + `</g>`;
+    }
     return `<g${did}><image x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" href="${s.href}" preserveAspectRatio="none"/></g>`;
   }
   if (s.type === 'roundRect') {
@@ -1392,15 +1433,16 @@ function snapMove(dx, dy, b0, excludeIds) {
    ===================================================================== */
 let drag = null;
 function newShapeDefaults(type, p) {
-  const base = { id: uid(), stroke: '#000000', sw: 2, dash: 'solid' };
+  const D = settings.defaults || { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' };
+  const base = { id: uid(), stroke: D.stroke, sw: D.sw, dash: 'solid' };
   if (type === 'rect') return { ...base, type, x: p.x, y: p.y, w: 0, h: 0,
-    fill: '#ffffff', noFill: false, noStroke: false, text: '', fs: 14, tc: '#000000', bold: false, font: 'Calibri', locked: false };
+    fill: D.fill, noFill: false, noStroke: false, text: '', fs: D.fs, tc: D.tc, bold: false, font: D.font, locked: false };
   if (type === 'ellipse') return { ...base, type, x: p.x, y: p.y, w: 0, h: 0,
-    fill: '#ffffff', noFill: true, noStroke: false, text: '', fs: 14, tc: '#000000', bold: false, font: 'Calibri', locked: false };
+    fill: D.fill, noFill: true, noStroke: false, text: '', fs: D.fs, tc: D.tc, bold: false, font: D.font, locked: false };
   if (type === 'line' || type === 'arrow') return { ...base, type: 'line',
     x1: p.x, y1: p.y, x2: p.x, y2: p.y, as: false, ae: type === 'arrow', locked: false };
   if (type === 'text') return { id: uid(), type: 'text', x: p.x, y: p.y,
-    text: 'Tekst', fs: 16, tc: '#000000', bold: false, font: 'Calibri', locked: false };
+    text: 'Tekst', fs: Math.max(D.fs, 16), tc: D.tc, bold: false, font: D.font, locked: false };
   return null;
 }
 function setSelection(ids) {
@@ -1420,7 +1462,10 @@ function materializeLock(a) { if (a.locked) { a.lockMove = a.lockSize = a.lockSt
 function lockToast() { toast(t('t.locked')); }
 cv.addEventListener('pointerdown', e => {
   if (txtEd.style.display === 'block') commitEdit();
-  cv.setPointerCapture(e.pointerId);
+  closeMenus();                                  /* klik na płótnie zamyka menu */
+  if (window.getSelection) { const g = window.getSelection(); if (g && g.removeAllRanges) g.removeAllRanges(); }
+  try { cv.setPointerCapture(e.pointerId); } catch (er) {}
+  drag = null;                                   /* nigdy nie zaczynaj z zawieszonym dragiem */
   const p = worldPt(e);
   /* pan */
   if (e.button === 1 || spaceDown || tool === 'pan') {
@@ -1676,6 +1721,20 @@ cv.addEventListener('pointerup', e => {
   }
   render(); renderProps(); autosave();
 });
+/* awaryjne zakończenie dragu, gdy pointerup zaginie (Edge: „samo się przesuwa") */
+function abortDrag() {
+  if (!drag) return;
+  const wasNew = drag.mode === 'new' || drag.mode === 'newline';
+  const s = drag.s;
+  drag = null; guides = []; cv.classList.remove('panning');
+  if (wasNew && s && ((s.w < 3 && s.h < 3) || (s.type === 'line' && Math.hypot(s.x2 - s.x1, s.y2 - s.y1) < 3))) {
+    state.shapes = state.shapes.filter(a => a !== s); undoStack.pop(); sel.clear();
+  }
+  render(); renderProps(); autosave();
+}
+cv.addEventListener('pointercancel', abortDrag);
+cv.addEventListener('lostpointercapture', () => { if (drag && drag.mode !== 'pan') abortDrag(); });
+window.addEventListener('blur', abortDrag);
 /* zoom wokół środka płótna (przyciski +/- i klawisze) */
 function zoomAtCenter(k) {
   const r = cv.getBoundingClientRect();
@@ -1823,7 +1882,18 @@ function renderProps() {
       h += `<div class="row"><label>${t('props.size')}</label><input class="in" type="number" id="pW" step="1"><input class="in" type="number" id="pH" step="1"></div>`;
     h += `<div class="row"><label>${t('props.rotDeg')}</label><input class="in" type="number" id="pRot" step="1" value="${Math.round((s.rot || 0) * 10) / 10}">
       <label style="min-width:0"><input type="checkbox" id="pRotStep" ${rotStepOn ? 'checked' : ''}> ${t('props.rotStep', { n: ROT_STEP })}</label></div>`;
+    h += `<div class="row"><label>${t('props.flip')}</label>
+      <button class="btn" id="pFlipH" title="${t('props.flipH')}">↔</button>
+      <button class="btn" id="pFlipV" title="${t('props.flipV')}">↕</button></div>`;
     h += `</div>`;
+  }
+  if (one && s.type === 'image') {
+    const cr = s.crop || { l: 0, t: 0, r: 0, b: 0 };
+    const pc = v => Math.round((v || 0) * 100);
+    h += `<div class="grp"><h4>${t('props.crop')}</h4>
+      <div class="row"><label>${t('props.cropLT')}</label><input class="in" type="number" id="pCropL" min="0" max="90" step="1" value="${pc(cr.l)}"><input class="in" type="number" id="pCropT" min="0" max="90" step="1" value="${pc(cr.t)}"></div>
+      <div class="row"><label>${t('props.cropRB')}</label><input class="in" type="number" id="pCropR" min="0" max="90" step="1" value="${pc(cr.r)}"><input class="in" type="number" id="pCropB" min="0" max="90" step="1" value="${pc(cr.b)}"></div>
+      <div class="row"><button class="btn" id="pCropReset">${t('props.cropReset')}</button></div></div>`;
   }
   if (one && s.type === 'line') {
     h += `<div class="grp"><h4>${t('props.linePts')}</h4>
@@ -1920,6 +1990,12 @@ function renderProps() {
   on('pBold', 'change', () => applyStyleAll(a => { if ('fs' in a) a.bold = $('#pBold').checked; }));
   on('pItalic', 'change', () => applyStyleAll(a => { if ('fs' in a) a.italic = $('#pItalic').checked; }));
   on('pRotStep', 'change', () => { rotStepOn = $('#pRotStep').checked; });
+  on('pFlipH', 'click', () => applySizeAll(a => { if (a.type !== 'line') a.flipH = !a.flipH; }));
+  on('pFlipV', 'click', () => applySizeAll(a => { if (a.type !== 'line') a.flipV = !a.flipV; }));
+  const cropVal = id => clamp((parseFloat($('#' + id).value) || 0) / 100, 0, 0.9);
+  const setCrop = () => applySizeAll(a => { if (a.type === 'image') a.crop = { l: cropVal('pCropL'), t: cropVal('pCropT'), r: cropVal('pCropR'), b: cropVal('pCropB') }; });
+  ['pCropL', 'pCropT', 'pCropR', 'pCropB'].forEach(id => on(id, 'change', setCrop));
+  on('pCropReset', 'click', () => { applySizeAll(a => { if (a.type === 'image') a.crop = null; }); renderProps(); });
   on('pText', 'focus', () => pushUndo());
   on('pText', 'input', () => {
     const v = $('#pText').value;
@@ -2140,23 +2216,53 @@ function placeLib(item) {
   state.shapes.push(...copies);
   setSelection(copies.map(a => a.id)); autosave();
 }
+function saveLibFolders() { try { localStorage.setItem('prodrys_libfolders', JSON.stringify(libFolders)); } catch (e) {} }
 function renderLib() {
   const el = $('#tab-lib');
-  let h = `<div class="hint" style="margin-bottom:10px">${t('lib.hint')}</div>`;
+  const folderOptions = sel => ['', ...libFolders].map(f =>
+    `<option value="${escXml(f)}" ${sel === f ? 'selected' : ''}>${f ? escXml(f) : '—'}</option>`).join('');
+  const tile = i => {
+    const item = lib[i];
+    const b = buildSVG(item.shapes, null, 6);
+    return `<div class="libTile">
+      <div class="libThumb" data-lib="${i}" title="${t('lib.insertHint')}">${b ? b.svg : ''}</div>
+      <div class="cap" title="${escXml(item.name)}">${escXml(item.name)}</div>
+      <div class="tileBar"><select data-libmove="${i}" title="${t('lib.folder')}">${folderOptions(item.folder || '')}</select>
+        <button class="miniBtn" data-libdel="${i}" title="${t('props.del')}"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></div>`;
+  };
+  const idxByFolder = f => lib.map((it, i) => ({ it, i })).filter(o => (o.it.folder || '') === f).map(o => o.i);
+  let h = `<div class="hint" style="margin-bottom:8px">${t('lib.hint')}</div>`;
+  h += `<div class="row" style="margin-bottom:10px"><button class="btn" id="libAddFolder">${t('lib.newFolder')}</button></div>`;
   if (!lib.length) h += `<div class="empty">${t('lib.empty')}</div>`;
-  lib.forEach((item, i) => {
-    const t = buildSVG(item.shapes, null, 6);
-    h += `<div class="libItem">
-      <div class="libThumb" data-lib="${i}" title="Kliknij, aby wstawić">${t ? t.svg : ''}</div>
-      <div class="libRow"><span>${escXml(item.name)}</span>
-        <button class="miniBtn" data-libdel="${i}" title="Usuń z biblioteki"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-      </div></div>`;
-  });
+  /* korzeń */
+  const root = idxByFolder('');
+  if (root.length) h += `<div class="libGrid">${root.map(tile).join('')}</div>`;
+  /* foldery */
+  for (const f of libFolders) {
+    h += `<div class="libFolderHead"><span>📁 ${escXml(f)}</span><button class="fdel" data-fdel="${escXml(f)}" title="${t('props.del')}">✕</button></div>`;
+    const ids = idxByFolder(f);
+    h += ids.length ? `<div class="libGrid">${ids.map(tile).join('')}</div>` : `<div class="empty" style="padding:8px">${t('lib.emptyFolder')}</div>`;
+  }
   el.innerHTML = h;
+  $('#libAddFolder').addEventListener('click', () => {
+    const n = (prompt(t('lib.folderName')) || '').trim();
+    if (!n || libFolders.includes(n)) return;
+    libFolders.push(n); saveLibFolders(); renderLib();
+  });
   $$('#tab-lib [data-lib]').forEach(n => n.addEventListener('click', () => placeLib(lib[+n.dataset.lib])));
   $$('#tab-lib [data-libdel]').forEach(n => n.addEventListener('click', () => {
     if (!confirm(t('c.delLib', { n: lib[+n.dataset.libdel].name }))) return;
     lib.splice(+n.dataset.libdel, 1); saveLib(); renderLib();
+  }));
+  $$('#tab-lib [data-libmove]').forEach(n => n.addEventListener('change', () => {
+    lib[+n.dataset.libmove].folder = n.value; saveLib(); renderLib();
+  }));
+  $$('#tab-lib [data-fdel]').forEach(n => n.addEventListener('click', () => {
+    const f = n.dataset.fdel;
+    if (!confirm(t('c.delFolder', { n: f }))) return;
+    lib.forEach(it => { if ((it.folder || '') === f) it.folder = ''; });   /* elementy → korzeń */
+    libFolders = libFolders.filter(x => x !== f);
+    saveLib(); saveLibFolders(); renderLib();
   }));
 }
 function saveLib() { try { localStorage.setItem('prodrys_lib', JSON.stringify(lib)); } catch (e) {} }
@@ -2344,7 +2450,7 @@ async function saveProject(forcePicker = false) {
       await writeToHandle(currentProjectHandle);
       const fn = currentProjectHandle.name || (name + '.pdraw');
       setNameFromFilename(fn);
-      toast(t('t.nativeSaved') + fn); autosave();
+      toast(t('t.nativeSaved') + fn, 6000); autosave();
       return;
     } catch (err) {
       if (err && err.name === 'AbortError') return;   /* użytkownik anulował */
@@ -2353,7 +2459,7 @@ async function saveProject(forcePicker = false) {
   }
   /* fallback: pobranie pliku */
   downloadBlob(new Blob([projectJSON()], { type: 'application/json' }), name + '.json');
-  toast(t('t.saved') + name + '.json');
+  toast(t('t.saved') + name + '.json', 6000);
 }
 async function saveProjectAs() {
   if (!hasNativeFS()) {
@@ -2427,7 +2533,7 @@ async function exportImage(fmt, forcePicker = false) {
       }
       const w = await exportHandles[fmt].createWritable();
       await w.write(blob); await w.close();
-      toast(t('t.exported') + (exportHandles[fmt].name || name + ext));
+      toast(t('t.exported') + (exportHandles[fmt].name || name + ext), 6000);
       return;
     } catch (err) {
       if (err && err.name === 'AbortError') return;
@@ -2435,7 +2541,7 @@ async function exportImage(fmt, forcePicker = false) {
     }
   }
   downloadBlob(blob, name + ext);
-  toast(t('t.exported') + name + ext);
+  toast(t('t.exported') + name + ext, 6000);
 }
 
 /* =====================================================================
@@ -2695,30 +2801,8 @@ function setTool(name) {
   $$('.tool').forEach(b => b.classList.toggle('on', b.dataset.tool === name));
   cv.setAttribute('class', 't-' + name);
 }
-/* pipeta — pobiera kolor z ekranu (EyeDropper API; brak w Firefoksie) */
-async function startEyedropper() {
-  if (!window.EyeDropper) return toast(t('t.noEyedropper'));
-  try {
-    const res = await new EyeDropper().open();
-    applyPickedColor(res.sRGBHex);
-  } catch (e) { /* użytkownik anulował */ }
-}
-function applyPickedColor(color) {
-  const ss = selShapes();
-  if (ss.length) {
-    pushUndo();
-    ss.forEach(a => {
-      if (['rect', 'ellipse', 'poly', 'roundRect'].includes(a.type)) { a.fill = color; a.noFill = false; }
-      else if (a.type === 'line') a.stroke = color;
-      else if (a.type === 'text') a.tc = color;
-    });
-    render(); renderProps(); autosave();
-  }
-  toast(t('t.picked') + color);
-}
 $$('.tool').forEach(b => b.addEventListener('click', () => {
   if (b.dataset.tool === 'image') { $('#fImg').click(); return; }
-  if (b.dataset.tool === 'eyedrop') { startEyedropper(); return; }
   if (b.dataset.tool === 'shapes') { openShapeModal(); return; }
   setTool(b.dataset.tool);
 }));
@@ -2778,11 +2862,9 @@ function projectFromTemplate(tmpl) {
 /* modal wyboru szablonu (jak przy imporcie obrazów) */
 function openTemplatePicker() {
   const body = $('#tmplBody'); body.innerHTML = '';
-  const cards = [
-    { label: t('tmpl.blank'), tmpl: null, blank: true },
-    { label: t('tmpl.default'), tmpl: 'builtin' }
-  ];
+  const cards = [{ label: t('tmpl.blank'), tmpl: null, blank: true }];
   templates.forEach((tm, i) => cards.push({ label: tm.name, tmpl: tm, idx: i }));
+  if (!templates.length) cards.push({ label: t('tmpl.default'), tmpl: 'builtin' });   /* awaryjny wbudowany */
   for (const card of cards) {
     const d = document.createElement('div');
     d.className = 'tmplCard' + (card.blank ? ' blank' : '');
@@ -2813,8 +2895,11 @@ function saveAsTemplate() {
     shapes: JSON.parse(JSON.stringify(state.shapes)),
     vars: JSON.parse(JSON.stringify(state.vars)),
     page: JSON.parse(JSON.stringify(state.page)) };
-  const i = templates.findIndex(x => x.name === name);
-  if (i >= 0) templates[i] = tmpl; else templates.push(tmpl);
+  const i = templates.findIndex(x => x.name.toLowerCase() === name.toLowerCase());
+  if (i >= 0) {
+    if (!confirm(t('c.tmplOverwrite', { n: templates[i].name }))) return;
+    templates[i] = tmpl;
+  } else templates.push(tmpl);
   saveTemplatesLS();
   toast(t('t.tmplSaved') + name);
 }
@@ -2825,6 +2910,7 @@ function buildConfig() {
   return { app: 'prodrys-config', version: 1,
     settings: JSON.parse(JSON.stringify(settings)),
     lib: JSON.parse(JSON.stringify(lib)),
+    libFolders: JSON.parse(JSON.stringify(libFolders)),
     templates: JSON.parse(JSON.stringify(templates)) };
 }
 function exportConfig() {
@@ -2838,6 +2924,10 @@ function importConfig(obj) {
   if (Array.isArray(obj.lib)) {
     for (const it of obj.lib) if (!lib.some(l => l.name === it.name)) lib.push(it);
     saveLib();
+  }
+  if (Array.isArray(obj.libFolders)) {
+    for (const f of obj.libFolders) if (!libFolders.includes(f)) libFolders.push(f);
+    saveLibFolders();
   }
   if (Array.isArray(obj.templates)) {
     for (const it of obj.templates) {
@@ -2927,6 +3017,8 @@ function renderHelp() {
 }
 function renderSettings() {
   const el = $('#tab-settings');
+  const D = settings.defaults || (settings.defaults = { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' });
+  const fonts = ['Calibri', 'Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact'];
   el.innerHTML = `
     <div class="grp"><h4>${t('set.language')}</h4>
       <div class="setRow"><select class="in wide" id="setLang">
@@ -2942,6 +3034,18 @@ function renderSettings() {
     <div class="grp"><h4>${t('set.panel')}</h4>
       <div class="row"><label>${t('set.panelWidth')}</label><input class="in" type="number" id="setSideW" min="200" max="640" step="10" value="${settings.sideW}"></div>
     </div>
+    <div class="grp"><h4>${t('set.defaults')}</h4>
+      <div class="row"><label>${t('props.font')}</label><select class="in" id="dFont" style="width:130px">
+        ${fonts.map(f => `<option value="${f}" ${D.font === f ? 'selected' : ''}>${f}</option>`).join('')}</select></div>
+      <div class="row"><label>${t('props.size')}</label><input class="in" type="number" id="dFs" min="4" value="${D.fs}"></div>
+      <div class="row"><label>${t('props.width')}</label><input class="in" type="number" id="dSw" min="0.5" step="0.5" value="${D.sw}"></div>
+      <div class="row"><label>${t('props.stroke')}</label><input class="in" type="color" id="dStroke" value="${D.stroke}">
+        <input class="in" type="color" id="dTc" value="${D.tc}" title="${t('props.text')}">
+        <input class="in" type="color" id="dFill" value="${D.fill}" title="${t('props.fill')}"></div></div>
+    <div class="grp"><h4>${t('set.config')}</h4>
+      <div class="row"><button class="btn" id="setTmpl">${t('config.saveTmpl')}</button></div>
+      <div class="row"><button class="btn" id="setExpCfg">${t('config.save')}</button>
+        <button class="btn" id="setImpCfg">${t('config.load')}</button></div></div>
     <div class="grp"><div class="hint">${t('set.about')}</div></div>`;
   $('#setLang').addEventListener('change', e => { settings.lang = e.target.value; saveSettingsLS(); applySettings(); });
   $('#setMx').addEventListener('change', e => { settings.mxMaster = e.target.checked; saveSettingsLS(); });
@@ -2950,6 +3054,16 @@ function renderSettings() {
     settings.sideW = clamp(parseInt(e.target.value) || 272, 200, 640); saveSettingsLS();
     document.documentElement.style.setProperty('--sideW', settings.sideW + 'px'); render();
   });
+  const dSave = () => saveSettingsLS();
+  $('#dFont').addEventListener('change', e => { D.font = e.target.value; dSave(); });
+  $('#dFs').addEventListener('change', e => { D.fs = Math.max(4, parseFloat(e.target.value) || 14); dSave(); });
+  $('#dSw').addEventListener('change', e => { D.sw = Math.max(0.5, parseFloat(e.target.value) || 2); dSave(); });
+  $('#dStroke').addEventListener('input', e => { D.stroke = e.target.value; dSave(); });
+  $('#dTc').addEventListener('input', e => { D.tc = e.target.value; dSave(); });
+  $('#dFill').addEventListener('input', e => { D.fill = e.target.value; dSave(); });
+  $('#setTmpl').addEventListener('click', saveAsTemplate);
+  $('#setExpCfg').addEventListener('click', exportConfig);
+  $('#setImpCfg').addEventListener('click', () => $('#fSettings').click());
 }
 $('#pageSel').addEventListener('change', () => {
   const m = $('#pageSel').value;
@@ -2979,9 +3093,7 @@ $$('.menuItem').forEach(it => it.addEventListener('click', closeMenus));
 document.addEventListener('click', closeMenus);
 
 $('#bNew').addEventListener('click', openTemplatePicker);
-$('#bTmpl').addEventListener('click', saveAsTemplate);
-$('#bExpSet').addEventListener('click', exportConfig);
-$('#bImpSet').addEventListener('click', () => $('#fSettings').click());
+/* przyciski konfiguracji przeniesione do zakładki Ustawienia (renderSettings) */
 $('#fSettings').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (!f) return;
@@ -3088,7 +3200,6 @@ document.addEventListener('keydown', e => {
   else if (K === 't') setTool('text');
   else if (K === 's') openShapeModal();
   else if (K === 'i') $('#fImg').click();
-  else if (K === 'k') startEyedropper();
   else if (e.key === '=' || e.key === '+') { e.preventDefault(); zoomAtCenter(1.25); }
   else if (e.key === '-' || e.key === '_') { e.preventDefault(); zoomAtCenter(1 / 1.25); }
   else if (e.key.startsWith('Arrow') && sel.size) {
@@ -3126,9 +3237,11 @@ window.addEventListener('beforeunload', () => {
   /* odśwież wbudowane elementy biblioteki do aktualnej wersji */
   for (const d of defaultLibItems()) {
     const i = lib.findIndex(l => l.name === d.name);
-    if (i >= 0) lib[i] = d; else lib.unshift(d);
+    if (i >= 0) lib[i] = Object.assign(d, { folder: lib[i].folder || '' }); else lib.unshift(d);
   }
   saveLib();
+  try { const lf = localStorage.getItem('prodrys_libfolders'); libFolders = lf ? JSON.parse(lf) : []; } catch (e) { libFolders = []; }
+  if (!Array.isArray(libFolders)) libFolders = [];
   /* szablony (z migracją starego pojedynczego szablonu) */
   try { const tp = localStorage.getItem('prodrys_templates');
     templates = tp ? JSON.parse(tp) : []; } catch (e) { templates = []; }
@@ -3143,6 +3256,12 @@ window.addEventListener('beforeunload', () => {
       saveTemplatesLS();
     }
   } catch (e) {}
+  /* zasil edytowalnym domyślnym szablonem (można go nadpisać/usunąć) */
+  if (!templates.length) {
+    templates.push({ name: t('tmpl.default'), shapes: templateShapes(PAGES.a4l.w, PAGES.a4l.h),
+      vars: { cols: [], rows: [] }, page: { mode: 'a4l', w: PAGES.a4l.w, h: PAGES.a4l.h } });
+    saveTemplatesLS();
+  }
   let restored = false;
   try {
     const a = localStorage.getItem('prodrys_auto');
