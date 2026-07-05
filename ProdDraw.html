@@ -189,8 +189,11 @@ body{grid-template-columns:46px 1fr var(--sideW,272px);}
   <div class="menu" id="mExport">
     <button class="btn" data-menu><span data-i18n="menu.export">Eksport</span><span class="caret">▼</span></button>
     <div class="menuPop">
-      <button class="menuItem" id="bPng"><span data-i18n="export.png">Eksport PNG</span></button>
-      <button class="menuItem" id="bJpg"><span data-i18n="export.jpg">Eksport JPG</span></button>
+      <button class="menuItem" id="bPng"><span data-i18n="export.png">Eksportuj PNG</span></button>
+      <button class="menuItem" id="bPngAs"><span data-i18n="export.pngAs">Eksportuj PNG jako…</span></button>
+      <div class="menuSep"></div>
+      <button class="menuItem" id="bJpg"><span data-i18n="export.jpg">Eksportuj JPG</span></button>
+      <button class="menuItem" id="bJpgAs"><span data-i18n="export.jpgAs">Eksportuj JPG jako…</span></button>
     </div>
   </div>
 
@@ -205,7 +208,7 @@ body{grid-template-columns:46px 1fr var(--sideW,272px);}
   </div>
 
   <div class="sep"></div>
-  <button class="btn primary" id="bPngQuick" data-i18n="export.pngQuick">Eksport PNG</button>
+  <button class="btn primary" id="bJpgQuick" data-i18n="export.jpgQuick">Eksport JPG</button>
   <div class="spacer"></div>
   <button class="btn" id="bUndo" data-i18n-title="tt.undo">&#x21B6;</button>
   <button class="btn" id="bRedo" data-i18n-title="tt.redo">&#x21B7;</button>
@@ -238,11 +241,13 @@ body{grid-template-columns:46px 1fr var(--sideW,272px);}
     <button class="tab" data-tab="lib" data-i18n="tab.lib">Biblioteka</button>
     <button class="tab" data-tab="vars" data-i18n="tab.vars">Warianty</button>
     <button class="tab" data-tab="settings" data-i18n="tab.settings">Ustawienia</button>
+    <button class="tab" data-tab="help" data-i18n="tab.help">Pomoc</button>
   </div>
   <div class="tabBody on" id="tab-props"></div>
   <div class="tabBody" id="tab-lib"></div>
   <div class="tabBody" id="tab-vars"></div>
   <div class="tabBody" id="tab-settings"></div>
+  <div class="tabBody" id="tab-help"></div>
 </div>
 
 <!-- ======= STATUS ======= -->
@@ -348,13 +353,13 @@ const I18N = {
     'menu.file':'Plik','menu.export':'Eksport','menu.config':'Konfig',
     'file.new':'Nowy…','file.open':'Otwórz…','file.save':'Zapisz projekt','file.saveAs':'Zapisz jako…',
     'file.importXlsx':'Import XLSX/XLSM','file.insertImg':'Wstaw obraz…',
-    'export.png':'Eksport PNG','export.jpg':'Eksport JPG','export.pngQuick':'Eksport PNG',
+    'export.png':'Eksportuj PNG','export.jpg':'Eksportuj JPG','export.pngAs':'Eksportuj PNG jako…','export.jpgAs':'Eksportuj JPG jako…','export.jpgQuick':'Eksport JPG','export.pngQuick':'Eksport PNG',
     'config.saveTmpl':'Zapisz jako szablon…','config.save':'Zapisz konfig (plik)','config.load':'Wczytaj konfig (plik)',
     'tt.projName':'Nazwa projektu — użyta w nazwach plików','tt.undo':'Cofnij (Ctrl+Z)','tt.redo':'Ponów (Ctrl+Y)',
     'tt.tool.select':'Zaznaczanie (V)','tt.tool.rect':'Prostokąt (R)','tt.tool.ellipse':'Elipsa / koło (C)',
     'tt.tool.line':'Linia (L)','tt.tool.arrow':'Strzałka (A)','tt.tool.text':'Tekst (T)',
     'tt.tool.image':'Wstaw obraz PNG/JPG (I)','tt.tool.eyedrop':'Pipeta — pobierz kolor z ekranu (K)',
-    'tab.props':'Właściwości','tab.lib':'Biblioteka','tab.vars':'Warianty','tab.settings':'Ustawienia',
+    'tab.props':'Właściwości','tab.lib':'Biblioteka','tab.vars':'Warianty','tab.settings':'Ustawienia','tab.help':'Pomoc',
     'status.format':'Format','status.snapGrid':'Przyciągaj do siatki','status.grid':'Siatka',
     'status.snapObj':'Przyciągaj do obiektów',
     'status.hint':'Kółko = zoom  |  Spacja/środkowy = przesuwanie  |  2×klik = tekst',
@@ -399,6 +404,7 @@ const I18N = {
     'p.saveAs':'Nazwa projektu:','c.delLib':'Usunąć „{n}” z biblioteki?','c.delTmpl':'Usunąć szablon „{n}”?',
     'lib.default1':'Linia wymiarowa','lib.default2':'Balon nr części',
     'props.font':'Czcionka','props.locked':'zablokowane','props.content':'Treść',
+    'props.lockGrp':'Blokada','lock.all':'Zablokuj wszystko','lock.move':'Przesuwanie','lock.size':'Rozmiar i obrót','lock.style':'Wygląd (kolory)','lock.text':'Edycja tekstu',
     't.locked':'Kształt zablokowany — odblokuj we Właściwościach','t.added':'Dodano: ',
     'tt.tool.shapes':'Kształty dodatkowe (S)','shapes.title':'Kształty dodatkowe — kliknij, aby dodać',
     'xl.selectAll':'Zaznacz wszystko','xl.importSel':'Importuj zaznaczone','xl.image':'Obraz','xl.shape':'Kształt',
@@ -410,13 +416,13 @@ const I18N = {
     'menu.file':'File','menu.export':'Export','menu.config':'Config',
     'file.new':'New…','file.open':'Open…','file.save':'Save project','file.saveAs':'Save as…',
     'file.importXlsx':'Import XLSX/XLSM','file.insertImg':'Insert image…',
-    'export.png':'Export PNG','export.jpg':'Export JPG','export.pngQuick':'Export PNG',
+    'export.png':'Export PNG','export.jpg':'Export JPG','export.pngAs':'Export PNG as…','export.jpgAs':'Export JPG as…','export.jpgQuick':'Export JPG','export.pngQuick':'Export PNG',
     'config.saveTmpl':'Save as template…','config.save':'Save config (file)','config.load':'Load config (file)',
     'tt.projName':'Project name — used in file names','tt.undo':'Undo (Ctrl+Z)','tt.redo':'Redo (Ctrl+Y)',
     'tt.tool.select':'Select (V)','tt.tool.rect':'Rectangle (R)','tt.tool.ellipse':'Ellipse / circle (C)',
     'tt.tool.line':'Line (L)','tt.tool.arrow':'Arrow (A)','tt.tool.text':'Text (T)',
     'tt.tool.image':'Insert PNG/JPG image (I)','tt.tool.eyedrop':'Eyedropper — pick a color from screen (K)',
-    'tab.props':'Properties','tab.lib':'Library','tab.vars':'Variants','tab.settings':'Settings',
+    'tab.props':'Properties','tab.lib':'Library','tab.vars':'Variants','tab.settings':'Settings','tab.help':'Help',
     'status.format':'Format','status.snapGrid':'Snap to grid','status.grid':'Grid',
     'status.snapObj':'Snap to objects',
     'status.hint':'Wheel = zoom  |  Space/middle = pan  |  double-click = text',
@@ -461,6 +467,7 @@ const I18N = {
     'p.saveAs':'Project name:','c.delLib':'Remove “{n}” from the library?','c.delTmpl':'Delete template “{n}”?',
     'lib.default1':'Dimension line','lib.default2':'Part-number balloon',
     'props.font':'Font','props.locked':'locked','props.content':'Content',
+    'props.lockGrp':'Lock','lock.all':'Lock everything','lock.move':'Moving','lock.size':'Size & rotation','lock.style':'Appearance (colors)','lock.text':'Text editing',
     't.locked':'Shape locked — unlock it in Properties','t.added':'Added: ',
     'tt.tool.shapes':'More shapes (S)','shapes.title':'More shapes — click to add',
     'xl.selectAll':'Select all','xl.importSel':'Import selected','xl.image':'Image','xl.shape':'Shape',
@@ -472,13 +479,13 @@ const I18N = {
     'menu.file':'Datei','menu.export':'Export','menu.config':'Konfig',
     'file.new':'Neu…','file.open':'Öffnen…','file.save':'Projekt speichern','file.saveAs':'Speichern unter…',
     'file.importXlsx':'XLSX/XLSM importieren','file.insertImg':'Bild einfügen…',
-    'export.png':'PNG exportieren','export.jpg':'JPG exportieren','export.pngQuick':'PNG exportieren',
+    'export.png':'PNG exportieren','export.jpg':'JPG exportieren','export.pngAs':'PNG exportieren als…','export.jpgAs':'JPG exportieren als…','export.jpgQuick':'JPG exportieren','export.pngQuick':'PNG exportieren',
     'config.saveTmpl':'Als Vorlage speichern…','config.save':'Konfig speichern (Datei)','config.load':'Konfig laden (Datei)',
     'tt.projName':'Projektname — in Dateinamen verwendet','tt.undo':'Rückgängig (Strg+Z)','tt.redo':'Wiederholen (Strg+Y)',
     'tt.tool.select':'Auswahl (V)','tt.tool.rect':'Rechteck (R)','tt.tool.ellipse':'Ellipse / Kreis (C)',
     'tt.tool.line':'Linie (L)','tt.tool.arrow':'Pfeil (A)','tt.tool.text':'Text (T)',
     'tt.tool.image':'PNG/JPG-Bild einfügen (I)','tt.tool.eyedrop':'Pipette — Farbe vom Bildschirm wählen (K)',
-    'tab.props':'Eigenschaften','tab.lib':'Bibliothek','tab.vars':'Varianten','tab.settings':'Einstellungen',
+    'tab.props':'Eigenschaften','tab.lib':'Bibliothek','tab.vars':'Varianten','tab.settings':'Einstellungen','tab.help':'Hilfe',
     'status.format':'Format','status.snapGrid':'Am Raster ausrichten','status.grid':'Raster',
     'status.snapObj':'An Objekten ausrichten',
     'status.hint':'Rad = Zoom  |  Leertaste/Mitte = verschieben  |  Doppelklick = Text',
@@ -523,6 +530,7 @@ const I18N = {
     'p.saveAs':'Projektname:','c.delLib':'„{n}“ aus der Bibliothek entfernen?','c.delTmpl':'Vorlage „{n}“ löschen?',
     'lib.default1':'Maßlinie','lib.default2':'Teilenummer-Ballon',
     'props.font':'Schriftart','props.locked':'gesperrt','props.content':'Inhalt',
+    'props.lockGrp':'Sperre','lock.all':'Alles sperren','lock.move':'Verschieben','lock.size':'Größe & Drehung','lock.style':'Aussehen (Farben)','lock.text':'Textbearbeitung',
     't.locked':'Form gesperrt — in Eigenschaften entsperren','t.added':'Hinzugefügt: ',
     'tt.tool.shapes':'Weitere Formen (S)','shapes.title':'Weitere Formen — zum Hinzufügen klicken',
     'xl.selectAll':'Alle auswählen','xl.importSel':'Ausgewählte importieren','xl.image':'Bild','xl.shape':'Form',
@@ -1209,6 +1217,7 @@ function overlaySVG() {
   const hw = 4 / z, hs = `width="${hw * 2}" height="${hw * 2}" fill="#fff" stroke="var(--sel)" stroke-width="${1.2 / z}"`;
   const ss = selShapes();
   const lockedSel = hasLockedSelection(ss);
+  const sizeLock = hasSizeLock(ss);
   /* kontury zaznaczenia */
   for (const s of ss) {
     if (s.type === 'line') {
@@ -1219,8 +1228,8 @@ function overlaySVG() {
       out += `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="none" stroke="var(--sel)" stroke-width="${1 / z}" stroke-dasharray="${4 / z} ${3 / z}"${rt}/>`;
     }
   }
-  /* uchwyty */
-  if (ss.length === 1 && !lockedSel) {
+  /* uchwyty (ukryte gdy zablokowany rozmiar/obrót) */
+  if (ss.length === 1 && !sizeLock) {
     const s = ss[0];
     if (s.type === 'line') {
       out += `<circle data-handle="p1" cx="${s.x1}" cy="${s.y1}" r="${5 / z}" fill="#fff" stroke="var(--sel)" stroke-width="${1.4 / z}" style="cursor:move"/>`;
@@ -1244,7 +1253,7 @@ function overlaySVG() {
       hh += `<circle data-handle="rot" cx="${rx}" cy="${ry}" r="${5 / z}" fill="var(--acc)" stroke="#fff" stroke-width="${1.4 / z}" style="cursor:grab"/>`;
       out += `<g${rt}>${hh}</g>`;
     }
-  } else if (ss.length > 1 && !lockedSel) {
+  } else if (ss.length > 1 && !sizeLock) {
     const b = unionBBox(ss);
     out += `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="none" stroke="var(--sel)" stroke-width="${1.2 / z}"/>`;
     const H = [
@@ -1383,23 +1392,31 @@ function snapMove(dx, dy, b0, excludeIds) {
    ===================================================================== */
 let drag = null;
 function newShapeDefaults(type, p) {
-  const base = { id: uid(), stroke: '#111827', sw: 2, dash: 'solid' };
+  const base = { id: uid(), stroke: '#000000', sw: 2, dash: 'solid' };
   if (type === 'rect') return { ...base, type, x: p.x, y: p.y, w: 0, h: 0,
-    fill: '#ffffff', noFill: false, noStroke: false, text: '', fs: 14, tc: '#111827', bold: false, font: 'Calibri', locked: false };
+    fill: '#ffffff', noFill: false, noStroke: false, text: '', fs: 14, tc: '#000000', bold: false, font: 'Calibri', locked: false };
   if (type === 'ellipse') return { ...base, type, x: p.x, y: p.y, w: 0, h: 0,
-    fill: '#ffffff', noFill: true, noStroke: false, text: '', fs: 14, tc: '#111827', bold: false, font: 'Calibri', locked: false };
+    fill: '#ffffff', noFill: true, noStroke: false, text: '', fs: 14, tc: '#000000', bold: false, font: 'Calibri', locked: false };
   if (type === 'line' || type === 'arrow') return { ...base, type: 'line',
     x1: p.x, y1: p.y, x2: p.x, y2: p.y, as: false, ae: type === 'arrow', locked: false };
   if (type === 'text') return { id: uid(), type: 'text', x: p.x, y: p.y,
-    text: 'Tekst', fs: 16, tc: '#111827', bold: false, font: 'Calibri', locked: false };
+    text: 'Tekst', fs: 16, tc: '#000000', bold: false, font: 'Calibri', locked: false };
   return null;
 }
 function setSelection(ids) {
   sel = new Set(ids); render(); renderProps();
 }
 /* ---------- blokada kształtów ---------- */
-function isLockedShape(s) { return !!(s && s.locked); }
+/* granularna blokada: ruch / rozmiar+obrót / wygląd / tekst (legacy locked = wszystko) */
+function isMoveLocked(s) { return !!(s && (s.locked || s.lockMove)); }
+function isSizeLocked(s) { return !!(s && (s.locked || s.lockSize)); }
+function isStyleLocked(s) { return !!(s && (s.locked || s.lockStyle)); }
+function isTextLocked(s) { return !!(s && (s.locked || s.lockText)); }
+function isLockedShape(s) { return isMoveLocked(s) || isSizeLocked(s) || isStyleLocked(s) || isTextLocked(s); }
 function hasLockedSelection(shapes = selShapes()) { return shapes.some(isLockedShape); }
+function hasMoveLock(shapes = selShapes()) { return shapes.some(isMoveLocked); }
+function hasSizeLock(shapes = selShapes()) { return shapes.some(isSizeLocked); }
+function materializeLock(a) { if (a.locked) { a.lockMove = a.lockSize = a.lockStyle = a.lockText = true; a.locked = false; } }
 function lockToast() { toast(t('t.locked')); }
 cv.addEventListener('pointerdown', e => {
   if (txtEd.style.display === 'block') commitEdit();
@@ -1416,7 +1433,7 @@ cv.addEventListener('pointerdown', e => {
     const hEl = e.target.closest('[data-handle]');
     if (hEl && sel.size >= 1) {
       const ss = selShapes();
-      if (hasLockedSelection(ss)) { lockToast(); return; }
+      if (hasSizeLock(ss)) { lockToast(); return; }   /* uchwyty = zmiana rozmiaru/obrotu */
       pushUndo();
       const h = hEl.dataset.handle;
       if (h === 'rot') {
@@ -1452,7 +1469,11 @@ cv.addEventListener('pointerdown', e => {
         sel = new Set(ids);
       }
       renderProps();
-      if (hasLockedSelection(selShapes())) { render(); return; }
+      if (hasMoveLock(selShapes())) {   /* ruch zablokowany — brak przeciągania, ale tekst nadal edytowalny */
+        render();
+        if (sel.size === 1) maybeClickEdit([...sel][0]);
+        return;
+      }
       pushUndo();
       drag = { mode: 'move', sx: p.x, sy: p.y, moved: false,
         b0: unionBBox(selShapes()),
@@ -1583,6 +1604,10 @@ cv.addEventListener('pointermove', e => {
     if (o.rot) { /* przenieś kursor do lokalnego (nieobróconego) układu kształtu */
       const c0 = { x: o.x + o.w / 2, y: o.y + o.h / 2 };
       sp = rotatePt(p.x, p.y, c0.x, c0.y, -o.rot);
+      if ($('#snapG').checked) {   /* przyciąganie do siatki w układzie lokalnym */
+        const gs = +$('#gridSize').value || 10;
+        sp = { x: Math.round(sp.x / gs) * gs, y: Math.round(sp.y / gs) * gs };
+      }
     } else {
       sp = snapPt(p, new Set([s.id]));
     }
@@ -1644,7 +1669,11 @@ cv.addEventListener('pointerup', e => {
     } else setTool('select');
     render(); renderProps(); autosave(); return;
   }
-  if (d.mode === 'move' && !d.moved) undoStack.pop(); /* klik bez ruchu */
+  if (d.mode === 'move' && !d.moved) {
+    undoStack.pop(); /* klik bez ruchu */
+    /* dwuklik wykrywany po czasie — niezależny od DOM (Edge gubi natywny dblclick) */
+    if (sel.size === 1) maybeClickEdit([...sel][0]);
+  }
   render(); renderProps(); autosave();
 });
 /* zoom wokół środka płótna (przyciski +/- i klawisze) */
@@ -1675,8 +1704,21 @@ cwrap.addEventListener('wheel', e => {
    EDYCJA TEKSTU (2x klik)
    ===================================================================== */
 let editShape = null;
+let lastClick = { id: null, t: 0 };
 const isTextShapeType = t => ['rect', 'ellipse', 'text', 'poly', 'roundRect'].includes(t);
+/* drugi klik na tym samym kształcie w <400ms = edycja tekstu (działa też w Edge) */
+function maybeClickEdit(id) {
+  const now = (window.performance && performance.now) ? performance.now() : Date.now();
+  const s = state.shapes.find(a => a.id === id);
+  if (lastClick.id === id && now - lastClick.t < 400 && s && isTextShapeType(s.type) && !isTextLocked(s)) {
+    lastClick = { id: null, t: 0 };
+    setSelection([id]); startEdit(s);
+    return;
+  }
+  lastClick = { id, t: now };
+}
 cv.addEventListener('dblclick', e => {
+  if (editShape) return;
   const el = e.target.closest('[data-id]');
   let s = el ? state.shapes.find(a => a.id === el.dataset.id) : null;
   /* Fallback: render() in pointerdown can detach DOM nodes before dblclick fires.
@@ -1687,7 +1729,7 @@ cv.addEventListener('dblclick', e => {
       if (c && isTextShapeType(c.type)) { s = c; break; }
     }
   }
-  if (s && isTextShapeType(s.type) && !isLockedShape(s)) {
+  if (s && isTextShapeType(s.type) && !isTextLocked(s)) {
     setSelection([s.id]);
     startEdit(s);
   }
@@ -1741,11 +1783,16 @@ function refreshRot() {
   const el = $('#pRot'); if (el && document.activeElement !== el) el.value = Math.round((ss[0].rot || 0) * 10) / 10;
 }
 function applyAll(fn) { pushUndo(); selShapes().forEach(fn); render(); autosave(); }
-function applyUnlockedAll(fn) {
-  const unlocked = selShapes().filter(s => !isLockedShape(s));
-  if (!unlocked.length) return lockToast();
-  pushUndo(); unlocked.forEach(fn); render(); autosave();
+/* zastosuj do kształtów, które nie mają danej blokady (pred = test blokady) */
+function applyFiltered(pred, fn) {
+  const u = selShapes().filter(s => !pred(s));
+  if (!u.length) return lockToast();
+  pushUndo(); u.forEach(fn); render(); autosave();
 }
+const applyMoveAll = fn => applyFiltered(isMoveLocked, fn);   /* pozycja */
+const applySizeAll = fn => applyFiltered(isSizeLocked, fn);   /* rozmiar / obrót / geometria */
+const applyStyleAll = fn => applyFiltered(isStyleLocked, fn); /* kolory / obrys / czcionka */
+const applyUnlockedAll = applyMoveAll;                        /* zgodność wstecz */
 function renderProps() {
   const el = $('#tab-props');
   const ss = selShapes();
@@ -1761,7 +1808,13 @@ function renderProps() {
   const hasText = ['rect', 'ellipse', 'text', 'poly', 'roundRect'].some(t => types.has(t));
   const hasLine = types.has('line');
   let h = `<div class="grp"><h4>${t('props.selected')}: ${ss.length}</h4></div>`;
-  h += `<div class="grp"><div class="row"><label style="min-width:0"><input type="checkbox" id="pLock" ${ss.every(a => a.locked) ? 'checked' : ''}> ${t('props.locked')}</label></div></div>`;
+  const allLocked = ss.every(a => isMoveLocked(a) && isSizeLocked(a) && isStyleLocked(a) && isTextLocked(a));
+  h += `<div class="grp"><h4>${t('props.lockGrp')}</h4>
+    <div class="row"><label style="min-width:0"><input type="checkbox" id="pLockAll" ${allLocked ? 'checked' : ''}> <b>${t('lock.all')}</b></label></div>
+    <div class="row"><label style="min-width:0"><input type="checkbox" id="pLockMove" ${ss.every(isMoveLocked) ? 'checked' : ''}> ${t('lock.move')}</label>
+      <label style="min-width:0"><input type="checkbox" id="pLockSize" ${ss.every(isSizeLocked) ? 'checked' : ''}> ${t('lock.size')}</label></div>
+    <div class="row"><label style="min-width:0"><input type="checkbox" id="pLockStyle" ${ss.every(isStyleLocked) ? 'checked' : ''}> ${t('lock.style')}</label>
+      <label style="min-width:0"><input type="checkbox" id="pLockText" ${ss.every(isTextLocked) ? 'checked' : ''}> ${t('lock.text')}</label></div></div>`;
 
   if (one && s.type !== 'line') {
     h += `<div class="grp"><h4>${t('props.posSize')}</h4>
@@ -1839,37 +1892,42 @@ function renderProps() {
   /* zdarzenia panelu */
   const on = (id, ev, fn) => { const n = $('#' + id); if (n) n.addEventListener(ev, fn); };
   const num = id => parseFloat($('#' + id).value);
-  on('pLock', 'change', () => applyAll(a => { a.locked = $('#pLock').checked; }));
-  on('pX', 'change', () => applyUnlockedAll(a => { if (a.x !== undefined) a.x = num('pX'); }));
-  on('pY', 'change', () => applyUnlockedAll(a => { if (a.y !== undefined) a.y = num('pY'); }));
-  on('pW', 'change', () => applyUnlockedAll(a => { if (a.w !== undefined) a.w = Math.max(1, num('pW')); }));
-  on('pH', 'change', () => applyUnlockedAll(a => { if (a.h !== undefined) a.h = Math.max(1, num('pH')); }));
-  on('pRot', 'change', () => applyUnlockedAll(a => { if (a.type !== 'line') a.rot = ((num('pRot') % 360) + 360) % 360; }));
+  /* blokady granularne */
+  on('pLockAll', 'change', () => { const v = $('#pLockAll').checked; applyAll(a => { a.lockMove = a.lockSize = a.lockStyle = a.lockText = v; a.locked = false; }); renderProps(); });
+  on('pLockMove', 'change', () => { applyAll(a => { materializeLock(a); a.lockMove = $('#pLockMove').checked; }); renderProps(); });
+  on('pLockSize', 'change', () => { applyAll(a => { materializeLock(a); a.lockSize = $('#pLockSize').checked; }); renderProps(); });
+  on('pLockStyle', 'change', () => { applyAll(a => { materializeLock(a); a.lockStyle = $('#pLockStyle').checked; }); renderProps(); });
+  on('pLockText', 'change', () => { applyAll(a => { materializeLock(a); a.lockText = $('#pLockText').checked; }); renderProps(); });
+  on('pX', 'change', () => applyMoveAll(a => { if (a.x !== undefined) a.x = num('pX'); }));
+  on('pY', 'change', () => applyMoveAll(a => { if (a.y !== undefined) a.y = num('pY'); }));
+  on('pW', 'change', () => applySizeAll(a => { if (a.w !== undefined) a.w = Math.max(1, num('pW')); }));
+  on('pH', 'change', () => applySizeAll(a => { if (a.h !== undefined) a.h = Math.max(1, num('pH')); }));
+  on('pRot', 'change', () => applySizeAll(a => { if (a.type !== 'line') a.rot = ((num('pRot') % 360) + 360) % 360; }));
   ['pX1', 'pY1', 'pX2', 'pY2'].forEach(id =>
-    on(id, 'change', () => applyUnlockedAll(a => { if (a.type === 'line') a[id[1].toLowerCase() + id[2]] = num(id); })));
-  /* kolory: cofnij łapie CAŁĄ zmianę — pushUndo raz przy focusie, potem live bez undo */
-  const liveApply = fn => { selShapes().forEach(fn); render(); autosave(); };
+    on(id, 'change', () => applySizeAll(a => { if (a.type === 'line') a[id[1].toLowerCase() + id[2]] = num(id); })));
+  /* kolory: cofnij łapie CAŁĄ zmianę — pushUndo raz przy focusie, potem live bez undo (pomija zablok. wygląd) */
+  const liveApply = fn => { selShapes().filter(s => !isStyleLocked(s)).forEach(fn); render(); autosave(); };
   const bindColor = (id, fn) => { on(id, 'focus', () => pushUndo()); on(id, 'input', () => liveApply(fn)); };
   bindColor('pStroke', a => { if (a.stroke !== undefined) { a.stroke = $('#pStroke').value; a.noStroke = false; } });
-  on('pNoStroke', 'change', () => applyAll(a => { if ('noStroke' in a || a.type === 'rect' || a.type === 'ellipse') a.noStroke = $('#pNoStroke').checked; }));
-  on('pSw', 'change', () => applyAll(a => { if (a.sw !== undefined) a.sw = Math.max(0.5, num('pSw')); }));
-  on('pDash', 'change', () => applyAll(a => { if (a.dash !== undefined) a.dash = $('#pDash').value; }));
+  on('pNoStroke', 'change', () => applyStyleAll(a => { if ('noStroke' in a || a.type === 'rect' || a.type === 'ellipse') a.noStroke = $('#pNoStroke').checked; }));
+  on('pSw', 'change', () => applyStyleAll(a => { if (a.sw !== undefined) a.sw = Math.max(0.5, num('pSw')); }));
+  on('pDash', 'change', () => applyStyleAll(a => { if (a.dash !== undefined) a.dash = $('#pDash').value; }));
   bindColor('pFill', a => { if (a.fill !== undefined) { a.fill = $('#pFill').value; a.noFill = false; } });
-  on('pNoFill', 'change', () => applyAll(a => { if (a.fill !== undefined) a.noFill = $('#pNoFill').checked; }));
-  on('pFont', 'change', () => applyAll(a => { if ('font' in a || a.fs !== undefined) a.font = $('#pFont').value; }));
-  on('pFs', 'change', () => applyAll(a => { if (a.fs !== undefined) a.fs = Math.max(4, num('pFs')); }));
+  on('pNoFill', 'change', () => applyStyleAll(a => { if (a.fill !== undefined) a.noFill = $('#pNoFill').checked; }));
+  on('pFont', 'change', () => applyStyleAll(a => { if ('font' in a || a.fs !== undefined) a.font = $('#pFont').value; }));
+  on('pFs', 'change', () => applyStyleAll(a => { if (a.fs !== undefined) a.fs = Math.max(4, num('pFs')); }));
   bindColor('pTc', a => { if (a.tc !== undefined) a.tc = $('#pTc').value; });
-  on('pBold', 'change', () => applyAll(a => { if ('fs' in a) a.bold = $('#pBold').checked; }));
-  on('pItalic', 'change', () => applyAll(a => { if ('fs' in a) a.italic = $('#pItalic').checked; }));
+  on('pBold', 'change', () => applyStyleAll(a => { if ('fs' in a) a.bold = $('#pBold').checked; }));
+  on('pItalic', 'change', () => applyStyleAll(a => { if ('fs' in a) a.italic = $('#pItalic').checked; }));
   on('pRotStep', 'change', () => { rotStepOn = $('#pRotStep').checked; });
   on('pText', 'focus', () => pushUndo());
   on('pText', 'input', () => {
     const v = $('#pText').value;
-    selShapes().forEach(a => { if (a.text !== undefined) a.text = v; });
+    selShapes().forEach(a => { if (a.text !== undefined && !isTextLocked(a)) a.text = v; });
     render(); autosave();
   });
-  on('pAs', 'change', () => applyAll(a => { if (a.type === 'line') a.as = $('#pAs').checked; }));
-  on('pAe', 'change', () => applyAll(a => { if (a.type === 'line') a.ae = $('#pAe').checked; }));
+  on('pAs', 'change', () => applyStyleAll(a => { if (a.type === 'line') a.as = $('#pAs').checked; }));
+  on('pAe', 'change', () => applyStyleAll(a => { if (a.type === 'line') a.ae = $('#pAe').checked; }));
   $$('#tab-props [data-al]').forEach(b => b.addEventListener('click', () => alignSel(b.dataset.al)));
   on('matrixGap', 'change', () => { matrixGap = Math.max(0, parseFloat($('#matrixGap').value) || 0); });
   $$('#tab-props [data-mx]').forEach(b => b.addEventListener('click', () => gridArrange(b.dataset.mx === 'fit')));
@@ -1898,7 +1956,7 @@ function alignSel(kind) {
   const ss = selShapes();
   if (kind === 'dh' || kind === 'dv') return distribute(kind);
   if (ss.length < 2) return toast(t('t.min2'));
-  if (hasLockedSelection(ss)) return lockToast();
+  if (hasMoveLock(ss)) return lockToast();
   pushUndo();
   const U = unionBBox(ss);
   for (const s of ss) {
@@ -1915,7 +1973,7 @@ function alignSel(kind) {
 function distribute(kind) {
   const ss = selShapes();
   if (ss.length < 3) return toast(t('t.min3'));
-  if (hasLockedSelection(ss)) return lockToast();
+  if (hasMoveLock(ss)) return lockToast();
   pushUndo();
   const hor = kind === 'dh';
   const items = ss.map(s => ({ s, b: aabbOf(s) }))
@@ -1935,7 +1993,7 @@ function distribute(kind) {
 function gridArrange(resize) {
   const ss = selShapes().filter(s => s.type !== 'line');
   if (ss.length < 2) return toast(t('t.min2mx'));
-  if (hasLockedSelection(ss)) return lockToast();
+  if (hasMoveLock(ss)) return lockToast();
   pushUndo();
   const items = ss.map(s => ({ s, b: aabbOf(s) }));
   const hs = items.map(i => i.b.h).sort((a, b) => a - b);
@@ -2350,17 +2408,33 @@ function autosave() {
     try { localStorage.setItem('prodrys_auto', projectJSON()); } catch (e) {}
   }, 400);
 }
-async function exportImage(fmt) {
+const exportHandles = { png: null, jpg: null };   /* zapamiętane pliki eksportu (jak zapis) */
+async function exportImage(fmt, forcePicker = false) {
   const region = pageRegion();
   if (!state.shapes.length && !region) return toast(t('t.emptyCanvas'));
   const b = buildSVG(state.shapes, currentVals(), 16, region);
   const mime = fmt === 'jpg' ? 'image/jpeg' : 'image/png';
   const ext = fmt === 'jpg' ? '.jpg' : '.png';
-  const png = await svgToPngBlob(b.svg, b.w, b.h, 2, mime);
+  const blob = await svgToPngBlob(b.svg, b.w, b.h, 2, mime);
   let name = sanitizeFile($('#projName').value);
   if (previewRow >= 0 && state.vars.rows[previewRow])
     name += '_' + sanitizeFile(state.vars.rows[previewRow].name);
-  downloadBlob(png, name + ext);
+  if (hasNativeFS()) {
+    try {
+      if (!exportHandles[fmt] || forcePicker) {
+        exportHandles[fmt] = await window.showSaveFilePicker({
+          suggestedName: name + ext, types: [{ description: fmt.toUpperCase(), accept: { [mime]: [ext] } }] });
+      }
+      const w = await exportHandles[fmt].createWritable();
+      await w.write(blob); await w.close();
+      toast(t('t.exported') + (exportHandles[fmt].name || name + ext));
+      return;
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;
+      toast(t('t.saveErr'));
+    }
+  }
+  downloadBlob(blob, name + ext);
   toast(t('t.exported') + name + ext);
 }
 
@@ -2396,8 +2470,17 @@ function fileToDataURL(file) {
   });
 }
 /* wklejanie: obraz ze schowka (np. zrzut z CATII) lub skopiowane kształty */
+const CLIP_PREFIX = 'PRODDRAW_SHAPES:';
 document.addEventListener('paste', async e => {
   if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  /* skopiowane kształty (autorytatywne — nadpisują stary obrazek w schowku) */
+  const txt = (e.clipboardData && e.clipboardData.getData('text/plain')) || '';
+  if (txt.startsWith(CLIP_PREFIX)) {
+    e.preventDefault();
+    clip = txt.slice(CLIP_PREFIX.length);
+    pasteClip();
+    return;
+  }
   const items = [...(e.clipboardData?.items || [])];
   const imgItem = items.find(i => i.type.startsWith('image/'));
   if (imgItem) {
@@ -2424,6 +2507,8 @@ document.addEventListener('paste', async e => {
 function copySel() {
   const ss = selShapes(); if (!ss.length) return;
   clip = JSON.stringify(ss);
+  /* nadpisz schowek systemowy naszymi kształtami (usuwa stary obrazek) */
+  try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(CLIP_PREFIX + clip); } catch (e) {}
   toast(t('t.copied') + ss.length);
 }
 function pasteClip() {
@@ -2772,7 +2857,73 @@ function importConfig(obj) {
 function applySettings() {
   document.documentElement.style.setProperty('--sideW', settings.sideW + 'px');
   applyI18n();
-  render(); renderProps(); renderVars(); renderLib(); renderSettings();
+  render(); renderProps(); renderVars(); renderLib(); renderSettings(); renderHelp();
+}
+/* ---------- zakładka Pomoc: instrukcje + skróty ---------- */
+const HELP_HTML = {
+  pl: `<div class="grp"><h4>Narzędzia</h4><div class="hint">
+    V zaznaczanie · R prostokąt · C elipsa · L linia · A strzałka · T tekst · S kształty · I obraz · K pipeta.
+    Kliknij narzędzie na pasku po lewej.</div></div>
+    <div class="grp"><h4>Skróty klawiszowe</h4><div class="hint">
+    Ctrl+Z / Ctrl+Y — cofnij / ponów<br>Ctrl+C / Ctrl+V — kopiuj / wklej<br>Ctrl+D — duplikuj<br>
+    Ctrl+A — zaznacz wszystko<br>Ctrl+G / Ctrl+Shift+G — grupuj / rozgrupuj<br>
+    Ctrl+S — zapisz · Ctrl+O — otwórz<br>Delete — usuń<br>strzałki — przesuń (Shift = 10 px)<br>
+    + / − — powiększ / pomniejsz<br>Spacja lub środkowy przycisk — przesuwanie płótna · kółko — zoom</div></div>
+    <div class="grp"><h4>Obracanie</h4><div class="hint">
+    Złap pomarańczowy uchwyt nad kształtem i obróć. Zaznacz „skok 10°" obok pola kąta, aby obracać skokowo
+    (lub trzymaj Shift = co 15°). Kąt wpiszesz też ręcznie w polu.</div></div>
+    <div class="grp"><h4>Grupy</h4><div class="hint">
+    Zwykłe kliknięcie zaznacza całą grupę (do przesuwania/blokady). <b>Alt+klik</b> = wybór pojedynczego
+    obiektu w grupie (edycja koloru/tekstu).</div></div>
+    <div class="grp"><h4>Blokady</h4><div class="hint">
+    We Właściwościach: osobno blokada przesuwania, rozmiaru+obrotu, wyglądu (kolorów) i edycji tekstu.
+    Np. zablokuj ruch+rozmiar+wygląd, a zostaw tekst — obiekt stoi, ale treść wciąż edytujesz.</div></div>
+    <div class="grp"><h4>Zapis i eksport</h4><div class="hint">
+    „Zapisz" zapisuje do tego samego pliku (Chrome/Edge). „Zapisz jako" wybiera nowy plik.
+    Eksport PNG/JPG działa tak samo — szybki guzik = JPG. Pliki .pdraw/.json/.xlsx/.xlsm oraz obrazy
+    można przeciągnąć na okno.</div></div>`,
+  en: `<div class="grp"><h4>Tools</h4><div class="hint">
+    V select · R rectangle · C ellipse · L line · A arrow · T text · S shapes · I image · K eyedropper.</div></div>
+    <div class="grp"><h4>Keyboard shortcuts</h4><div class="hint">
+    Ctrl+Z / Ctrl+Y — undo / redo<br>Ctrl+C / Ctrl+V — copy / paste<br>Ctrl+D — duplicate<br>
+    Ctrl+A — select all<br>Ctrl+G / Ctrl+Shift+G — group / ungroup<br>
+    Ctrl+S — save · Ctrl+O — open<br>Delete — delete<br>arrows — nudge (Shift = 10 px)<br>
+    + / − — zoom in / out<br>Space or middle button — pan · wheel — zoom</div></div>
+    <div class="grp"><h4>Rotation</h4><div class="hint">
+    Grab the orange handle above a shape and turn. Tick “step 10°" next to the angle box for stepped
+    rotation (or hold Shift = 15°). You can also type the angle.</div></div>
+    <div class="grp"><h4>Groups</h4><div class="hint">
+    A normal click selects the whole group (for moving/locking). <b>Alt+click</b> = select a single
+    object inside the group (edit its color/text).</div></div>
+    <div class="grp"><h4>Locks</h4><div class="hint">
+    In Properties: separate locks for moving, size+rotation, appearance (colors) and text editing.
+    E.g. lock move+size+appearance and leave text — the object stays put but its text is still editable.</div></div>
+    <div class="grp"><h4>Save & export</h4><div class="hint">
+    “Save" writes to the same file (Chrome/Edge). “Save as" picks a new file. PNG/JPG export works the same
+    way — the quick button = JPG. Drop .pdraw/.json/.xlsx/.xlsm files or images onto the window.</div></div>`,
+  de: `<div class="grp"><h4>Werkzeuge</h4><div class="hint">
+    V Auswahl · R Rechteck · C Ellipse · L Linie · A Pfeil · T Text · S Formen · I Bild · K Pipette.</div></div>
+    <div class="grp"><h4>Tastenkürzel</h4><div class="hint">
+    Strg+Z / Strg+Y — rückgängig / wiederholen<br>Strg+C / Strg+V — kopieren / einfügen<br>Strg+D — duplizieren<br>
+    Strg+A — alles auswählen<br>Strg+G / Strg+Umschalt+G — gruppieren / aufheben<br>
+    Strg+S — speichern · Strg+O — öffnen<br>Entf — löschen<br>Pfeile — verschieben (Umschalt = 10 px)<br>
+    + / − — zoomen<br>Leertaste oder mittlere Taste — Ansicht schieben · Rad — Zoom</div></div>
+    <div class="grp"><h4>Drehen</h4><div class="hint">
+    Den orangefarbenen Griff über der Form fassen und drehen. „Schritt 10°" neben dem Winkelfeld für
+    schrittweises Drehen (oder Umschalt = 15°). Der Winkel lässt sich auch eintippen.</div></div>
+    <div class="grp"><h4>Gruppen</h4><div class="hint">
+    Ein normaler Klick wählt die ganze Gruppe (Verschieben/Sperren). <b>Alt+Klick</b> = einzelnes Objekt
+    in der Gruppe wählen (Farbe/Text bearbeiten).</div></div>
+    <div class="grp"><h4>Sperren</h4><div class="hint">
+    In Eigenschaften: getrennte Sperren für Verschieben, Größe+Drehung, Aussehen (Farben) und
+    Textbearbeitung. Z. B. Verschieben+Größe+Aussehen sperren und Text lassen.</div></div>
+    <div class="grp"><h4>Speichern & Export</h4><div class="hint">
+    „Speichern" schreibt in dieselbe Datei (Chrome/Edge). „Speichern unter" wählt eine neue Datei.
+    PNG/JPG-Export ebenso — Schnell-Button = JPG. .pdraw/.json/.xlsx/.xlsm oder Bilder aufs Fenster ziehen.</div></div>`
+};
+function renderHelp() {
+  const el = $('#tab-help'); if (!el) return;
+  el.innerHTML = HELP_HTML[settings.lang] || HELP_HTML.pl;
 }
 function renderSettings() {
   const el = $('#tab-settings');
@@ -2863,8 +3014,10 @@ $('#bZoomOut').addEventListener('click', () => zoomAtCenter(1 / 1.25));
 $('#bZoomIn').addEventListener('click', () => zoomAtCenter(1.25));
 $('#tmplClose').addEventListener('click', () => $('#tmplModal').classList.remove('on'));
 $('#bPng').addEventListener('click', () => exportImage('png'));
+$('#bPngAs').addEventListener('click', () => exportImage('png', true));
 $('#bJpg').addEventListener('click', () => exportImage('jpg'));
-$('#bPngQuick').addEventListener('click', () => exportImage('png'));
+$('#bJpgAs').addEventListener('click', () => exportImage('jpg', true));
+$('#bJpgQuick').addEventListener('click', () => exportImage('jpg'));
 $('#bUndo').addEventListener('click', undo);
 $('#bRedo').addEventListener('click', redo);
 $('#projName').addEventListener('change', () => { state.name = $('#projName').value; autosave(); });
@@ -2939,7 +3092,7 @@ document.addEventListener('keydown', e => {
   else if (e.key === '=' || e.key === '+') { e.preventDefault(); zoomAtCenter(1.25); }
   else if (e.key === '-' || e.key === '_') { e.preventDefault(); zoomAtCenter(1 / 1.25); }
   else if (e.key.startsWith('Arrow') && sel.size) {
-    if (hasLockedSelection()) { e.preventDefault(); return lockToast(); }
+    if (hasMoveLock()) { e.preventDefault(); return lockToast(); }
     e.preventDefault(); pushUndo();
     const d = e.shiftKey ? 10 : 1;
     const dx = e.key === 'ArrowLeft' ? -d : e.key === 'ArrowRight' ? d : 0;
@@ -3010,6 +3163,7 @@ window.addEventListener('beforeunload', () => {
   else projectFromTemplate('builtin');
   renderLib();
   renderSettings();
+  renderHelp();
 })();
 </script>
 </body>
