@@ -65,6 +65,11 @@ body{
 .tabBody{flex:1;overflow-y:auto;padding:10px;display:none;min-height:0;}
 .tabBody.on{display:block;}
 .grp{margin-bottom:14px;}
+/* czytelniejsze rozdzielenie sekcji we Właściwościach */
+#tab-props .grp{padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid var(--line);}
+#tab-props .grp:last-child{border-bottom:none;padding-bottom:0;}
+#tab-props .grp h4{color:var(--acc);}
+#tab-props .row{margin-bottom:8px;}
 .grp h4{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--txt2);
   margin-bottom:7px;font-weight:600;}
 .row{display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap;}
@@ -326,6 +331,9 @@ let previewRow = -1;             // -1 = brak podglądu wariantu
 let clip = null;                 // wewnętrzny schowek kształtów
 let spaceDown = false;
 let matrixGap = 0;          // odstęp w układzie macierzowym
+let rotStepOn = false;      // skokowe obracanie (co ROT_STEP°)
+const ROT_STEP = 10;        // krok skokowego obrotu
+let currentProjectHandle = null;  // uchwyt pliku (zapis w miejscu, File System Access API)
 
 /* ---------- ustawienia aplikacji + szablony ---------- */
 let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, sideW: 272 };
@@ -362,8 +370,9 @@ const I18N = {
     'props.selected':'Zaznaczone','props.posSize':'Pozycja i rozmiar','props.linePts':'Punkty linii',
     'props.stroke':'Obrys','props.color':'Kolor','props.none2':'brak','props.width':'Grubość','props.style':'Styl',
     'props.fill':'Wypełnienie','props.text':'Tekst','props.textHint':'(2×klik na kształcie, aby edytować)',
-    'props.size':'Rozmiar','props.bold':'gruby','props.arrows':'Groty strzałek','props.start':'początek','props.end':'koniec',
-    'props.rotation':'Obrót','props.rotDeg':'Kąt (°)','props.align':'Wyrównanie (min. 2 kształty)',
+    'props.size':'Rozmiar','props.bold':'gruby','props.italic':'kursywa','props.arrows':'Groty strzałek','props.start':'początek','props.end':'koniec',
+    'props.rotation':'Obrót','props.rotDeg':'Kąt (°)','props.rotStep':'skok {n}°','props.align':'Wyrównanie (min. 2 kształty)',
+    't.nativeSaved':'Zapisano w pliku: ','t.saveErr':'Błąd zapisu — pobieram plik','t.openErr':'Błąd otwierania pliku','props.altHint':'Alt+klik = edytuj pojedynczy obiekt w grupie',
     'props.gridGap':'Odstęp siatki','props.matrixFit':'Macierz + rozmiar','props.matrix':'Macierz',
     'props.order':'Kolejność','props.top':'Na wierzch','props.up':'Wyżej','props.down':'Niżej','props.bot':'Na spód',
     'props.group':'Grupa','props.doGroup':'Grupuj','props.ungroup':'Rozgrupuj','props.toLib':'Do biblioteki',
@@ -423,8 +432,9 @@ const I18N = {
     'props.selected':'Selected','props.posSize':'Position & size','props.linePts':'Line points',
     'props.stroke':'Stroke','props.color':'Color','props.none2':'none','props.width':'Width','props.style':'Style',
     'props.fill':'Fill','props.text':'Text','props.textHint':'(double-click the shape to edit)',
-    'props.size':'Size','props.bold':'bold','props.arrows':'Arrowheads','props.start':'start','props.end':'end',
-    'props.rotation':'Rotation','props.rotDeg':'Angle (°)','props.align':'Align (min. 2 shapes)',
+    'props.size':'Size','props.bold':'bold','props.italic':'italic','props.arrows':'Arrowheads','props.start':'start','props.end':'end',
+    'props.rotation':'Rotation','props.rotDeg':'Angle (°)','props.rotStep':'step {n}°','props.align':'Align (min. 2 shapes)',
+    't.nativeSaved':'Saved to file: ','t.saveErr':'Save error — downloading file','t.openErr':'Error opening file','props.altHint':'Alt+click = edit a single object in the group',
     'props.gridGap':'Grid gap','props.matrixFit':'Matrix + resize','props.matrix':'Matrix',
     'props.order':'Order','props.top':'To front','props.up':'Up','props.down':'Down','props.bot':'To back',
     'props.group':'Group','props.doGroup':'Group','props.ungroup':'Ungroup','props.toLib':'To library',
@@ -484,8 +494,9 @@ const I18N = {
     'props.selected':'Ausgewählt','props.posSize':'Position & Größe','props.linePts':'Linienpunkte',
     'props.stroke':'Kontur','props.color':'Farbe','props.none2':'keine','props.width':'Stärke','props.style':'Stil',
     'props.fill':'Füllung','props.text':'Text','props.textHint':'(Form doppelklicken zum Bearbeiten)',
-    'props.size':'Größe','props.bold':'fett','props.arrows':'Pfeilspitzen','props.start':'Anfang','props.end':'Ende',
-    'props.rotation':'Drehung','props.rotDeg':'Winkel (°)','props.align':'Ausrichten (min. 2 Formen)',
+    'props.size':'Größe','props.bold':'fett','props.italic':'kursiv','props.arrows':'Pfeilspitzen','props.start':'Anfang','props.end':'Ende',
+    'props.rotation':'Drehung','props.rotDeg':'Winkel (°)','props.rotStep':'Schritt {n}°','props.align':'Ausrichten (min. 2 Formen)',
+    't.nativeSaved':'In Datei gespeichert: ','t.saveErr':'Speicherfehler — Datei wird heruntergeladen','t.openErr':'Fehler beim Öffnen','props.altHint':'Alt+Klick = einzelnes Objekt in der Gruppe bearbeiten',
     'props.gridGap':'Rasterabstand','props.matrixFit':'Matrix + Größe','props.matrix':'Matrix',
     'props.order':'Reihenfolge','props.top':'Nach vorn','props.up':'Höher','props.down':'Tiefer','props.bot':'Nach hinten',
     'props.group':'Gruppe','props.doGroup':'Gruppieren','props.ungroup':'Gruppierung aufheben','props.toLib':'In Bibliothek',
@@ -598,11 +609,25 @@ function bboxOf(s) {
   }
   return { x: s.x, y: s.y, w: s.w, h: s.h };
 }
+/* prostokąt otaczający uwzględniający OBRÓT (do przyciągania/wyrównania/macierzy) */
+function aabbOf(s) {
+  const b = bboxOf(s);
+  if (!s.rot || s.type === 'line') return b;
+  const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+  const corners = [[b.x, b.y], [b.x + b.w, b.y], [b.x + b.w, b.y + b.h], [b.x, b.y + b.h]];
+  let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
+  for (const [px, py] of corners) {
+    const r = rotatePt(px, py, cx, cy, s.rot);
+    x1 = Math.min(x1, r.x); y1 = Math.min(y1, r.y);
+    x2 = Math.max(x2, r.x); y2 = Math.max(y2, r.y);
+  }
+  return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+}
 function unionBBox(shapes) {
   if (!shapes.length) return null;
   let x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
   for (const s of shapes) {
-    const b = bboxOf(s);
+    const b = aabbOf(s);
     x1 = Math.min(x1, b.x); y1 = Math.min(y1, b.y);
     x2 = Math.max(x2, b.x + b.w); y2 = Math.max(y2, b.y + b.h);
   }
@@ -1008,7 +1033,7 @@ function subst(text, vals) {
   return String(text ?? '').replace(/\{([^}]+)\}/g, (m, k) =>
     (k in vals) ? vals[k] : m);
 }
-function textBlockSVG(cx, cy, text, fs, color, bold, vals, font = 'Calibri') {
+function textBlockSVG(cx, cy, text, fs, color, bold, vals, font = 'Calibri', italic = false) {
   const lines = subst(text, vals).split('\n');
   if (!lines.join('')) return '';
   const lh = fs * 1.25;
@@ -1016,7 +1041,7 @@ function textBlockSVG(cx, cy, text, fs, color, bold, vals, font = 'Calibri') {
   const y0 = cy - (lines.length - 1) * lh / 2 + fs * 0.35;
   const ts = lines.map((l, i) =>
     `<tspan x="${cx}" y="${y0 + i * lh}">${escXml(l)}</tspan>`).join('');
-  return `<text text-anchor="middle" font-family="${escXml(font || 'Calibri')},Arial,sans-serif" font-size="${fs}" ${bold ? 'font-weight="bold"' : ''} fill="${color}">${ts}</text>`;
+  return `<text text-anchor="middle" font-family="${escXml(font || 'Calibri')},Arial,sans-serif" font-size="${fs}" ${bold ? 'font-weight="bold"' : ''} ${italic ? 'font-style="italic"' : ''} fill="${color}">${ts}</text>`;
 }
 /* punkty wielokątów dla presetów kształtów */
 function polyPoints(preset, x, y, w, h) {
@@ -1089,7 +1114,7 @@ function shapeSVG(s, vals, live) {
       `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fill}" stroke="${stroke}" stroke-width="${s.sw}"${dash}/>`;
     if (fill === 'none' && live)
       out += `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="transparent" stroke="none"/>`;
-    out += textBlockSVG(s.x + s.w / 2, s.y + s.h / 2, s.text, s.fs, s.tc, s.bold, vals, s.font) + '</g>';
+    out += textBlockSVG(s.x + s.w / 2, s.y + s.h / 2, s.text, s.fs, s.tc, s.bold, vals, s.font, s.italic) + '</g>';
     return out;
   }
   if (s.type === 'ellipse') {
@@ -1098,7 +1123,7 @@ function shapeSVG(s, vals, live) {
       `<ellipse cx="${cx}" cy="${cy}" rx="${s.w / 2}" ry="${s.h / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${s.sw}"${dash}/>`;
     if (fill === 'none' && live)
       out += `<ellipse cx="${cx}" cy="${cy}" rx="${s.w / 2}" ry="${s.h / 2}" fill="transparent" stroke="none"/>`;
-    out += textBlockSVG(cx, cy, s.text, s.fs, s.tc, s.bold, vals, s.font) + '</g>';
+    out += textBlockSVG(cx, cy, s.text, s.fs, s.tc, s.bold, vals, s.font, s.italic) + '</g>';
     return out;
   }
   if (s.type === 'line') {
@@ -1123,7 +1148,7 @@ function shapeSVG(s, vals, live) {
     const lh = s.fs * 1.25;
     const ts = lines.map((l, i) =>
       `<tspan x="${s.x}" y="${s.y + s.fs + i * lh}">${escXml(l)}</tspan>`).join('');
-    let out = `<g${did}><text font-family="${escXml(s.font || 'Calibri')},Arial,sans-serif" font-size="${s.fs}" ${s.bold ? 'font-weight="bold"' : ''} fill="${s.tc}">${ts}</text>`;
+    let out = `<g${did}><text font-family="${escXml(s.font || 'Calibri')},Arial,sans-serif" font-size="${s.fs}" ${s.bold ? 'font-weight="bold"' : ''} ${s.italic ? 'font-style="italic"' : ''} fill="${s.tc}">${ts}</text>`;
     if (live) { const b = bboxOf(s);
       out += `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="transparent"/>`; }
     return out + '</g>';
@@ -1136,14 +1161,14 @@ function shapeSVG(s, vals, live) {
     let out = `<g${did}><rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" rx="${rx}" ry="${rx}" fill="${fill}" stroke="${stroke}" stroke-width="${s.sw}"${dash}/>`;
     if (fill === 'none' && live)
       out += `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" rx="${rx}" ry="${rx}" fill="transparent" stroke="none"/>`;
-    out += textBlockSVG(s.x + s.w / 2, s.y + s.h / 2, s.text || '', s.fs || 14, s.tc || '#111827', s.bold, vals, s.font) + '</g>';
+    out += textBlockSVG(s.x + s.w / 2, s.y + s.h / 2, s.text || '', s.fs || 14, s.tc || '#111827', s.bold, vals, s.font, s.italic) + '</g>';
     return out;
   }
   if (s.type === 'poly') {
     const pts = polyPoints(s.preset, s.x, s.y, s.w, s.h);
     const ptStr = pts.map(p => `${p[0]},${p[1]}`).join(' ');
     let out = `<g${did}><polygon points="${ptStr}" fill="${fill}" stroke="${stroke}" stroke-width="${s.sw}"${dash}/>`;
-    out += textBlockSVG(s.x + s.w / 2, s.y + s.h / 2, s.text || '', s.fs || 14, s.tc || '#111827', s.bold, vals, s.font);
+    out += textBlockSVG(s.x + s.w / 2, s.y + s.h / 2, s.text || '', s.fs || 14, s.tc || '#111827', s.bold, vals, s.font, s.italic);
     if (fill === 'none' && live)
       out += `<polygon points="${ptStr}" fill="transparent" stroke="none"/>`;
     return out + '</g>';
@@ -1299,7 +1324,7 @@ function snapCandidates(excludeIds) {
   const xs = [], ys = [];
   for (const s of state.shapes) {
     if (excludeIds && excludeIds.has(s.id)) continue;
-    const b = bboxOf(s);
+    const b = aabbOf(s);
     xs.push(b.x, b.x + b.w / 2, b.x + b.w);
     ys.push(b.y, b.y + b.h / 2, b.y + b.h);
   }
@@ -1417,8 +1442,10 @@ cv.addEventListener('pointerdown', e => {
     }
     const el = e.target.closest('[data-id]');
     if (el) {
-      const ids = expandGroup(el.dataset.id);
-      if (e.shiftKey) {
+      /* Alt+klik = wybierz pojedynczy obiekt w grupie (edycja koloru itp.) */
+      const ids = e.altKey ? [el.dataset.id] : expandGroup(el.dataset.id);
+      if (e.altKey) { sel = new Set(ids); }
+      else if (e.shiftKey) {
         const has = ids.every(i => sel.has(i));
         ids.forEach(i => has ? sel.delete(i) : sel.add(i));
       } else if (!sel.has(ids[0])) {
@@ -1544,7 +1571,8 @@ cv.addEventListener('pointermove', e => {
   if (drag.mode === 'rotate') {
     const ang = Math.atan2(p.y - drag.cy, p.x - drag.cx) * 180 / Math.PI;
     let rot = drag.startRot + (ang - drag.startAng);
-    if (e.shiftKey) rot = Math.round(rot / 15) * 15;   /* Shift = co 15° */
+    /* skok: checkbox (ROT_STEP°) lub Shift (15°) */
+    if (rotStepOn || e.shiftKey) { const st = rotStepOn ? ROT_STEP : 15; rot = Math.round(rot / st) * st; }
     rot = ((rot % 360) + 360) % 360;
     drag.s.rot = Math.round(rot * 10) / 10;
     render(); refreshRot(); return;
@@ -1594,7 +1622,7 @@ cv.addEventListener('pointerup', e => {
     if (w > 2 || h > 2) {
       const ids = new Set(e.shiftKey ? sel : []);
       for (const s of state.shapes) {
-        const b = bboxOf(s);
+        const b = aabbOf(s);
         if (b.x < x + w && b.x + b.w > x && b.y < y + h && b.y + b.h > y)
           expandGroup(s.id).forEach(i => ids.add(i));
       }
@@ -1677,6 +1705,7 @@ function startEdit(s) {
   txtEd.style.height = Math.max(30, b.h * z) + 'px';
   txtEd.style.fontSize = (s.fs * z) + 'px';
   txtEd.style.fontWeight = s.bold ? 'bold' : 'normal';
+  txtEd.style.fontStyle = s.italic ? 'italic' : 'normal';
   txtEd.style.fontFamily = (s.font || 'Calibri') + ',Arial,sans-serif';
   txtEd.style.textAlign = s.type === 'text' ? 'left' : 'center';
   txtEd.value = s.text || '';
@@ -1739,7 +1768,8 @@ function renderProps() {
       <div class="row"><label>X / Y</label><input class="in" type="number" id="pX" step="1"><input class="in" type="number" id="pY" step="1"></div>`;
     if (s.w !== undefined)
       h += `<div class="row"><label>${t('props.size')}</label><input class="in" type="number" id="pW" step="1"><input class="in" type="number" id="pH" step="1"></div>`;
-    h += `<div class="row"><label>${t('props.rotDeg')}</label><input class="in" type="number" id="pRot" step="1" value="${Math.round((s.rot || 0) * 10) / 10}"></div>`;
+    h += `<div class="row"><label>${t('props.rotDeg')}</label><input class="in" type="number" id="pRot" step="1" value="${Math.round((s.rot || 0) * 10) / 10}">
+      <label style="min-width:0"><input type="checkbox" id="pRotStep" ${rotStepOn ? 'checked' : ''}> ${t('props.rotStep', { n: ROT_STEP })}</label></div>`;
     h += `</div>`;
   }
   if (one && s.type === 'line') {
@@ -1768,7 +1798,8 @@ function renderProps() {
       </select></div>
       <div class="row"><label>${t('props.size')}</label><input class="in" type="number" id="pFs" min="4" value="${s.fs ?? 14}">
         <input class="in" type="color" id="pTc" value="${s.tc || '#111827'}">
-        <label style="min-width:0"><input type="checkbox" id="pBold" ${s.bold ? 'checked' : ''}> ${t('props.bold')}</label></div>`;
+        <label style="min-width:0"><input type="checkbox" id="pBold" ${s.bold ? 'checked' : ''}> ${t('props.bold')}</label>
+        <label style="min-width:0"><input type="checkbox" id="pItalic" ${s.italic ? 'checked' : ''}> ${t('props.italic')}</label></div>`;
     if (one && isTextShapeType(s.type)) {
       h += `<div class="row"><label style="align-self:flex-start;padding-top:4px">${t('props.content')}</label>
         <textarea class="in wide" id="pText" rows="4" style="width:100%;min-height:78px;resize:vertical;font-family:${escXml(s.font || 'Calibri')},Arial,sans-serif">${escXml(s.text || '')}</textarea></div>`;
@@ -1797,7 +1828,8 @@ function renderProps() {
   h += `<div class="grp"><h4>${t('props.group')}</h4><div class="row">
     <button class="btn" id="pGroup" ${ss.length < 2 ? 'disabled' : ''}>${t('props.doGroup')}</button>
     <button class="btn" id="pUngroup" ${!grouped ? 'disabled' : ''}>${t('props.ungroup')}</button>
-    <button class="btn" id="pToLib">${t('props.toLib')}</button></div></div>`;
+    <button class="btn" id="pToLib">${t('props.toLib')}</button></div>
+    ${grouped ? `<div class="hint" style="margin-top:6px">${t('props.altHint')}</div>` : ''}</div>`;
   h += `<div class="grp"><div class="row">
     <button class="btn" id="pDup">${t('props.dup')}</button>
     <button class="btn" id="pDel" style="color:#ff7070">${t('props.del')}</button></div></div>`;
@@ -1815,16 +1847,21 @@ function renderProps() {
   on('pRot', 'change', () => applyUnlockedAll(a => { if (a.type !== 'line') a.rot = ((num('pRot') % 360) + 360) % 360; }));
   ['pX1', 'pY1', 'pX2', 'pY2'].forEach(id =>
     on(id, 'change', () => applyUnlockedAll(a => { if (a.type === 'line') a[id[1].toLowerCase() + id[2]] = num(id); })));
-  on('pStroke', 'input', () => applyAll(a => { if (a.stroke !== undefined) { a.stroke = $('#pStroke').value; a.noStroke = false; } }));
+  /* kolory: cofnij łapie CAŁĄ zmianę — pushUndo raz przy focusie, potem live bez undo */
+  const liveApply = fn => { selShapes().forEach(fn); render(); autosave(); };
+  const bindColor = (id, fn) => { on(id, 'focus', () => pushUndo()); on(id, 'input', () => liveApply(fn)); };
+  bindColor('pStroke', a => { if (a.stroke !== undefined) { a.stroke = $('#pStroke').value; a.noStroke = false; } });
   on('pNoStroke', 'change', () => applyAll(a => { if ('noStroke' in a || a.type === 'rect' || a.type === 'ellipse') a.noStroke = $('#pNoStroke').checked; }));
   on('pSw', 'change', () => applyAll(a => { if (a.sw !== undefined) a.sw = Math.max(0.5, num('pSw')); }));
   on('pDash', 'change', () => applyAll(a => { if (a.dash !== undefined) a.dash = $('#pDash').value; }));
-  on('pFill', 'input', () => applyAll(a => { if (a.fill !== undefined) { a.fill = $('#pFill').value; a.noFill = false; } }));
+  bindColor('pFill', a => { if (a.fill !== undefined) { a.fill = $('#pFill').value; a.noFill = false; } });
   on('pNoFill', 'change', () => applyAll(a => { if (a.fill !== undefined) a.noFill = $('#pNoFill').checked; }));
   on('pFont', 'change', () => applyAll(a => { if ('font' in a || a.fs !== undefined) a.font = $('#pFont').value; }));
   on('pFs', 'change', () => applyAll(a => { if (a.fs !== undefined) a.fs = Math.max(4, num('pFs')); }));
-  on('pTc', 'input', () => applyAll(a => { if (a.tc !== undefined) a.tc = $('#pTc').value; }));
+  bindColor('pTc', a => { if (a.tc !== undefined) a.tc = $('#pTc').value; });
   on('pBold', 'change', () => applyAll(a => { if ('fs' in a) a.bold = $('#pBold').checked; }));
+  on('pItalic', 'change', () => applyAll(a => { if ('fs' in a) a.italic = $('#pItalic').checked; }));
+  on('pRotStep', 'change', () => { rotStepOn = $('#pRotStep').checked; });
   on('pText', 'focus', () => pushUndo());
   on('pText', 'input', () => {
     const v = $('#pText').value;
@@ -1852,7 +1889,7 @@ const ALICON = {
 
 /* ---------- wyrównanie / rozkład ---------- */
 function moveShapeTo(s, nx, ny) {
-  const b = bboxOf(s);
+  const b = aabbOf(s);
   const dx = nx - b.x, dy = ny - b.y;
   if (s.type === 'line') { s.x1 += dx; s.y1 += dy; s.x2 += dx; s.y2 += dy; }
   else { s.x += dx; s.y += dy; }
@@ -1865,7 +1902,7 @@ function alignSel(kind) {
   pushUndo();
   const U = unionBBox(ss);
   for (const s of ss) {
-    const b = bboxOf(s);
+    const b = aabbOf(s);
     if (kind === 'l') moveShapeTo(s, U.x, b.y);
     if (kind === 'r') moveShapeTo(s, U.x + U.w - b.w, b.y);
     if (kind === 'cx') moveShapeTo(s, U.x + (U.w - b.w) / 2, b.y);
@@ -1881,7 +1918,7 @@ function distribute(kind) {
   if (hasLockedSelection(ss)) return lockToast();
   pushUndo();
   const hor = kind === 'dh';
-  const items = ss.map(s => ({ s, b: bboxOf(s) }))
+  const items = ss.map(s => ({ s, b: aabbOf(s) }))
     .sort((a, b) => hor ? a.b.x - b.b.x : a.b.y - b.b.y);
   const first = items[0].b, last = items[items.length - 1].b;
   const span = hor ? (last.x + last.w) - first.x : (last.y + last.h) - first.y;
@@ -1900,7 +1937,7 @@ function gridArrange(resize) {
   if (ss.length < 2) return toast(t('t.min2mx'));
   if (hasLockedSelection(ss)) return lockToast();
   pushUndo();
-  const items = ss.map(s => ({ s, b: bboxOf(s) }));
+  const items = ss.map(s => ({ s, b: aabbOf(s) }));
   const hs = items.map(i => i.b.h).sort((a, b) => a - b);
   const medH = hs[hs.length >> 1] || 20;
   /* wiersze wg środka Y (klaster), kolumny wg X */
@@ -1916,19 +1953,19 @@ function gridArrange(resize) {
   const U = unionBBox(ss);
   const gap = matrixGap;
   if (resize) {
-    /* Per-row: uniform height = max height in that row */
+    /* Per-row: uniform height = max height in that row (obrócone pomijamy) */
     for (const row of rows) {
       const rowH = Math.max(...row.items.map(i => i.b.h));
       for (const it of row.items)
-        if (it.s.h !== undefined) { it.s.h = rowH; it.b = bboxOf(it.s); }
+        if (it.s.h !== undefined && !it.s.rot) { it.s.h = rowH; it.b = aabbOf(it.s); }
     }
     /* Per-column: uniform width = max width in that column */
     const numColumns = Math.max(...rows.map(r => r.items.length));
     for (let j = 0; j < numColumns; j++) {
       const cw = Math.max(...rows.map(r => r.items[j] ? r.items[j].b.w : 0));
       for (const row of rows)
-        if (row.items[j] && row.items[j].s.w !== undefined) {
-          row.items[j].s.w = cw; row.items[j].b = bboxOf(row.items[j].s);
+        if (row.items[j] && row.items[j].s.w !== undefined && !row.items[j].s.rot) {
+          row.items[j].s.w = cw; row.items[j].b = aabbOf(row.items[j].s);
         }
     }
   }
@@ -2222,17 +2259,67 @@ function projectJSON() {
     name: $('#projName').value, shapes: state.shapes, vars: state.vars,
     page: state.page, lib }, null, 1);
 }
-function saveProject() {
-  state.name = $('#projName').value;           /* utrzymaj nazwę projektu w synchronie */
+/* File System Access API — zapis w miejscu (do tego samego pliku), bez pobierania */
+function hasNativeFS() {
+  return typeof window.showSaveFilePicker === 'function' && typeof window.showOpenFilePicker === 'function';
+}
+function projectFileTypes() {
+  return [{ description: 'ProdDraw Project', accept: { 'application/json': ['.pdraw', '.json', '.prodrys'] } }];
+}
+async function writeToHandle(handle) {
+  const w = await handle.createWritable();
+  await w.write(projectJSON());
+  await w.close();
+}
+function setNameFromFilename(fn) {
+  const base = (fn || '').replace(/\.[^.]+$/, '');
+  if (base) { state.name = base; $('#projName').value = base; }
+}
+async function saveProject(forcePicker = false) {
+  state.name = $('#projName').value;
   const name = sanitizeFile($('#projName').value);
+  if (hasNativeFS()) {
+    try {
+      if (!currentProjectHandle || forcePicker) {
+        currentProjectHandle = await window.showSaveFilePicker({ suggestedName: name + '.pdraw', types: projectFileTypes() });
+      }
+      await writeToHandle(currentProjectHandle);
+      const fn = currentProjectHandle.name || (name + '.pdraw');
+      setNameFromFilename(fn);
+      toast(t('t.nativeSaved') + fn); autosave();
+      return;
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;   /* użytkownik anulował */
+      toast(t('t.saveErr'));
+    }
+  }
+  /* fallback: pobranie pliku */
   downloadBlob(new Blob([projectJSON()], { type: 'application/json' }), name + '.json');
   toast(t('t.saved') + name + '.json');
 }
-function saveProjectAs() {
-  const n = (prompt(t('p.saveAs'), $('#projName').value) || '').trim();
-  if (!n) return;
-  $('#projName').value = n; state.name = n;    /* zaktualizuj nazwę w rogu */
-  saveProject();
+async function saveProjectAs() {
+  if (!hasNativeFS()) {
+    const n = (prompt(t('p.saveAs'), $('#projName').value) || '').trim();
+    if (!n) return;
+    $('#projName').value = n; state.name = n;
+    return saveProject();
+  }
+  return saveProject(true);   /* natywnie: „zapisz jako" = wybór nowego pliku */
+}
+async function openProjectNative() {
+  if (!hasNativeFS()) { $('#fOpen').click(); return; }
+  try {
+    const [handle] = await window.showOpenFilePicker({ multiple: false, types: projectFileTypes() });
+    if (!handle) return;
+    const file = await handle.getFile();
+    const obj = JSON.parse(await file.text());
+    if (obj.app === 'prodrys-config' || obj.app === 'prodrys-settings') { importConfig(obj); return; }
+    loadProject(obj, file.name);
+    currentProjectHandle = handle;   /* kolejny zapis pójdzie do tego pliku */
+  } catch (err) {
+    if (err && err.name === 'AbortError') return;
+    toast(t('t.openErr'));
+  }
 }
 function loadProject(obj, fileName) {
   if (!obj || !isProjectApp(obj.app) || !Array.isArray(obj.shapes))
@@ -2586,6 +2673,7 @@ function templateShapes(W, H) {
 }
 /* utwórz nowy projekt z wybranego szablonu (null=pusty, 'builtin'=wbudowany) */
 function projectFromTemplate(tmpl) {
+  currentProjectHandle = null;   /* nowy projekt = brak powiązanego pliku */
   state = { name: 'Instrukcja_01', shapes: [], vars: { cols: [], rows: [] },
     page: { mode: 'a4l', w: PAGES.a4l.w, h: PAGES.a4l.h } };
   if (tmpl === 'builtin') {
@@ -2749,12 +2837,13 @@ $('#fSettings').addEventListener('change', async e => {
   try { importConfig(JSON.parse(await f.text())); }
   catch (err) { toast(t('t.cfgBad')); }
 });
-$('#bSave').addEventListener('click', saveProject);
+$('#bSave').addEventListener('click', () => saveProject());
 $('#bSaveAs').addEventListener('click', saveProjectAs);
-$('#bOpen').addEventListener('click', () => $('#fOpen').click());
+$('#bOpen').addEventListener('click', openProjectNative);
 $('#fOpen').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (!f) return;
+  currentProjectHandle = null;   /* z pobranego pliku nie ma uchwytu do zapisu */
   try { loadProject(JSON.parse(await f.text()), f.name); }
   catch (err) { toast(t('t.badFile')); }
 });
@@ -2785,13 +2874,17 @@ $('#gridSize').addEventListener('change', render);
 window.addEventListener('dragover', e => { e.preventDefault(); });
 window.addEventListener('drop', async e => {
   e.preventDefault();
+  /* spróbuj pobrać uchwyt pliku (zapis w miejscu dla przeciągniętego projektu) */
+  let handle = null;
+  const it0 = e.dataTransfer && e.dataTransfer.items && e.dataTransfer.items[0];
+  if (it0 && it0.getAsFileSystemHandle) { try { handle = await it0.getAsFileSystemHandle(); } catch (er) {} }
   const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
   if (!f) return;
-  if (/\.(json|prodrys)$/i.test(f.name)) {
+  if (/\.(pdraw|json|prodrys)$/i.test(f.name)) {
     try {
       const obj = JSON.parse(await f.text());
       if (obj.app === 'prodrys-config' || obj.app === 'prodrys-settings') importConfig(obj);
-      else loadProject(obj, f.name);
+      else { loadProject(obj, f.name); currentProjectHandle = (handle && handle.kind === 'file') ? handle : null; }
     } catch (err) { toast(t('t.badFile')); }
   } else if (/\.(xlsx|xlsm)$/i.test(f.name)) {
     importXlsx(f);
