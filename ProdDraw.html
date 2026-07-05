@@ -107,8 +107,13 @@ input[type=checkbox]{accent-color:var(--acc);}
 .libTile .miniBtn{width:22px;height:22px;min-width:22px;padding:0;}
 .libFolderHead{display:flex;align-items:center;gap:6px;margin:10px 0 4px;font-size:11px;text-transform:uppercase;
   letter-spacing:.6px;color:var(--acc);font-weight:600;}
+.libFolderHead{cursor:pointer;}
 .libFolderHead .fdel{margin-left:auto;background:none;border:none;color:var(--txt2);cursor:pointer;font-size:12px;}
 .libFolderHead .fdel:hover{color:#ff5555;}
+.libDrop{border:1px dashed transparent;border-radius:5px;padding:2px;margin-bottom:6px;}
+.libDrop.dropOn{border-color:var(--acc);background:rgba(255,176,32,.08);}
+.libTile{cursor:grab;}
+.libTile .grab{color:var(--txt2);font-size:13px;cursor:grab;padding:0 2px;user-select:none;}
 /* variants */
 #varTbl{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px;}
 #varTbl th,#varTbl td{border:1px solid var(--line);padding:0;}
@@ -343,6 +348,8 @@ let spaceDown = false;
 let matrixGap = 0;          // odstęp w układzie macierzowym
 let rotStepOn = true;       // skokowe obracanie (co ROT_STEP°) — domyślnie włączone
 let libFolders = [];        // nazwy folderów biblioteki (do segregacji)
+let cropMode = null;        // id obrazka w trybie przycinania
+let libCollapsed = {};      // zwinięte foldery biblioteki {nazwa:true}
 const ROT_STEP = 10;        // krok skokowego obrotu
 let currentProjectHandle = null;  // uchwyt pliku (zapis w miejscu, File System Access API)
 
@@ -378,9 +385,12 @@ const I18N = {
     'set.mxMasterHint':'Włącz, jeśli kółko myszy przewija zbyt szybko. Wyższy dzielnik = wolniejszy zoom.',
     'set.zoomDiv':'Dzielnik zoomu','set.panel':'Panel','set.panelWidth':'Szerokość panelu (px)',
     'set.defaults':'Domyślne nowych kształtów','set.config':'Konfiguracja',
+    'set.colStroke':'Kolor obrysu','set.colText':'Kolor tekstu','set.colFill':'Kolor wypełnienia',
     'props.flip':'Odbicie','props.flipH':'Odbij w poziomie','props.flipV':'Odbij w pionie',
-    'props.crop':'Przycięcie (%)','props.cropLT':'Lewa / Góra','props.cropRB':'Prawa / Dół','props.cropReset':'Resetuj przycięcie',
+    'props.crop':'Przycięcie','props.cropStart':'Przytnij','props.cropDone':'Gotowe','props.cropReset':'Resetuj',
+    'props.cropHint':'Przeciągnij uchwyty ramki, aby przyciąć. Proporcje obrazu bez zmian. Esc lub „Gotowe" kończy.',
     'lib.newFolder':'+ Folder','lib.folder':'Folder','lib.folderName':'Nazwa folderu:','lib.emptyFolder':'(pusty folder)','lib.insertHint':'Kliknij, aby wstawić',
+    'lib.root':'Bez folderu','lib.drag':'Przeciągnij do folderu','lib.dragHint':'Przeciągnij kafelek do folderu. Kliknij nagłówek, aby zwinąć.',
     'c.tmplOverwrite':'Szablon „{n}" już istnieje. Nadpisać?','c.delFolder':'Usunąć folder „{n}"? Elementy trafią do korzenia.',
     'set.about':'ProdRys — edytor instrukcji produkcyjnych.',
     'props.none':'Nic nie zaznaczono.','props.noneHint':'Narysuj kształt narzędziami po lewej, wklej zrzut (Ctrl+V) lub zaimportuj obraz z pliku XLSX.',
@@ -399,6 +409,7 @@ const I18N = {
     'vars.hint':'W tekstach kształtów wpisz {NAZWA} — np. {A}. Każdy wiersz tabeli to jeden wariant. „Generuj” tworzy ZIP z plikiem PNG dla każdego wiersza.',
     'vars.addCol':'+ Zmienna','vars.addRow':'+ Wariant','vars.variant':'Wariant','vars.preview':'Podgląd na płótnie',
     'vars.rawVals':'— wartości surowe {A} —','vars.gen':'Generuj wszystkie PNG (ZIP)',
+    'vars.nameGrp':'Nazwa pliku wariantu','vars.namePh':'np. {A}_{B} (puste = wartości)','vars.nameHint':'Puste = wartości zmiennych złączone „_". Możesz użyć wzoru z {ZMIENNA}, np. {A}x{B}.',
     't.saved':'Zapisano projekt: ','t.loaded':'Wczytano projekt: ','t.emptyCanvas':'Płótno jest puste',
     't.pasteImg':'Wklejono obraz ze schowka','t.copied':'Skopiowano: ','t.grouped':'Zgrupowano','t.ungrouped':'Rozgrupowano',
     't.libSaved':'Zapisano do biblioteki: ','t.min2':'Zaznacz min. 2 kształty','t.min3':'Rozłożenie wymaga min. 3 kształtów',
@@ -445,9 +456,12 @@ const I18N = {
     'set.language':'Language','set.zoom':'Zoom control','set.mxMaster':'Slower zoom',
     'set.mxMasterHint':'Enable if the mouse wheel zooms too fast. Higher divider = slower zoom.',
     'set.defaults':'Defaults for new shapes','set.config':'Configuration',
+    'set.colStroke':'Stroke color','set.colText':'Text color','set.colFill':'Fill color',
     'props.flip':'Flip','props.flipH':'Flip horizontally','props.flipV':'Flip vertically',
-    'props.crop':'Crop (%)','props.cropLT':'Left / Top','props.cropRB':'Right / Bottom','props.cropReset':'Reset crop',
+    'props.crop':'Crop','props.cropStart':'Crop','props.cropDone':'Done','props.cropReset':'Reset',
+    'props.cropHint':'Drag the frame handles to crop. Image proportions stay unchanged. Esc or “Done" finishes.',
     'lib.newFolder':'+ Folder','lib.folder':'Folder','lib.folderName':'Folder name:','lib.emptyFolder':'(empty folder)','lib.insertHint':'Click to insert',
+    'lib.root':'No folder','lib.drag':'Drag to a folder','lib.dragHint':'Drag a tile into a folder. Click a header to collapse.',
     'c.tmplOverwrite':'Template “{n}" already exists. Overwrite?','c.delFolder':'Delete folder “{n}"? Items move to root.',
     'set.zoomDiv':'Zoom divider','set.panel':'Panel','set.panelWidth':'Panel width (px)',
     'set.about':'ProdRys — production-instruction editor.',
@@ -467,6 +481,7 @@ const I18N = {
     'vars.hint':'In shape texts type {NAME} — e.g. {A}. Each table row is one variant. “Generate” builds a ZIP with a PNG for each row.',
     'vars.addCol':'+ Variable','vars.addRow':'+ Variant','vars.variant':'Variant','vars.preview':'Canvas preview',
     'vars.rawVals':'— raw values {A} —','vars.gen':'Generate all PNG (ZIP)',
+    'vars.nameGrp':'Variant file name','vars.namePh':'e.g. {A}_{B} (empty = values)','vars.nameHint':'Empty = variable values joined with "_". You can use a pattern with {VAR}, e.g. {A}x{B}.',
     't.saved':'Project saved: ','t.loaded':'Project loaded: ','t.emptyCanvas':'Canvas is empty',
     't.pasteImg':'Image pasted from clipboard','t.copied':'Copied: ','t.grouped':'Grouped','t.ungrouped':'Ungrouped',
     't.libSaved':'Saved to library: ','t.min2':'Select at least 2 shapes','t.min3':'Distribution needs at least 3 shapes',
@@ -513,9 +528,12 @@ const I18N = {
     'set.language':'Sprache','set.zoom':'Zoom-Steuerung','set.mxMaster':'Langsamerer Zoom',
     'set.mxMasterHint':'Aktivieren, wenn das Mausrad zu schnell zoomt. Höherer Teiler = langsamerer Zoom.',
     'set.defaults':'Vorgaben für neue Formen','set.config':'Konfiguration',
+    'set.colStroke':'Konturfarbe','set.colText':'Textfarbe','set.colFill':'Füllfarbe',
     'props.flip':'Spiegeln','props.flipH':'Horizontal spiegeln','props.flipV':'Vertikal spiegeln',
-    'props.crop':'Zuschnitt (%)','props.cropLT':'Links / Oben','props.cropRB':'Rechts / Unten','props.cropReset':'Zuschnitt zurücksetzen',
+    'props.crop':'Zuschnitt','props.cropStart':'Zuschneiden','props.cropDone':'Fertig','props.cropReset':'Zurücksetzen',
+    'props.cropHint':'Rahmengriffe ziehen zum Zuschneiden. Bildproportionen bleiben. Esc oder „Fertig" beendet.',
     'lib.newFolder':'+ Ordner','lib.folder':'Ordner','lib.folderName':'Ordnername:','lib.emptyFolder':'(leerer Ordner)','lib.insertHint':'Zum Einfügen klicken',
+    'lib.root':'Kein Ordner','lib.drag':'In Ordner ziehen','lib.dragHint':'Kachel in einen Ordner ziehen. Kopf klicken zum Einklappen.',
     'c.tmplOverwrite':'Vorlage „{n}" existiert bereits. Überschreiben?','c.delFolder':'Ordner „{n}" löschen? Elemente wandern in die Wurzel.',
     'set.zoomDiv':'Zoom-Teiler','set.panel':'Panel','set.panelWidth':'Panelbreite (px)',
     'set.about':'ProdRys — Editor für Produktionsanweisungen.',
@@ -535,6 +553,7 @@ const I18N = {
     'vars.hint':'In Formtexten {NAME} eingeben — z. B. {A}. Jede Tabellenzeile ist eine Variante. „Generieren“ erstellt ein ZIP mit einem PNG pro Zeile.',
     'vars.addCol':'+ Variable','vars.addRow':'+ Variante','vars.variant':'Variante','vars.preview':'Vorschau auf Zeichenfläche',
     'vars.rawVals':'— Rohwerte {A} —','vars.gen':'Alle PNG generieren (ZIP)',
+    'vars.nameGrp':'Dateiname der Variante','vars.namePh':'z. B. {A}_{B} (leer = Werte)','vars.nameHint':'Leer = Variablenwerte mit „_" verbunden. Muster mit {VAR} möglich, z. B. {A}x{B}.',
     't.saved':'Projekt gespeichert: ','t.loaded':'Projekt geladen: ','t.emptyCanvas':'Zeichenfläche ist leer',
     't.pasteImg':'Bild aus Zwischenablage eingefügt','t.copied':'Kopiert: ','t.grouped':'Gruppiert','t.ungrouped':'Gruppierung aufgehoben',
     't.libSaved':'In Bibliothek gespeichert: ','t.min2':'Mindestens 2 Formen auswählen','t.min3':'Verteilung braucht mindestens 3 Formen',
@@ -1121,6 +1140,13 @@ function arrowHeadSVG(fromX, fromY, tipX, tipY, sw, color) {
   const px = -Math.sin(a) * W, py = Math.cos(a) * W;
   return `<polygon points="${tipX},${tipY} ${bx + px},${by + py} ${bx - px},${by - py}" fill="${color}"/>`;
 }
+/* pełny (nieprzycięty) prostokąt obrazka — obraz rysowany w tym rozmiarze, przycięcie tylko przysłania */
+function fullRect(s) {
+  const l = (s.crop && s.crop.l) || 0, tp = (s.crop && s.crop.t) || 0;
+  const r = (s.crop && s.crop.r) || 0, bt = (s.crop && s.crop.b) || 0;
+  const FW = s.w / Math.max(0.02, 1 - l - r), FH = s.h / Math.max(0.02, 1 - tp - bt);
+  return { x: s.x - l * FW, y: s.y - tp * FH, w: FW, h: FH };
+}
 /* środek kształtu (do obrotu) */
 function shapeCenter(s) {
   if (s.type === 'line') return { x: (s.x1 + s.x2) / 2, y: (s.y1 + s.y2) / 2 };
@@ -1193,14 +1219,15 @@ function shapeSVG(s, vals, live) {
   }
   if (s.type === 'image') {
     const cr = s.crop;
+    const F = fullRect(s);
+    /* w trybie przycinania: pokaż CAŁY obraz (przygaszenie/ramkę rysuje overlay) */
+    if (live && cropMode === s.id) {
+      return `<g${did}><image x="${F.x}" y="${F.y}" width="${F.w}" height="${F.h}" href="${s.href}" preserveAspectRatio="none" opacity="0.55"/></g>`;
+    }
     if (cr && (cr.l || cr.t || cr.r || cr.b)) {
-      const cw = Math.max(0.02, 1 - (cr.l || 0) - (cr.r || 0));
-      const ch = Math.max(0.02, 1 - (cr.t || 0) - (cr.b || 0));
-      const dw = s.w / cw, dh = s.h / ch;
-      const ix = s.x - (cr.l || 0) * dw, iy = s.y - (cr.t || 0) * dh;
       const cid = 'clip_' + s.id;
       return `<g${did}><clipPath id="${cid}"><rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}"/></clipPath>` +
-        `<image x="${ix}" y="${iy}" width="${dw}" height="${dh}" href="${s.href}" preserveAspectRatio="none" clip-path="url(#${cid})"/>` +
+        `<image x="${F.x}" y="${F.y}" width="${F.w}" height="${F.h}" href="${s.href}" preserveAspectRatio="none" clip-path="url(#${cid})"/>` +
         (live ? `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="transparent"/>` : '') + `</g>`;
     }
     return `<g${did}><image x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" href="${s.href}" preserveAspectRatio="none"/></g>`;
@@ -1253,7 +1280,28 @@ function render() {
   cv.innerHTML = html;
   $('#zoomLbl').textContent = Math.round(z * 100) + '%';
 }
+function cropOverlaySVG() {
+  const s = state.shapes.find(a => a.id === cropMode);
+  if (!s || s.type !== 'image') return '';
+  const z = view.z, hw = 5 / z;
+  const F = fullRect(s);
+  const dim = 'rgba(0,0,0,.5)';
+  let out = '';
+  /* przygaszenie obszaru poza ramką przycięcia */
+  out += `<rect x="${F.x}" y="${F.y}" width="${F.w}" height="${Math.max(0, s.y - F.y)}" fill="${dim}"/>`;
+  out += `<rect x="${F.x}" y="${s.y + s.h}" width="${F.w}" height="${Math.max(0, F.y + F.h - (s.y + s.h))}" fill="${dim}"/>`;
+  out += `<rect x="${F.x}" y="${s.y}" width="${Math.max(0, s.x - F.x)}" height="${s.h}" fill="${dim}"/>`;
+  out += `<rect x="${s.x + s.w}" y="${s.y}" width="${Math.max(0, F.x + F.w - (s.x + s.w))}" height="${s.h}" fill="${dim}"/>`;
+  /* ramka + uchwyty przycięcia */
+  out += `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="none" stroke="#fff" stroke-width="${1.6 / z}"/>`;
+  const H = [['nw', s.x, s.y], ['n', s.x + s.w / 2, s.y], ['ne', s.x + s.w, s.y], ['e', s.x + s.w, s.y + s.h / 2],
+    ['se', s.x + s.w, s.y + s.h], ['s', s.x + s.w / 2, s.y + s.h], ['sw', s.x, s.y + s.h], ['w', s.x, s.y + s.h / 2]];
+  for (const [k, x, y] of H)
+    out += `<rect data-crop="1" data-handle="${k}" x="${x - hw}" y="${y - hw}" width="${hw * 2}" height="${hw * 2}" fill="var(--acc)" stroke="#111" stroke-width="${1 / z}"/>`;
+  return `<g${rotAttr(s)}>${out}</g>`;
+}
 function overlaySVG() {
+  if (cropMode) return cropOverlaySVG();
   const z = view.z; let out = '';
   const hw = 4 / z, hs = `width="${hw * 2}" height="${hw * 2}" fill="#fff" stroke="var(--sel)" stroke-width="${1.2 / z}"`;
   const ss = selShapes();
@@ -1474,6 +1522,14 @@ cv.addEventListener('pointerdown', e => {
   }
   if (e.button !== 0) return;
 
+  /* tryb przycinania obrazka */
+  if (cropMode) {
+    const s = state.shapes.find(a => a.id === cropMode);
+    const hEl = e.target.closest('[data-crop]');
+    if (hEl && s) { pushUndo(); drag = { mode: 'crop', h: hEl.dataset.handle, s, F: fullRect(s) }; return; }
+    cropMode = null; render(); renderProps(); return;   /* klik poza ramką = koniec */
+  }
+
   if (tool === 'select') {
     const hEl = e.target.closest('[data-handle]');
     if (hEl && sel.size >= 1) {
@@ -1553,6 +1609,19 @@ cv.addEventListener('pointerdown', e => {
 cv.addEventListener('pointermove', e => {
   if (!drag) return;
   const p = worldPt(e);
+  if (drag.mode === 'crop') {
+    const s = drag.s, F = drag.F, h = drag.h, min = 8 / view.z;
+    let L = s.x, T = s.y, R = s.x + s.w, B = s.y + s.h;
+    let pt = p;
+    if (s.rot) pt = rotatePt(p.x, p.y, F.x + F.w / 2, F.y + F.h / 2, -s.rot);   /* do układu lokalnego */
+    if (h.includes('w')) L = clamp(pt.x, F.x, R - min);
+    if (h.includes('e')) R = clamp(pt.x, L + min, F.x + F.w);
+    if (h.includes('n')) T = clamp(pt.y, F.y, B - min);
+    if (h.includes('s')) B = clamp(pt.y, T + min, F.y + F.h);
+    s.x = L; s.y = T; s.w = R - L; s.h = B - T;
+    s.crop = { l: (L - F.x) / F.w, t: (T - F.y) / F.h, r: (F.x + F.w - R) / F.w, b: (F.y + F.h - B) / F.h };
+    render(); return;
+  }
   if (drag.mode === 'pan') {
     view.x = drag.ox + e.clientX - drag.sx;
     view.y = drag.oy + e.clientY - drag.sy;
@@ -1888,12 +1957,13 @@ function renderProps() {
     h += `</div>`;
   }
   if (one && s.type === 'image') {
-    const cr = s.crop || { l: 0, t: 0, r: 0, b: 0 };
-    const pc = v => Math.round((v || 0) * 100);
+    const cropping = cropMode === s.id;
     h += `<div class="grp"><h4>${t('props.crop')}</h4>
-      <div class="row"><label>${t('props.cropLT')}</label><input class="in" type="number" id="pCropL" min="0" max="90" step="1" value="${pc(cr.l)}"><input class="in" type="number" id="pCropT" min="0" max="90" step="1" value="${pc(cr.t)}"></div>
-      <div class="row"><label>${t('props.cropRB')}</label><input class="in" type="number" id="pCropR" min="0" max="90" step="1" value="${pc(cr.r)}"><input class="in" type="number" id="pCropB" min="0" max="90" step="1" value="${pc(cr.b)}"></div>
-      <div class="row"><button class="btn" id="pCropReset">${t('props.cropReset')}</button></div></div>`;
+      <div class="row">${cropping
+        ? `<button class="btn primary" id="pCropDone">${t('props.cropDone')}</button>`
+        : `<button class="btn" id="pCropStart">${t('props.cropStart')}</button>`}
+        <button class="btn" id="pCropReset">${t('props.cropReset')}</button></div>
+      ${cropping ? `<div class="hint" style="margin-top:4px">${t('props.cropHint')}</div>` : ''}</div>`;
   }
   if (one && s.type === 'line') {
     h += `<div class="grp"><h4>${t('props.linePts')}</h4>
@@ -1976,8 +2046,9 @@ function renderProps() {
   ['pX1', 'pY1', 'pX2', 'pY2'].forEach(id =>
     on(id, 'change', () => applySizeAll(a => { if (a.type === 'line') a[id[1].toLowerCase() + id[2]] = num(id); })));
   /* kolory: cofnij łapie CAŁĄ zmianę — pushUndo raz przy focusie, potem live bez undo (pomija zablok. wygląd) */
-  const liveApply = fn => { selShapes().filter(s => !isStyleLocked(s)).forEach(fn); render(); autosave(); };
-  const bindColor = (id, fn) => { on(id, 'focus', () => pushUndo()); on(id, 'input', () => liveApply(fn)); };
+  /* kolory: TYLKO 'change' (raz, po zamknięciu okna koloru/pipety) — brak re-renderu
+     w trakcie otwartego natywnego dialogu = brak zawieszki na Edge */
+  const bindColor = (id, fn) => on(id, 'change', () => applyStyleAll(fn));
   bindColor('pStroke', a => { if (a.stroke !== undefined) { a.stroke = $('#pStroke').value; a.noStroke = false; } });
   on('pNoStroke', 'change', () => applyStyleAll(a => { if ('noStroke' in a || a.type === 'rect' || a.type === 'ellipse') a.noStroke = $('#pNoStroke').checked; }));
   on('pSw', 'change', () => applyStyleAll(a => { if (a.sw !== undefined) a.sw = Math.max(0.5, num('pSw')); }));
@@ -1992,10 +2063,9 @@ function renderProps() {
   on('pRotStep', 'change', () => { rotStepOn = $('#pRotStep').checked; });
   on('pFlipH', 'click', () => applySizeAll(a => { if (a.type !== 'line') a.flipH = !a.flipH; }));
   on('pFlipV', 'click', () => applySizeAll(a => { if (a.type !== 'line') a.flipV = !a.flipV; }));
-  const cropVal = id => clamp((parseFloat($('#' + id).value) || 0) / 100, 0, 0.9);
-  const setCrop = () => applySizeAll(a => { if (a.type === 'image') a.crop = { l: cropVal('pCropL'), t: cropVal('pCropT'), r: cropVal('pCropR'), b: cropVal('pCropB') }; });
-  ['pCropL', 'pCropT', 'pCropR', 'pCropB'].forEach(id => on(id, 'change', setCrop));
-  on('pCropReset', 'click', () => { applySizeAll(a => { if (a.type === 'image') a.crop = null; }); renderProps(); });
+  on('pCropStart', 'click', () => { if (isSizeLocked(s)) return lockToast(); cropMode = s.id; setTool('select'); render(); renderProps(); });
+  on('pCropDone', 'click', () => { cropMode = null; render(); renderProps(); autosave(); });
+  on('pCropReset', 'click', () => { applySizeAll(a => { if (a.type === 'image' && a.crop) { const F = fullRect(a); a.x = F.x; a.y = F.y; a.w = F.w; a.h = F.h; a.crop = null; } }); renderProps(); });
   on('pText', 'focus', () => pushUndo());
   on('pText', 'input', () => {
     const v = $('#pText').value;
@@ -2217,31 +2287,34 @@ function placeLib(item) {
   setSelection(copies.map(a => a.id)); autosave();
 }
 function saveLibFolders() { try { localStorage.setItem('prodrys_libfolders', JSON.stringify(libFolders)); } catch (e) {} }
+function moveLibToFolder(i, folder) {
+  if (i < 0 || i >= lib.length) return;
+  lib[i].folder = folder || ''; saveLib(); renderLib();
+}
 function renderLib() {
   const el = $('#tab-lib');
-  const folderOptions = sel => ['', ...libFolders].map(f =>
-    `<option value="${escXml(f)}" ${sel === f ? 'selected' : ''}>${f ? escXml(f) : '—'}</option>`).join('');
   const tile = i => {
     const item = lib[i];
     const b = buildSVG(item.shapes, null, 6);
-    return `<div class="libTile">
+    return `<div class="libTile" draggable="true" data-libdrag="${i}">
       <div class="libThumb" data-lib="${i}" title="${t('lib.insertHint')}">${b ? b.svg : ''}</div>
       <div class="cap" title="${escXml(item.name)}">${escXml(item.name)}</div>
-      <div class="tileBar"><select data-libmove="${i}" title="${t('lib.folder')}">${folderOptions(item.folder || '')}</select>
+      <div class="tileBar"><span class="grab" title="${t('lib.drag')}">⠿</span>
         <button class="miniBtn" data-libdel="${i}" title="${t('props.del')}"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></div>`;
   };
   const idxByFolder = f => lib.map((it, i) => ({ it, i })).filter(o => (o.it.folder || '') === f).map(o => o.i);
-  let h = `<div class="hint" style="margin-bottom:8px">${t('lib.hint')}</div>`;
-  h += `<div class="row" style="margin-bottom:10px"><button class="btn" id="libAddFolder">${t('lib.newFolder')}</button></div>`;
+  const grid = ids => ids.length ? `<div class="libGrid">${ids.map(tile).join('')}</div>` : `<div class="empty" style="padding:8px">${t('lib.emptyFolder')}</div>`;
+  let h = `<div class="hint" style="margin-bottom:8px">${t('lib.hint')}<br>${t('lib.dragHint')}</div>`;
+  h += `<div class="row" style="margin-bottom:8px"><button class="btn" id="libAddFolder">${t('lib.newFolder')}</button></div>`;
   if (!lib.length) h += `<div class="empty">${t('lib.empty')}</div>`;
-  /* korzeń */
-  const root = idxByFolder('');
-  if (root.length) h += `<div class="libGrid">${root.map(tile).join('')}</div>`;
+  /* korzeń (też cel upuszczenia) */
+  h += `<div class="libDrop" data-drop=""><div class="libFolderHead"><span>▾ ${t('lib.root')}</span></div>${grid(idxByFolder(''))}</div>`;
   /* foldery */
   for (const f of libFolders) {
-    h += `<div class="libFolderHead"><span>📁 ${escXml(f)}</span><button class="fdel" data-fdel="${escXml(f)}" title="${t('props.del')}">✕</button></div>`;
-    const ids = idxByFolder(f);
-    h += ids.length ? `<div class="libGrid">${ids.map(tile).join('')}</div>` : `<div class="empty" style="padding:8px">${t('lib.emptyFolder')}</div>`;
+    const col = !!libCollapsed[f];
+    h += `<div class="libDrop" data-drop="${escXml(f)}">
+      <div class="libFolderHead" data-fold="${escXml(f)}"><span>${col ? '▸' : '▾'} 📁 ${escXml(f)}</span><button class="fdel" data-fdel="${escXml(f)}" title="${t('props.del')}">✕</button></div>
+      ${col ? '' : grid(idxByFolder(f))}</div>`;
   }
   el.innerHTML = h;
   $('#libAddFolder').addEventListener('click', () => {
@@ -2250,20 +2323,37 @@ function renderLib() {
     libFolders.push(n); saveLibFolders(); renderLib();
   });
   $$('#tab-lib [data-lib]').forEach(n => n.addEventListener('click', () => placeLib(lib[+n.dataset.lib])));
-  $$('#tab-lib [data-libdel]').forEach(n => n.addEventListener('click', () => {
+  $$('#tab-lib [data-libdel]').forEach(n => n.addEventListener('click', ev => {
+    ev.stopPropagation();
     if (!confirm(t('c.delLib', { n: lib[+n.dataset.libdel].name }))) return;
     lib.splice(+n.dataset.libdel, 1); saveLib(); renderLib();
   }));
-  $$('#tab-lib [data-libmove]').forEach(n => n.addEventListener('change', () => {
-    lib[+n.dataset.libmove].folder = n.value; saveLib(); renderLib();
+  /* zwijanie folderu (klik w nagłówek) */
+  $$('#tab-lib [data-fold]').forEach(n => n.addEventListener('click', ev => {
+    if (ev.target.closest('.fdel')) return;
+    const f = n.dataset.fold; libCollapsed[f] = !libCollapsed[f]; renderLib();
   }));
-  $$('#tab-lib [data-fdel]').forEach(n => n.addEventListener('click', () => {
+  $$('#tab-lib [data-fdel]').forEach(n => n.addEventListener('click', ev => {
+    ev.stopPropagation();
     const f = n.dataset.fdel;
     if (!confirm(t('c.delFolder', { n: f }))) return;
-    lib.forEach(it => { if ((it.folder || '') === f) it.folder = ''; });   /* elementy → korzeń */
-    libFolders = libFolders.filter(x => x !== f);
+    lib.forEach(it => { if ((it.folder || '') === f) it.folder = ''; });
+    libFolders = libFolders.filter(x => x !== f); delete libCollapsed[f];
     saveLib(); saveLibFolders(); renderLib();
   }));
+  /* drag & drop kafelków między folderami */
+  $$('#tab-lib [data-libdrag]').forEach(n => n.addEventListener('dragstart', ev => {
+    ev.dataTransfer.setData('text/plain', n.dataset.libdrag); ev.dataTransfer.effectAllowed = 'move';
+  }));
+  $$('#tab-lib [data-drop]').forEach(zone => {
+    zone.addEventListener('dragover', ev => { ev.preventDefault(); zone.classList.add('dropOn'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dropOn'));
+    zone.addEventListener('drop', ev => {
+      ev.preventDefault(); zone.classList.remove('dropOn');
+      const i = parseInt(ev.dataTransfer.getData('text/plain'), 10);
+      if (!isNaN(i)) moveLibToFolder(i, zone.dataset.drop);
+    });
+  });
 }
 function saveLib() { try { localStorage.setItem('prodrys_lib', JSON.stringify(lib)); } catch (e) {} }
 function defaultLibItems() {
@@ -2360,6 +2450,9 @@ function renderVars() {
     <select class="in wide" id="vPrev"><option value="-1">${t('vars.rawVals')}</option>` +
     V.rows.map((r, i) => `<option value="${i}" ${previewRow === i ? 'selected' : ''}>${escXml(r.name)}</option>`).join('') +
     `</select></div>`;
+  h += `<div class="grp"><h4>${t('vars.nameGrp')}</h4>
+    <input class="in wide" id="vNamePat" placeholder="${escXml(t('vars.namePh'))}" value="${escXml(V.namePattern || '')}">
+    <div class="hint" style="margin-top:4px">${t('vars.nameHint')}</div></div>`;
   h += `<button class="btn primary" id="vGen" style="width:100%" ${!V.rows.length ? 'disabled' : ''}>${t('vars.gen')}</button>`;
   el.innerHTML = h;
 
@@ -2395,20 +2488,31 @@ function renderVars() {
   $('#vPrev').addEventListener('change', e => {
     previewRow = +e.target.value; render();
   });
+  const np = $('#vNamePat'); if (np) np.addEventListener('input', () => { V.namePattern = np.value; autosave(); });
   $('#vGen').addEventListener('click', generateVariants);
+}
+/* nazwa wariantu: wzór {A}_{B} albo wartości zmiennych złączone "_" */
+function variantName(row) {
+  const V = state.vars;
+  const pat = (V.namePattern || '').trim();
+  if (pat) return sanitizeFile(subst(pat, row.vals)) || sanitizeFile(row.name);
+  const vals = V.cols.map(c => row.vals[c] ?? '').filter(x => String(x).trim() !== '');
+  return sanitizeFile(vals.length ? vals.join('_') : row.name);
 }
 async function generateVariants() {
   if (!state.shapes.length) return toast(t('t.emptyCanvas'));
   const proj = sanitizeFile($('#projName').value);
   const files = [];
+  const used = {};
   const region = pageRegion();
   toast(t('t.genVariants'));
   for (const row of state.vars.rows) {
     const b = buildSVG(state.shapes, row.vals, 16, region);
     if (!b) continue;
     const png = await svgToPngBlob(b.svg, b.w, b.h, 2);
-    files.push({ name: proj + '_' + sanitizeFile(row.name) + '.png',
-      data: new Uint8Array(await png.arrayBuffer()) });
+    let nm = variantName(row);
+    if (used[nm]) nm += '_' + (++used[nm]); else used[nm] = 1;   /* unikaj kolizji nazw */
+    files.push({ name: proj + '_' + nm + '.png', data: new Uint8Array(await png.arrayBuffer()) });
   }
   if (!files.length) return toast(t('t.noVariants'));
   downloadBlob(makeZip(files), proj + '_warianty.zip');
@@ -2951,65 +3055,162 @@ function applySettings() {
 }
 /* ---------- zakładka Pomoc: instrukcje + skróty ---------- */
 const HELP_HTML = {
-  pl: `<div class="grp"><h4>Narzędzia</h4><div class="hint">
-    V zaznaczanie · R prostokąt · C elipsa · L linia · A strzałka · T tekst · S kształty · I obraz · K pipeta.
-    Kliknij narzędzie na pasku po lewej.</div></div>
+  pl: `<div class="grp"><h4>Do czego to jest</h4><div class="hint">
+    ProdRys — edytor rysunków/instrukcji produkcyjnych. Rysujesz kształty, dodajesz teksty i obrazy,
+    układasz w macierz, robisz warianty tego samego rysunku i eksportujesz do PNG/JPG.</div></div>
+    <div class="grp"><h4>Narzędzia (pasek z lewej)</h4><div class="hint">
+    V zaznaczanie · R prostokąt · C elipsa · L linia · A strzałka · T tekst · S kształty (trójkąt, gwiazda,
+    strzałki, zaokrąglony prostokąt…) · I obraz. Kolor pobierzesz pipetą wbudowaną w okno wyboru koloru.</div></div>
     <div class="grp"><h4>Skróty klawiszowe</h4><div class="hint">
-    Ctrl+Z / Ctrl+Y — cofnij / ponów<br>Ctrl+C / Ctrl+V — kopiuj / wklej<br>Ctrl+D — duplikuj<br>
-    Ctrl+A — zaznacz wszystko<br>Ctrl+G / Ctrl+Shift+G — grupuj / rozgrupuj<br>
-    Ctrl+S — zapisz · Ctrl+O — otwórz<br>Delete — usuń<br>strzałki — przesuń (Shift = 10 px)<br>
-    + / − — powiększ / pomniejsz<br>Spacja lub środkowy przycisk — przesuwanie płótna · kółko — zoom</div></div>
-    <div class="grp"><h4>Obracanie</h4><div class="hint">
-    Złap pomarańczowy uchwyt nad kształtem i obróć. Zaznacz „skok 10°" obok pola kąta, aby obracać skokowo
-    (lub trzymaj Shift = co 15°). Kąt wpiszesz też ręcznie w polu.</div></div>
+    Ctrl+Z / Ctrl+Y — cofnij / ponów<br>Ctrl+C / Ctrl+V — kopiuj / wklej · Ctrl+D — duplikuj<br>
+    Ctrl+A — zaznacz wszystko · Ctrl+G / Ctrl+Shift+G — grupuj / rozgrupuj<br>
+    Ctrl+S — zapisz · Ctrl+O — otwórz · Delete — usuń<br>
+    strzałki — przesuń o 1 px (Shift = 10 px)<br>+ / − — zoom · Spacja lub środkowy przycisk — przesuń płótno · kółko — zoom<br>
+    Shift przy rysowaniu = kwadrat/koło; przy linii = co 45°.</div></div>
+    <div class="grp"><h4>Rysowanie i rozmiar</h4><div class="hint">
+    Wybierz narzędzie i przeciągnij po płótnie. Zaznaczony kształt ma uchwyty do skalowania.
+    Przeciąganie ze snapem: „Przyciągaj do siatki" i „do obiektów" (dół ekranu). Podwójny klik = edycja tekstu.</div></div>
+    <div class="grp"><h4>Tekst i czcionki</h4><div class="hint">
+    2×klik na kształcie (prostokąt/elipsa/tekst/wielokąt) wpisuje tekst w środku. We Właściwościach: czcionka,
+    rozmiar, kolor, <b>pogrubienie</b> i <i>kursywa</i>, pole „Treść".</div></div>
+    <div class="grp"><h4>Obracanie i odbicie</h4><div class="hint">
+    Złap pomarańczowy uchwyt nad kształtem. „skok 10°" (domyślnie wł.) obraca skokowo, Shift = co 15°.
+    Kąt wpiszesz też ręcznie. Odbicie lustrzane: guziki ↔ / ↕ w sekcji Pozycja.</div></div>
+    <div class="grp"><h4>Przycinanie zdjęć</h4><div class="hint">
+    Zaznacz obraz → „Przytnij" → przeciągnij uchwyty ramki. Proporcje obrazu NIE zmieniają się.
+    Esc lub „Gotowe" kończy, „Resetuj" przywraca cały obraz.</div></div>
     <div class="grp"><h4>Grupy</h4><div class="hint">
-    Zwykłe kliknięcie zaznacza całą grupę (do przesuwania/blokady). <b>Alt+klik</b> = wybór pojedynczego
-    obiektu w grupie (edycja koloru/tekstu).</div></div>
-    <div class="grp"><h4>Blokady</h4><div class="hint">
-    We Właściwościach: osobno blokada przesuwania, rozmiaru+obrotu, wyglądu (kolorów) i edycji tekstu.
-    Np. zablokuj ruch+rozmiar+wygląd, a zostaw tekst — obiekt stoi, ale treść wciąż edytujesz.</div></div>
+    Zwykły klik zaznacza całą grupę (przesuwanie/blokada). <b>Alt+klik</b> = pojedynczy obiekt w grupie,
+    by zmienić jego kolor/tekst. Ctrl+G grupuje, Ctrl+Shift+G rozgrupowuje.</div></div>
+    <div class="grp"><h4>Blokady (Właściwości)</h4><div class="hint">
+    Osobno: Przesuwanie, Rozmiar+obrót, Wygląd (kolory), Edycja tekstu, oraz „Zablokuj wszystko".
+    Przykład: zablokuj ruch+rozmiar+wygląd, zostaw tekst — obiekt stoi, ale treść dalej edytujesz.</div></div>
+    <div class="grp"><h4>Wyrównanie i macierz</h4><div class="hint">
+    Zaznacz 2+ kształty → guziki wyrównania (do lewej/środka/…). 3+ → rozłożenie równomierne.
+    „Macierz" układa w tabelę; „Macierz + rozmiar" dodatkowo ujednolica komórki. „Odstęp siatki" ustawia luz.</div></div>
+    <div class="grp"><h4>Warianty (zakładka Warianty)</h4><div class="hint">
+    W tekstach użyj <b>{A}</b>, <b>{B}</b>… Dodaj zmienne i wiersze. Każdy wiersz = jeden rysunek z podstawionymi
+    wartościami. „Podgląd" pokazuje wybrany wariant na płótnie. „Generuj" tworzy ZIP z PNG.<br>
+    <b>Nazwa pliku:</b> puste = wartości złączone „_" (np. <i>10_20</i>). Wzór np. <b>{A}x{B}</b> → <i>10x20</i>.</div></div>
+    <div class="grp"><h4>Biblioteka i foldery</h4><div class="hint">
+    Zaznacz kształty → „Do biblioteki". Kliknij kafelek, aby wstawić. „+ Folder" tworzy folder, kafelek
+    <b>przeciągnij</b> do folderu, klik nagłówka zwija folder.</div></div>
+    <div class="grp"><h4>Szablony</h4><div class="hint">
+    „Nowy" otwiera wybór szablonu (miniatury). Ustawienia → „Zapisz jako szablon" zapisuje bieżący rysunek;
+    ta sama nazwa = pytanie o nadpisanie. Domyślny szablon też można nadpisać/usunąć.</div></div>
+    <div class="grp"><h4>Ustawienia</h4><div class="hint">
+    Język (PL/EN/DE), wolniejszy zoom (dla myszy z szybkim kółkiem), szerokość panelu, domyślne nowych
+    kształtów (czcionka, rozmiar, grubość, kolory) oraz zapis/wczytanie konfiguracji.</div></div>
+    <div class="grp"><h4>Import XLSX/XLSM</h4><div class="hint">
+    Wczytuje kształty i obrazy z Excela (pozycje zachowane). Wybierasz co wstawić. Formaty EMF/WMF są
+    pomijane — w Excelu wklejaj zrzuty jako bitmapę.</div></div>
     <div class="grp"><h4>Zapis i eksport</h4><div class="hint">
-    „Zapisz" zapisuje do tego samego pliku (Chrome/Edge). „Zapisz jako" wybiera nowy plik.
-    Eksport PNG/JPG działa tak samo — szybki guzik = JPG. Pliki .pdraw/.json/.xlsx/.xlsm oraz obrazy
-    można przeciągnąć na okno.</div></div>`,
-  en: `<div class="grp"><h4>Tools</h4><div class="hint">
-    V select · R rectangle · C ellipse · L line · A arrow · T text · S shapes · I image · K eyedropper.</div></div>
+    „Zapisz" pisze do tego samego pliku (Chrome/Edge), „Zapisz jako" wybiera nowy. Eksport PNG/JPG działa tak
+    samo (pamięta plik), szybki guzik = JPG. Pliki .pdraw/.json/.xlsx/.xlsm oraz obrazy przeciągniesz na okno.</div></div>`,
+  en: `<div class="grp"><h4>What it is</h4><div class="hint">
+    ProdRys — an editor for production drawings/instructions. Draw shapes, add text and images, arrange in a
+    matrix, build variants of the same drawing and export to PNG/JPG.</div></div>
+    <div class="grp"><h4>Tools (left rail)</h4><div class="hint">
+    V select · R rectangle · C ellipse · L line · A arrow · T text · S shapes (triangle, star, arrows, rounded
+    rectangle…) · I image. Pick colors with the eyedropper built into the color dialog.</div></div>
     <div class="grp"><h4>Keyboard shortcuts</h4><div class="hint">
-    Ctrl+Z / Ctrl+Y — undo / redo<br>Ctrl+C / Ctrl+V — copy / paste<br>Ctrl+D — duplicate<br>
-    Ctrl+A — select all<br>Ctrl+G / Ctrl+Shift+G — group / ungroup<br>
-    Ctrl+S — save · Ctrl+O — open<br>Delete — delete<br>arrows — nudge (Shift = 10 px)<br>
-    + / − — zoom in / out<br>Space or middle button — pan · wheel — zoom</div></div>
-    <div class="grp"><h4>Rotation</h4><div class="hint">
-    Grab the orange handle above a shape and turn. Tick “step 10°" next to the angle box for stepped
-    rotation (or hold Shift = 15°). You can also type the angle.</div></div>
+    Ctrl+Z / Ctrl+Y — undo / redo<br>Ctrl+C / Ctrl+V — copy / paste · Ctrl+D — duplicate<br>
+    Ctrl+A — select all · Ctrl+G / Ctrl+Shift+G — group / ungroup<br>
+    Ctrl+S — save · Ctrl+O — open · Delete — delete<br>
+    arrows — nudge 1 px (Shift = 10 px)<br>+ / − — zoom · Space or middle button — pan · wheel — zoom<br>
+    Shift while drawing = square/circle; on a line = 45° steps.</div></div>
+    <div class="grp"><h4>Drawing & sizing</h4><div class="hint">
+    Pick a tool and drag on the canvas. A selected shape has resize handles. Snapping: “Snap to grid" and
+    “to objects" (bottom bar). Double-click = edit text.</div></div>
+    <div class="grp"><h4>Text & fonts</h4><div class="hint">
+    Double-click a shape (rect/ellipse/text/polygon) to type text inside. In Properties: font, size, color,
+    <b>bold</b> and <i>italic</i>, plus a “Content" field.</div></div>
+    <div class="grp"><h4>Rotate & flip</h4><div class="hint">
+    Grab the orange handle above a shape. “step 10°" (on by default) rotates in steps, Shift = 15°.
+    You can type the angle too. Mirror: ↔ / ↕ buttons in the Position section.</div></div>
+    <div class="grp"><h4>Cropping images</h4><div class="hint">
+    Select an image → “Crop" → drag the frame handles. Image proportions do NOT change.
+    Esc or “Done" finishes, “Reset" restores the full image.</div></div>
     <div class="grp"><h4>Groups</h4><div class="hint">
-    A normal click selects the whole group (for moving/locking). <b>Alt+click</b> = select a single
-    object inside the group (edit its color/text).</div></div>
-    <div class="grp"><h4>Locks</h4><div class="hint">
-    In Properties: separate locks for moving, size+rotation, appearance (colors) and text editing.
-    E.g. lock move+size+appearance and leave text — the object stays put but its text is still editable.</div></div>
+    A normal click selects the whole group (move/lock). <b>Alt+click</b> = a single object inside the group,
+    to change its color/text. Ctrl+G groups, Ctrl+Shift+G ungroups.</div></div>
+    <div class="grp"><h4>Locks (Properties)</h4><div class="hint">
+    Separate: Moving, Size+rotation, Appearance (colors), Text editing, plus “Lock everything".
+    Example: lock move+size+appearance, leave text — the object stays put but text stays editable.</div></div>
+    <div class="grp"><h4>Align & matrix</h4><div class="hint">
+    Select 2+ shapes → align buttons (left/center/…). 3+ → even distribution. “Matrix" lays out a table;
+    “Matrix + resize" also equalizes cells. “Grid gap" sets the spacing.</div></div>
+    <div class="grp"><h4>Variants (Variants tab)</h4><div class="hint">
+    In texts use <b>{A}</b>, <b>{B}</b>… Add variables and rows. Each row = one drawing with values substituted.
+    “Preview" shows the chosen variant. “Generate" builds a ZIP of PNGs.<br>
+    <b>File name:</b> empty = values joined with “_" (e.g. <i>10_20</i>). Pattern like <b>{A}x{B}</b> → <i>10x20</i>.</div></div>
+    <div class="grp"><h4>Library & folders</h4><div class="hint">
+    Select shapes → “To library". Click a tile to insert. “+ Folder" creates a folder, <b>drag</b> a tile into
+    a folder, click a header to collapse.</div></div>
+    <div class="grp"><h4>Templates</h4><div class="hint">
+    “New" opens a template picker (thumbnails). Settings → “Save as template" stores the current drawing;
+    same name = overwrite prompt. The default template can be overwritten/deleted too.</div></div>
+    <div class="grp"><h4>Settings</h4><div class="hint">
+    Language (PL/EN/DE), slower zoom (for fast wheels), panel width, defaults for new shapes (font, size,
+    line width, colors), and save/load configuration.</div></div>
+    <div class="grp"><h4>XLSX/XLSM import</h4><div class="hint">
+    Imports shapes and images from Excel (positions kept). You pick what to insert. EMF/WMF are skipped —
+    in Excel paste screenshots as bitmaps.</div></div>
     <div class="grp"><h4>Save & export</h4><div class="hint">
-    “Save" writes to the same file (Chrome/Edge). “Save as" picks a new file. PNG/JPG export works the same
-    way — the quick button = JPG. Drop .pdraw/.json/.xlsx/.xlsm files or images onto the window.</div></div>`,
-  de: `<div class="grp"><h4>Werkzeuge</h4><div class="hint">
-    V Auswahl · R Rechteck · C Ellipse · L Linie · A Pfeil · T Text · S Formen · I Bild · K Pipette.</div></div>
+    “Save" writes the same file (Chrome/Edge), “Save as" picks a new one. PNG/JPG export works the same
+    (remembers the file), quick button = JPG. Drop .pdraw/.json/.xlsx/.xlsm or images onto the window.</div></div>`,
+  de: `<div class="grp"><h4>Wozu</h4><div class="hint">
+    ProdRys — Editor für Produktionszeichnungen/-anweisungen. Formen zeichnen, Text und Bilder hinzufügen,
+    in Matrix anordnen, Varianten derselben Zeichnung erstellen und als PNG/JPG exportieren.</div></div>
+    <div class="grp"><h4>Werkzeuge (linke Leiste)</h4><div class="hint">
+    V Auswahl · R Rechteck · C Ellipse · L Linie · A Pfeil · T Text · S Formen (Dreieck, Stern, Pfeile,
+    abgerundetes Rechteck…) · I Bild. Farben mit der Pipette im Farbdialog wählen.</div></div>
     <div class="grp"><h4>Tastenkürzel</h4><div class="hint">
-    Strg+Z / Strg+Y — rückgängig / wiederholen<br>Strg+C / Strg+V — kopieren / einfügen<br>Strg+D — duplizieren<br>
-    Strg+A — alles auswählen<br>Strg+G / Strg+Umschalt+G — gruppieren / aufheben<br>
-    Strg+S — speichern · Strg+O — öffnen<br>Entf — löschen<br>Pfeile — verschieben (Umschalt = 10 px)<br>
-    + / − — zoomen<br>Leertaste oder mittlere Taste — Ansicht schieben · Rad — Zoom</div></div>
-    <div class="grp"><h4>Drehen</h4><div class="hint">
-    Den orangefarbenen Griff über der Form fassen und drehen. „Schritt 10°" neben dem Winkelfeld für
-    schrittweises Drehen (oder Umschalt = 15°). Der Winkel lässt sich auch eintippen.</div></div>
+    Strg+Z / Strg+Y — rückgängig / wiederholen<br>Strg+C / Strg+V — kopieren / einfügen · Strg+D — duplizieren<br>
+    Strg+A — alles wählen · Strg+G / Strg+Umschalt+G — gruppieren / aufheben<br>
+    Strg+S — speichern · Strg+O — öffnen · Entf — löschen<br>
+    Pfeile — 1 px (Umschalt = 10 px)<br>+ / − — Zoom · Leertaste/Mitteltaste — schieben · Rad — Zoom<br>
+    Umschalt beim Zeichnen = Quadrat/Kreis; bei Linie = 45°-Schritte.</div></div>
+    <div class="grp"><h4>Zeichnen & Größe</h4><div class="hint">
+    Werkzeug wählen und auf der Fläche ziehen. Gewählte Form hat Griffe. Einrasten: „Am Raster" und
+    „An Objekten" (untere Leiste). Doppelklick = Text bearbeiten.</div></div>
+    <div class="grp"><h4>Text & Schriften</h4><div class="hint">
+    Form doppelklicken (Rechteck/Ellipse/Text/Polygon) für Text in der Mitte. In Eigenschaften: Schrift,
+    Größe, Farbe, <b>fett</b> und <i>kursiv</i>, Feld „Inhalt".</div></div>
+    <div class="grp"><h4>Drehen & Spiegeln</h4><div class="hint">
+    Orangefarbenen Griff über der Form fassen. „Schritt 10°" (standard an), Umschalt = 15°. Winkel auch
+    eintippbar. Spiegeln: ↔ / ↕ im Bereich Position.</div></div>
+    <div class="grp"><h4>Bilder zuschneiden</h4><div class="hint">
+    Bild wählen → „Zuschneiden" → Rahmengriffe ziehen. Proportionen ändern sich NICHT.
+    Esc oder „Fertig" beendet, „Zurücksetzen" stellt das ganze Bild wieder her.</div></div>
     <div class="grp"><h4>Gruppen</h4><div class="hint">
-    Ein normaler Klick wählt die ganze Gruppe (Verschieben/Sperren). <b>Alt+Klick</b> = einzelnes Objekt
-    in der Gruppe wählen (Farbe/Text bearbeiten).</div></div>
-    <div class="grp"><h4>Sperren</h4><div class="hint">
-    In Eigenschaften: getrennte Sperren für Verschieben, Größe+Drehung, Aussehen (Farben) und
-    Textbearbeitung. Z. B. Verschieben+Größe+Aussehen sperren und Text lassen.</div></div>
+    Normaler Klick wählt die ganze Gruppe (Verschieben/Sperren). <b>Alt+Klick</b> = einzelnes Objekt in der
+    Gruppe, um Farbe/Text zu ändern. Strg+G gruppiert, Strg+Umschalt+G hebt auf.</div></div>
+    <div class="grp"><h4>Sperren (Eigenschaften)</h4><div class="hint">
+    Getrennt: Verschieben, Größe+Drehung, Aussehen (Farben), Textbearbeitung, plus „Alles sperren".
+    Beispiel: Verschieben+Größe+Aussehen sperren, Text lassen — Objekt bleibt, Text bleibt bearbeitbar.</div></div>
+    <div class="grp"><h4>Ausrichten & Matrix</h4><div class="hint">
+    2+ Formen wählen → Ausrichtbuttons. 3+ → gleichmäßig verteilen. „Matrix" ordnet als Tabelle;
+    „Matrix + Größe" vereinheitlicht Zellen. „Rasterabstand" setzt den Abstand.</div></div>
+    <div class="grp"><h4>Varianten (Reiter Varianten)</h4><div class="hint">
+    In Texten <b>{A}</b>, <b>{B}</b>… verwenden. Variablen und Zeilen hinzufügen. Jede Zeile = eine Zeichnung mit
+    eingesetzten Werten. „Vorschau" zeigt die Variante. „Generieren" baut ein ZIP mit PNGs.<br>
+    <b>Dateiname:</b> leer = Werte mit „_" (z. B. <i>10_20</i>). Muster wie <b>{A}x{B}</b> → <i>10x20</i>.</div></div>
+    <div class="grp"><h4>Bibliothek & Ordner</h4><div class="hint">
+    Formen wählen → „In Bibliothek". Kachel klicken zum Einfügen. „+ Ordner" erstellt einen Ordner, Kachel in
+    einen Ordner <b>ziehen</b>, Kopf klicken zum Einklappen.</div></div>
+    <div class="grp"><h4>Vorlagen</h4><div class="hint">
+    „Neu" öffnet die Vorlagenauswahl (Miniaturen). Einstellungen → „Als Vorlage speichern"; gleicher Name =
+    Überschreiben-Abfrage. Standardvorlage ist ebenfalls überschreib-/löschbar.</div></div>
+    <div class="grp"><h4>Einstellungen</h4><div class="hint">
+    Sprache (PL/EN/DE), langsamerer Zoom, Panelbreite, Vorgaben für neue Formen (Schrift, Größe, Stärke,
+    Farben) und Konfiguration speichern/laden.</div></div>
+    <div class="grp"><h4>XLSX/XLSM-Import</h4><div class="hint">
+    Importiert Formen und Bilder aus Excel (Positionen erhalten). Auswahl, was eingefügt wird. EMF/WMF werden
+    übersprungen — in Excel Screenshots als Bitmap einfügen.</div></div>
     <div class="grp"><h4>Speichern & Export</h4><div class="hint">
-    „Speichern" schreibt in dieselbe Datei (Chrome/Edge). „Speichern unter" wählt eine neue Datei.
-    PNG/JPG-Export ebenso — Schnell-Button = JPG. .pdraw/.json/.xlsx/.xlsm oder Bilder aufs Fenster ziehen.</div></div>`
+    „Speichern" schreibt dieselbe Datei (Chrome/Edge), „Speichern unter" wählt eine neue. PNG/JPG-Export
+    ebenso (merkt sich die Datei), Schnell-Button = JPG. .pdraw/.json/.xlsx/.xlsm oder Bilder aufs Fenster ziehen.</div></div>`
 };
 function renderHelp() {
   const el = $('#tab-help'); if (!el) return;
@@ -3039,9 +3240,9 @@ function renderSettings() {
         ${fonts.map(f => `<option value="${f}" ${D.font === f ? 'selected' : ''}>${f}</option>`).join('')}</select></div>
       <div class="row"><label>${t('props.size')}</label><input class="in" type="number" id="dFs" min="4" value="${D.fs}"></div>
       <div class="row"><label>${t('props.width')}</label><input class="in" type="number" id="dSw" min="0.5" step="0.5" value="${D.sw}"></div>
-      <div class="row"><label>${t('props.stroke')}</label><input class="in" type="color" id="dStroke" value="${D.stroke}">
-        <input class="in" type="color" id="dTc" value="${D.tc}" title="${t('props.text')}">
-        <input class="in" type="color" id="dFill" value="${D.fill}" title="${t('props.fill')}"></div></div>
+      <div class="row"><label>${t('set.colStroke')}</label><input class="in" type="color" id="dStroke" value="${D.stroke}"></div>
+      <div class="row"><label>${t('set.colText')}</label><input class="in" type="color" id="dTc" value="${D.tc}"></div>
+      <div class="row"><label>${t('set.colFill')}</label><input class="in" type="color" id="dFill" value="${D.fill}"></div></div>
     <div class="grp"><h4>${t('set.config')}</h4>
       <div class="row"><button class="btn" id="setTmpl">${t('config.saveTmpl')}</button></div>
       <div class="row"><button class="btn" id="setExpCfg">${t('config.save')}</button>
@@ -3058,9 +3259,9 @@ function renderSettings() {
   $('#dFont').addEventListener('change', e => { D.font = e.target.value; dSave(); });
   $('#dFs').addEventListener('change', e => { D.fs = Math.max(4, parseFloat(e.target.value) || 14); dSave(); });
   $('#dSw').addEventListener('change', e => { D.sw = Math.max(0.5, parseFloat(e.target.value) || 2); dSave(); });
-  $('#dStroke').addEventListener('input', e => { D.stroke = e.target.value; dSave(); });
-  $('#dTc').addEventListener('input', e => { D.tc = e.target.value; dSave(); });
-  $('#dFill').addEventListener('input', e => { D.fill = e.target.value; dSave(); });
+  $('#dStroke').addEventListener('change', e => { D.stroke = e.target.value; dSave(); });
+  $('#dTc').addEventListener('change', e => { D.tc = e.target.value; dSave(); });
+  $('#dFill').addEventListener('change', e => { D.fill = e.target.value; dSave(); });
   $('#setTmpl').addEventListener('click', saveAsTemplate);
   $('#setExpCfg').addEventListener('click', exportConfig);
   $('#setImpCfg').addEventListener('click', () => $('#fSettings').click());
@@ -3191,7 +3392,7 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (K === 'delete' || K === 'backspace') { e.preventDefault(); deleteSel(); }
-  else if (K === 'escape') { sel.clear(); setTool('select'); render(); renderProps(); }
+  else if (K === 'escape') { if (cropMode) { cropMode = null; } sel.clear(); setTool('select'); render(); renderProps(); }
   else if (K === 'v') setTool('select');
   else if (K === 'r') setTool('rect');
   else if (K === 'c') setTool('ellipse');
