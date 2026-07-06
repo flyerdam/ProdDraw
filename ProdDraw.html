@@ -604,9 +604,31 @@ function normalizeShape(s) {
   return n;
 }
 
-/* ---------- undo / redo ---------- */
+/* ---------- undo / redo ----------
+   Migawki dzielą duże dane obrazów (data:) przez pulę — 100 kroków historii
+   z 5 zdjęciami NIE trzyma 500 kopii base64, tylko 5 (jedna na unikat) + tokeny. */
 const undoStack = [], redoStack = [];
-function snap_() { return JSON.stringify(state.shapes); }
+const imgPool = new Map();      // token -> data:URL
+const imgRev = new Map();       // data:URL -> token
+let imgPoolN = 1;
+function poolToken(url) {
+  let tk = imgRev.get(url);
+  if (!tk) { tk = 'P' + (imgPoolN++); imgPool.set(tk, url); imgRev.set(url, tk); }
+  return tk;
+}
+function snapReplacer(k, v) {
+  return (k === 'href' && typeof v === 'string' && v.startsWith('data:')) ? '@@' + poolToken(v) : v;
+}
+function snap_() { return JSON.stringify(state.shapes, snapReplacer); }
+function unsnap(json) {
+  const arr = JSON.parse(json);
+  for (const s of arr)
+    if (s && typeof s.href === 'string' && s.href.startsWith('@@')) {
+      const u = imgPool.get(s.href.slice(2)); if (u) s.href = u;
+    }
+  return arr;
+}
+function clearHistory() { undoStack.length = 0; redoStack.length = 0; imgPool.clear(); imgRev.clear(); imgPoolN = 1; }
 function pushUndo() {
   undoStack.push(snap_());
   if (undoStack.length > 100) undoStack.shift();
@@ -615,13 +637,13 @@ function pushUndo() {
 function undo() {
   if (!undoStack.length) return;
   redoStack.push(snap_());
-  state.shapes = JSON.parse(undoStack.pop());
+  state.shapes = unsnap(undoStack.pop());
   sel.clear(); render(); renderProps(); autosave();
 }
 function redo() {
   if (!redoStack.length) return;
   undoStack.push(snap_());
-  state.shapes = JSON.parse(redoStack.pop());
+  state.shapes = unsnap(redoStack.pop());
   sel.clear(); render(); renderProps(); autosave();
 }
 
@@ -1614,6 +1636,10 @@ cv.addEventListener('pointermove', e => {
     let L = s.x, T = s.y, R = s.x + s.w, B = s.y + s.h;
     let pt = p;
     if (s.rot) pt = rotatePt(p.x, p.y, F.x + F.w / 2, F.y + F.h / 2, -s.rot);   /* do układu lokalnego */
+    if ($('#snapG').checked) {   /* przyciąganie krawędzi kadru do siatki */
+      const gs = +$('#gridSize').value || 10;
+      pt = { x: Math.round(pt.x / gs) * gs, y: Math.round(pt.y / gs) * gs };
+    }
     if (h.includes('w')) L = clamp(pt.x, F.x, R - min);
     if (h.includes('e')) R = clamp(pt.x, L + min, F.x + F.w);
     if (h.includes('n')) T = clamp(pt.y, F.y, B - min);
@@ -2959,7 +2985,7 @@ function projectFromTemplate(tmpl) {
   }
   $('#projName').value = state.name;
   sel.clear(); previewRow = -1;
-  undoStack.length = 0; redoStack.length = 0;
+  clearHistory();
   syncPageUI(); fitPage();
   render(); renderProps(); renderVars(); autosave();
 }
