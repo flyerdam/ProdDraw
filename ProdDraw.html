@@ -1057,6 +1057,13 @@ function parseGroupedShapes(aXml, anchorBox, relMap = {}, mediaMap = {}, theme =
   for (const sm of grpXml.matchAll(/<xdr:sp[\s>][\s\S]*?<\/xdr:sp>/g)) {
     const spXml = sm[0];
     const box = mapBox(parseNodeXfrm(spXml));
+    const geomM = spXml.match(/<a:prstGeom\s+prst="([^"]+)"/);
+    if (geomM && LINE_PRST_RE.test(geomM[1])) {
+      const s = parseConnectorNode(spXml, box, theme);
+      s.g = groupId;
+      out.push(s);
+      continue;
+    }
     const s = parseShapeNode(spXml, box, theme);
     if (s._unsupported && s._embedRid && relMap[s._embedRid] && mediaMap[relMap[s._embedRid]]) {
       pictures.push({ ...box, ...mediaMap[relMap[s._embedRid]], name: relMap[s._embedRid].replace(/^xl\/media\//i, '') });
@@ -1082,6 +1089,10 @@ function parseGroupedShapes(aXml, anchorBox, relMap = {}, mediaMap = {}, theme =
   }
   return { shapes: out, pictures, unsupportedFallbacks };
 }
+/* Excel czasem eksportuje zwykłe linie/strzałki jako <xdr:sp> z prstGeom
+   "line"/"straightConnectorN"/itd. zamiast jako <xdr:cxnSp> — trzeba je
+   rozpoznać po geometrii, inaczej lądują jako cienkie prostokąty */
+const LINE_PRST_RE = /^(line|straightConnector\d+|bentConnector\d+|curvedConnector\d+)$/;
 function parseDrawingShapes(xml, dims, relMap = {}, mediaMap = {}, theme = {}) {
   const shapes = [];
   const pictures = [];
@@ -1120,9 +1131,12 @@ function parseDrawingShapes(xml, dims, relMap = {}, mediaMap = {}, theme = {}) {
         x = fp.x; y = fp.y; w = +em[1] / EPX; h = +em[2] / EPX;
       }
     } catch (e) { continue; }
-    /* linie/łączniki (cxnSp) mogą być idealnie poziome lub pionowe — wtedy jeden
-       wymiar bounding-boxa to 0, to normalne i nie powinno odrzucać kształtu */
-    const isConnector = /<xdr:cxnSp[\s>]/.test(aXml);
+    /* linie/łączniki (cxnSp, lub <xdr:sp> z geometrią linii) mogą być idealnie
+       poziome lub pionowe — wtedy jeden wymiar bounding-boxa to 0, to normalne
+       i nie powinno odrzucać kształtu */
+    const spGeomM = aXml.match(/<a:prstGeom\s+prst="([^"]+)"/);
+    const isLineGeom = !!(spGeomM && LINE_PRST_RE.test(spGeomM[1]));
+    const isConnector = /<xdr:cxnSp[\s>]/.test(aXml) || isLineGeom;
     if (isConnector) {
       if (!w && !h) continue;
     } else if (!w || !h || w < 2 || h < 2) continue;
@@ -1139,13 +1153,17 @@ function parseDrawingShapes(xml, dims, relMap = {}, mediaMap = {}, theme = {}) {
     if (/<xdr:sp[\s>]/.test(aXml)) {
       const spXml = aXml.match(/<xdr:sp[\s>][\s\S]*?<\/xdr:sp>/)?.[0];
       if (spXml) {
-        const s = parseShapeNode(spXml, box, theme);
-        if (s._unsupported && s._embedRid && relMap[s._embedRid] && mediaMap[relMap[s._embedRid]]) {
-          pictures.push({ ...box, ...mediaMap[relMap[s._embedRid]], name: relMap[s._embedRid].replace(/^xl\/media\//i, '') });
-          unsupportedFallbacks++;
+        if (isLineGeom) {
+          shapes.push(parseConnectorNode(spXml, box, theme));
         } else {
-          delete s._unsupported; delete s._embedRid;
-          shapes.push(s);
+          const s = parseShapeNode(spXml, box, theme);
+          if (s._unsupported && s._embedRid && relMap[s._embedRid] && mediaMap[relMap[s._embedRid]]) {
+            pictures.push({ ...box, ...mediaMap[relMap[s._embedRid]], name: relMap[s._embedRid].replace(/^xl\/media\//i, '') });
+            unsupportedFallbacks++;
+          } else {
+            delete s._unsupported; delete s._embedRid;
+            shapes.push(s);
+          }
         }
       }
     } else if (/<xdr:cxnSp[\s>]/.test(aXml)) {
