@@ -134,6 +134,20 @@
   </div>
 </div>
 
+<!-- ======= MODAL: TEXT PROMPT (zamiast window.prompt, nie działa w Electron) ======= -->
+<div class="modalBg" id="promptModal">
+  <div class="modal" style="width:380px">
+    <h3 id="promptTitle">Nazwa:</h3>
+    <div class="modalBody" style="display:block">
+      <input class="in wide" id="promptInput" spellcheck="false">
+    </div>
+    <div class="modalFoot">
+      <button class="btn" id="promptCancel" data-i18n="btn.cancel">Anuluj</button>
+      <button class="btn primary" id="promptOk" data-i18n="btn.ok">OK</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 <input type="file" id="fOpen" accept=".pdraw,.json,.prodrys" hidden>
 <input type="file" id="fXlsx" accept=".xlsx,.xlsm" hidden>
@@ -144,6 +158,7 @@
 <script src="js/01-state.js"></script>
 <script src="js/projects.js"></script>
 <script src="js/02-i18n.js"></script>
+<script src="js/dialog.js"></script>
 <script src="js/03-undo.js"></script>
 <script src="js/04-geometry.js"></script>
 <script src="js/05-zip.js"></script>

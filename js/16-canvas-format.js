@@ -77,8 +77,8 @@ function openTemplatePicker() {
   }
   $('#tmplModal').classList.add('on');
 }
-function saveAsTemplate() {
-  const name = (prompt(t('p.tmplName'), $('#projName').value || 'Szablon') || '').trim();
+async function saveAsTemplate() {
+  const name = ((await promptDialog(t('p.tmplName'), $('#projName').value || 'Szablon')) || '').trim();
   if (!name) return;
   const tmpl = { name,
     shapes: JSON.parse(JSON.stringify(state.shapes)),

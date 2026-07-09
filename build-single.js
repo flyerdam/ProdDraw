@@ -12,6 +12,7 @@ const JS_FILES = [
   'js/01-state.js',
   'js/projects.js',
   'js/02-i18n.js',
+  'js/dialog.js',
   'js/03-undo.js',
   'js/04-geometry.js',
   'js/05-zip.js',

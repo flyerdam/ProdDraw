@@ -44,7 +44,7 @@ async function saveProject(forcePicker = false) {
 }
 async function saveProjectAs() {
   if (!hasNativeFS()) {
-    const n = (prompt(t('p.saveAs'), $('#projName').value) || '').trim();
+    const n = ((await promptDialog(t('p.saveAs'), $('#projName').value)) || '').trim();
     if (!n) return;
     $('#projName').value = n; state.name = n;
     return saveProject();

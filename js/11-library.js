@@ -1,7 +1,7 @@
 "use strict";
-function saveToLib() {
+async function saveToLib() {
   const ss = selShapes(); if (!ss.length) return toast(t('t.min2'));
-  const name = prompt(t('p.libName'), t('lib.default1'));
+  const name = await promptDialog(t('p.libName'), t('lib.default1'));
   if (!name) return;
   const b = unionBBox(ss);
   const shapes = ss.map(s => {
@@ -63,8 +63,8 @@ function renderLib() {
       ${col ? '' : grid(idxByFolder(f))}</div>`;
   }
   el.innerHTML = h;
-  $('#libAddFolder').addEventListener('click', () => {
-    const n = (prompt(t('lib.folderName')) || '').trim();
+  $('#libAddFolder').addEventListener('click', async () => {
+    const n = ((await promptDialog(t('lib.folderName'))) || '').trim();
     if (!n || libFolders.includes(n)) return;
     libFolders.push(n); saveLibFolders(); renderLib();
   });

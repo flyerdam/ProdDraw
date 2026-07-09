@@ -139,4 +139,6 @@ function dispatch(cmd) {
  */
 if (window.prodrawDesktop && typeof window.prodrawDesktop.onMenu === 'function') {
   window.prodrawDesktop.onMenu(dispatch);
+  // Hide in-page menu buttons when running in Electron (native menu replaces them)
+  document.body.classList.add('desktop-mode');
 }

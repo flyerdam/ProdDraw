@@ -27,8 +27,8 @@ function renderVars() {
   h += `<button class="btn primary" id="vGen" style="width:100%" ${!V.rows.length ? 'disabled' : ''}>${t('vars.gen')}</button>`;
   el.innerHTML = h;
 
-  $('#vAddCol').addEventListener('click', () => {
-    const n = prompt(t('p.varName'));
+  $('#vAddCol').addEventListener('click', async () => {
+    const n = await promptDialog(t('p.varName'));
     if (!n) return;
     const k = n.trim().replace(/[{}]/g, '');
     if (!k || V.cols.includes(k)) return toast(t('t.badVar'));

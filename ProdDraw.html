@@ -200,6 +200,9 @@ body{grid-template-columns:46px 1fr var(--sideW,272px);}
 .tmplCard .tdel{position:absolute;top:3px;right:3px;background:rgba(255,255,255,.85);border:1px solid var(--line);
   color:#c00;border-radius:3px;cursor:pointer;font-size:11px;line-height:1;padding:2px 5px;}
 .tmplCard.blank svg{background:#f6f7f9;}
+/* w Electron natywne menu (File/Edit/View) zastępuje te przyciski */
+body.desktop-mode #mFile,
+body.desktop-mode #mExport { display: none; }
 
 </style>
 </head>
@@ -328,6 +331,20 @@ body{grid-template-columns:46px 1fr var(--sideW,272px);}
     <h3 data-i18n="tmpl.title">Wybierz szablon nowego projektu</h3>
     <div class="modalBody" id="tmplBody"></div>
     <div class="modalFoot"><button class="btn" id="tmplClose" data-i18n="btn.cancel">Anuluj</button></div>
+  </div>
+</div>
+
+<!-- ======= MODAL: TEXT PROMPT (zamiast window.prompt, nie działa w Electron) ======= -->
+<div class="modalBg" id="promptModal">
+  <div class="modal" style="width:380px">
+    <h3 id="promptTitle">Nazwa:</h3>
+    <div class="modalBody" style="display:block">
+      <input class="in wide" id="promptInput" spellcheck="false">
+    </div>
+    <div class="modalFoot">
+      <button class="btn" id="promptCancel" data-i18n="btn.cancel">Anuluj</button>
+      <button class="btn primary" id="promptOk" data-i18n="btn.ok">OK</button>
+    </div>
   </div>
 </div>
 
@@ -589,7 +606,7 @@ const I18N = {
     'status.hint':'Kółko = zoom  |  Spacja/środkowy = przesuwanie  |  2×klik = tekst',
     'page.a4l':'A4 poziomo','page.a4p':'A4 pionowo','page.custom':'Własny','page.off':'∞ nieskończony',
     'xlsx.title':'Obrazy znalezione w pliku — kliknij, aby wstawić','xlsx.insertAll':'Wstaw wszystkie',
-    'btn.close':'Zamknij','btn.cancel':'Anuluj',
+    'btn.close':'Zamknij','btn.cancel':'Anuluj','btn.ok':'OK',
     'tmpl.title':'Wybierz szablon nowego projektu','tmpl.blank':'Pusty projekt','tmpl.default':'Domyślny szablon',
     'set.language':'Język','set.zoom':'Sterowanie zoomem','set.mxMaster':'Wolniejszy zoom',
     'set.mxMasterHint':'Włącz, jeśli kółko myszy przewija zbyt szybko. Wyższy dzielnik = wolniejszy zoom.',
@@ -661,7 +678,7 @@ const I18N = {
     'status.hint':'Wheel = zoom  |  Space/middle = pan  |  double-click = text',
     'page.a4l':'A4 landscape','page.a4p':'A4 portrait','page.custom':'Custom','page.off':'∞ infinite',
     'xlsx.title':'Images found in file — click to insert','xlsx.insertAll':'Insert all',
-    'btn.close':'Close','btn.cancel':'Cancel',
+    'btn.close':'Close','btn.cancel':'Cancel','btn.ok':'OK',
     'tmpl.title':'Choose a template for the new project','tmpl.blank':'Blank project','tmpl.default':'Default template',
     'set.language':'Language','set.zoom':'Zoom control','set.mxMaster':'Slower zoom',
     'set.mxMasterHint':'Enable if the mouse wheel zooms too fast. Higher divider = slower zoom.',
@@ -733,7 +750,7 @@ const I18N = {
     'status.hint':'Rad = Zoom  |  Leertaste/Mitte = verschieben  |  Doppelklick = Text',
     'page.a4l':'A4 quer','page.a4p':'A4 hoch','page.custom':'Eigen','page.off':'∞ unendlich',
     'xlsx.title':'Bilder in der Datei — zum Einfügen klicken','xlsx.insertAll':'Alle einfügen',
-    'btn.close':'Schließen','btn.cancel':'Abbrechen',
+    'btn.close':'Schließen','btn.cancel':'Abbrechen','btn.ok':'OK',
     'tmpl.title':'Vorlage für das neue Projekt wählen','tmpl.blank':'Leeres Projekt','tmpl.default':'Standardvorlage',
     'set.language':'Sprache','set.zoom':'Zoom-Steuerung','set.mxMaster':'Langsamerer Zoom',
     'set.mxMasterHint':'Aktivieren, wenn das Mausrad zu schnell zoomt. Höherer Teiler = langsamerer Zoom.',
@@ -802,6 +819,37 @@ function applyI18n() {
   document.documentElement.lang = settings.lang;
 }
 
+
+"use strict";
+/* =====================================================================
+   Okno tekstowe (zamiast window.prompt).
+   window.prompt() nie działa w Electron (Chromium embedder nie obsługuje
+   dialogu prompt — tylko alert/confirm), więc w desktopowej wersji apki
+   zwracał się cicho bez pokazania okna. Ten modal działa identycznie
+   w przeglądarce i w Electron.
+   ===================================================================== */
+let _promptResolve = null;
+function promptDialog(title, defaultValue) {
+  return new Promise(resolve => {
+    _promptResolve = resolve;
+    $('#promptTitle').textContent = title || '';
+    const inp = $('#promptInput');
+    inp.value = defaultValue || '';
+    $('#promptModal').classList.add('on');
+    inp.focus(); inp.select();
+  });
+}
+function _promptFinish(val) {
+  $('#promptModal').classList.remove('on');
+  const r = _promptResolve; _promptResolve = null;
+  if (r) r(val);
+}
+$('#promptOk').addEventListener('click', () => _promptFinish($('#promptInput').value));
+$('#promptCancel').addEventListener('click', () => _promptFinish(null));
+$('#promptInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); _promptFinish($('#promptInput').value); }
+  else if (e.key === 'Escape') { e.preventDefault(); _promptFinish(null); }
+});
 
 "use strict";
 let uidN = 1;
@@ -2507,9 +2555,9 @@ function deleteSel() {
    ===================================================================== */
 
 "use strict";
-function saveToLib() {
+async function saveToLib() {
   const ss = selShapes(); if (!ss.length) return toast(t('t.min2'));
-  const name = prompt(t('p.libName'), t('lib.default1'));
+  const name = await promptDialog(t('p.libName'), t('lib.default1'));
   if (!name) return;
   const b = unionBBox(ss);
   const shapes = ss.map(s => {
@@ -2571,8 +2619,8 @@ function renderLib() {
       ${col ? '' : grid(idxByFolder(f))}</div>`;
   }
   el.innerHTML = h;
-  $('#libAddFolder').addEventListener('click', () => {
-    const n = (prompt(t('lib.folderName')) || '').trim();
+  $('#libAddFolder').addEventListener('click', async () => {
+    const n = ((await promptDialog(t('lib.folderName'))) || '').trim();
     if (!n || libFolders.includes(n)) return;
     libFolders.push(n); saveLibFolders(); renderLib();
   });
@@ -2714,8 +2762,8 @@ function renderVars() {
   h += `<button class="btn primary" id="vGen" style="width:100%" ${!V.rows.length ? 'disabled' : ''}>${t('vars.gen')}</button>`;
   el.innerHTML = h;
 
-  $('#vAddCol').addEventListener('click', () => {
-    const n = prompt(t('p.varName'));
+  $('#vAddCol').addEventListener('click', async () => {
+    const n = await promptDialog(t('p.varName'));
     if (!n) return;
     const k = n.trim().replace(/[{}]/g, '');
     if (!k || V.cols.includes(k)) return toast(t('t.badVar'));
@@ -2827,7 +2875,7 @@ async function saveProject(forcePicker = false) {
 }
 async function saveProjectAs() {
   if (!hasNativeFS()) {
-    const n = (prompt(t('p.saveAs'), $('#projName').value) || '').trim();
+    const n = ((await promptDialog(t('p.saveAs'), $('#projName').value)) || '').trim();
     if (!n) return;
     $('#projName').value = n; state.name = n;
     return saveProject();
@@ -3258,8 +3306,8 @@ function openTemplatePicker() {
   }
   $('#tmplModal').classList.add('on');
 }
-function saveAsTemplate() {
-  const name = (prompt(t('p.tmplName'), $('#projName').value || 'Szablon') || '').trim();
+async function saveAsTemplate() {
+  const name = ((await promptDialog(t('p.tmplName'), $('#projName').value || 'Szablon')) || '').trim();
   if (!name) return;
   const tmpl = { name,
     shapes: JSON.parse(JSON.stringify(state.shapes)),
@@ -3968,6 +4016,8 @@ function dispatch(cmd) {
  */
 if (window.prodrawDesktop && typeof window.prodrawDesktop.onMenu === 'function') {
   window.prodrawDesktop.onMenu(dispatch);
+  // Hide in-page menu buttons when running in Electron (native menu replaces them)
+  document.body.classList.add('desktop-mode');
 }
 
 </script></body>
