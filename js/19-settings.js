@@ -22,6 +22,10 @@ function renderSettings() {
     <div class="grp"><h4>${t('set.panel')}</h4>
       <div class="row"><label>${t('set.panelWidth')}</label><input class="in" type="number" id="setSideW" min="200" max="640" step="10" value="${settings.sideW}"></div>
     </div>
+    <div class="grp"><h4>${t('set.autosave')}</h4>
+      <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setAutosave" ${settings.autosave !== false ? 'checked' : ''}> ${t('set.autosave')}</label></div>
+      <div class="hint">${t('set.autosaveHint')}</div>
+    </div>
     <div class="grp"><h4>${t('set.defaults')}</h4>
       <div class="row"><label>${t('props.font')}</label><select class="in" id="dFont" style="width:130px">
         ${fonts.map(f => `<option value="${f}" ${D.font === f ? 'selected' : ''}>${f}</option>`).join('')}</select></div>
@@ -37,6 +41,7 @@ function renderSettings() {
     <div class="grp"><div class="hint">${t('set.about')}</div></div>`;
   $('#setLang').addEventListener('change', e => { settings.lang = e.target.value; saveSettingsLS(); applySettings(); });
   $('#setMx').addEventListener('change', e => { settings.mxMaster = e.target.checked; saveSettingsLS(); });
+  $('#setAutosave').addEventListener('change', e => { settings.autosave = e.target.checked; saveSettingsLS(); if (settings.autosave) autosave(); });
   $('#setZoomDiv').addEventListener('change', e => { settings.zoomDiv = clamp(parseFloat(e.target.value) || 4, 1, 20); saveSettingsLS(); });
   $('#setSideW').addEventListener('change', e => {
     settings.sideW = clamp(parseInt(e.target.value) || 272, 200, 640); saveSettingsLS();

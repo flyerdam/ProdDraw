@@ -34,7 +34,7 @@ const ROT_STEP = 10;        // krok skokowego obrotu
 let currentProjectHandle = null;  // uchwyt pliku (zapis w miejscu, File System Access API)
 
 /* ---------- ustawienia aplikacji + szablony ---------- */
-let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, sideW: 272,
+let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, sideW: 272, autosave: true,
   defaults: { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' } };
 let templates = [];         // [{name, shapes, vars, page}]
 let imgCascade = 0;         // przesunięcie kolejnych wstawianych obrazów

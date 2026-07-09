@@ -188,6 +188,17 @@ body{grid-template-columns:46px 1fr var(--sideW,272px);}
 .ptab-add{align-self:center;margin:4px 2px 0;background:var(--panel);border:1px solid var(--line);
   color:var(--txt);width:26px;height:24px;border-radius:4px;cursor:pointer;font-size:15px;line-height:1;}
 .ptab-add:hover{border-color:var(--acc);color:#fff;}
+/* ---------- panel "otwórz zapisany projekt" ---------- */
+.ptab-panel{position:fixed;display:none;background:var(--panel2);border:1px solid var(--line);
+  border-radius:5px;min-width:220px;max-width:320px;max-height:60vh;overflow-y:auto;
+  box-shadow:0 4px 16px rgba(0,0,0,.35);z-index:45;padding:4px;}
+.ptab-panel.on{display:block;}
+.ptab-panel-empty{color:var(--txt2);font-size:12px;padding:10px;text-align:center;}
+.ptab-panel-row{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:4px;cursor:pointer;}
+.ptab-panel-row:hover{background:var(--panel);}
+.ptab-panel-name{flex:1;font-size:12.5px;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ptab-panel-del{background:none;border:none;color:var(--txt2);cursor:pointer;font-size:12px;padding:2px 5px;border-radius:3px;}
+.ptab-panel-del:hover{color:#ff5555;background:var(--panel2);}
 /* ---------- settings tab ---------- */
 .setRow{margin-bottom:12px;}
 .setRow label.big{display:block;font-size:12px;color:var(--txt2);margin-bottom:4px;}
@@ -392,7 +403,7 @@ const ROT_STEP = 10;        // krok skokowego obrotu
 let currentProjectHandle = null;  // uchwyt pliku (zapis w miejscu, File System Access API)
 
 /* ---------- ustawienia aplikacji + szablony ---------- */
-let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, sideW: 272,
+let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, sideW: 272, autosave: true,
   defaults: { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' } };
 let templates = [];         // [{name, shapes, vars, page}]
 let imgCascade = 0;         // przesunięcie kolejnych wstawianych obrazów
@@ -401,27 +412,42 @@ let imgCascade = 0;         // przesunięcie kolejnych wstawianych obrazów
 "use strict";
 /* =====================================================================
    Projekty — rejestr wielu projektów + gniazda autozapisu (multi-tab).
-   Każdy projekt = gniazdo (slot) o unikalnym, rosnącym id.
+   Każdy projekt = gniazdo (slot) o unikalnym, rosnącym id (id wewnętrzne,
+   nigdzie nie pokazywane użytkownikowi — nazwy widoczne w kartach bierze
+   się z rejestru).
+
    Dane projektu : localStorage['prodrys_auto:<slot>']  (JSON jak projectJSON())
-   Rejestr       : localStorage['prodrys_projects'] = [{slot,name}, ...]
-   Karty okna    : sessionStorage['prodrys_open'] = [slot,...], ['prodrys_active']=slot
-   Żywe gniazda  : localStorage['prodrys_live'] = {slot: ts}  (ten sam projekt w innym oknie)
+   Rejestr WSZYSTKICH projektów (otwartych i zamkniętych):
+                   localStorage['prodrys_projects'] = [{slot,name}, ...]
+   Otwarte karty  : localStorage['prodrys_session'] = {open:[slot,...], active:slot}
+                   (trwałe — przetrwa pełne zamknięcie i ponowne otwarcie apki/okna)
+   Żywe gniazda   : localStorage['prodrys_live'] = {slot: ts}  (ten sam projekt
+                   otwarty *teraz* w innym oknie — zabezpieczenie przed
+                   nadpisaniem się dwóch okien edytujących to samo gniazdo)
+
+   Zamknięcie karty (×) NIE usuwa projektu — tylko chowa go z paska kart.
+   Każdy zamknięty projekt można później otworzyć z panelu „Otwórz zapisany
+   projekt" albo trwale usunąć (js/tabs.js).
+
+   Autozapis można wyłączyć w Ustawieniach (settings.autosave) — wtedy
+   zmiany w bieżącej karcie nie są zapisywane (przełączenie/zamknięcie
+   karty lub programu je odrzuca). Sam fakt, które karty są otwarte, i tak
+   jest zapisywany trwale, niezależnie od tego przełącznika.
 
    Funkcje logiki są tylko DEFINIOWANE tutaj; PS_init() woła 21-init.js po
    załadowaniu wszystkich modułów (render/state/itd. muszą już istnieć).
    Warstwa UI paska kart (Tabs_render / Tabs_new) jest w js/tabs.js.
    ===================================================================== */
 
-const PS_REG_KEY    = 'prodrys_projects';
-const PS_LIVE_KEY   = 'prodrys_live';
-const PS_OPEN_KEY   = 'prodrys_open';      // sessionStorage
-const PS_ACTIVE_KEY = 'prodrys_active';    // sessionStorage
-const PS_STALE_MS   = 6000;
+const PS_REG_KEY  = 'prodrys_projects';
+const PS_LIVE_KEY = 'prodrys_live';
+const PS_SESS_KEY = 'prodrys_session';   // localStorage — trwałe, przetrwa restart apki
+const PS_STALE_MS = 6000;
 const PS_HEARTBEAT_MS = 2000;
 
 let PS_active = 0;                          // aktywny slot tego okna
 
-/* ---------- rejestr projektów ---------- */
+/* ---------- rejestr WSZYSTKICH projektów ---------- */
 function PS_registry() {
   try { const r = JSON.parse(localStorage.getItem(PS_REG_KEY)); return Array.isArray(r) ? r : []; }
   catch (e) { return []; }
@@ -430,10 +456,15 @@ function PS_saveRegistry(list) { try { localStorage.setItem(PS_REG_KEY, JSON.str
 function PS_keyFor(slot) { return 'prodrys_auto:' + slot; }
 function PS_projectName(slot) { const p = PS_registry().find(x => x.slot === slot); return p ? p.name : ('Projekt ' + slot); }
 function PS_nextSlot() { let m = 0; for (const p of PS_registry()) if (p.slot > m) m = p.slot; return m + 1; }
+/* numer w domyślnej nazwie ("Instrukcja_03") liczony z liczby projektów w
+   rejestrze — nie z wewnętrznego id gniazda, żeby nie pokazywać rosnącego
+   w nieskończoność licznika po usunięciu starych projektów */
+function PS_nextDisplayNumber() { return PS_registry().length + 1; }
 
 /* ---------- dane projektu ---------- */
 function PS_readData(slot) { try { return localStorage.getItem(PS_keyFor(slot)); } catch (e) { return null; } }
 function PS_writeData(slot, json) { try { localStorage.setItem(PS_keyFor(slot), json); } catch (e) {} }
+function PS_autosaveOn() { return settings.autosave !== false; }
 
 /* ---------- „żywe" gniazda (ten sam projekt otwarty w innym oknie) ---------- */
 function PS_readLive() {
@@ -446,16 +477,17 @@ function PS_isLiveElsewhere(slot) {
   return ts !== undefined && (Date.now() - ts) < PS_STALE_MS && !PS_openSlots().includes(slot);
 }
 
-/* ---------- karty tego okna (sessionStorage) ---------- */
-function PS_openSlots() {
-  try { const o = JSON.parse(sessionStorage.getItem(PS_OPEN_KEY)); return Array.isArray(o) ? o : []; }
-  catch (e) { return []; }
-}
-function PS_setOpen(list, active) {
+/* ---------- karty tego okna — trwała sesja (localStorage) ---------- */
+function PS_session() {
   try {
-    sessionStorage.setItem(PS_OPEN_KEY, JSON.stringify(list));
-    if (active !== undefined) sessionStorage.setItem(PS_ACTIVE_KEY, String(active));
-  } catch (e) {}
+    const s = JSON.parse(localStorage.getItem(PS_SESS_KEY));
+    return (s && Array.isArray(s.open)) ? s : { open: [], active: 0 };
+  } catch (e) { return { open: [], active: 0 }; }
+}
+function PS_openSlots() { return PS_session().open; }
+function PS_setOpen(list, active) {
+  try { localStorage.setItem(PS_SESS_KEY, JSON.stringify({ open: list, active: (active !== undefined ? active : PS_active) })); }
+  catch (e) {}
 }
 function PS_activeSlot() { return PS_active; }
 function PS_autoKey() { return PS_keyFor(PS_active); }   // używane przez autosave()
@@ -471,14 +503,16 @@ function PS_defaultProjectJSON(name) {
 }
 
 /* ---------- tworzenie / zapis / wczytanie ---------- */
+/* utworzenie projektu zawsze zapisuje jego początkową treść — to jest
+   jednorazowe "stworzenie", nie "autozapis", więc nie podlega przełącznikowi */
 function PS_newProject(name) {
   const slot = PS_nextSlot();
-  name = name || ('Instrukcja_' + String(slot).padStart(2, '0'));
+  name = name || ('Instrukcja_' + String(PS_nextDisplayNumber()).padStart(2, '0'));
   const reg = PS_registry(); reg.push({ slot: slot, name: name }); PS_saveRegistry(reg);
   PS_writeData(slot, PS_defaultProjectJSON(name));
   return { slot: slot, name: name };
 }
-function PS_commitActive() { if (PS_active) PS_writeData(PS_active, PS_currentJSON()); }
+function PS_commitActive() { if (PS_active && PS_autosaveOn()) PS_writeData(PS_active, PS_currentJSON()); }
 
 /* wczytaj dane gniazda do żywego stanu (state) i przerysuj */
 function PS_loadInto(slot) {
@@ -513,15 +547,38 @@ function PS_switchTo(slot) {
 function PS_openNewTabFromTemplate(tmpl) {
   PS_commitActive();
   const slot = PS_nextSlot();
-  const name = 'Instrukcja_' + String(slot).padStart(2, '0');
+  const name = 'Instrukcja_' + String(PS_nextDisplayNumber()).padStart(2, '0');
   const reg = PS_registry(); reg.push({ slot: slot, name: name }); PS_saveRegistry(reg);
   const open = PS_openSlots(); open.push(slot);
   PS_active = slot; PS_setOpen(open, slot);
   projectFromTemplate(tmpl);                 // ustawia świeży state + autosave() -> PS_autoKey()=slot
   state.name = name; if ($('#projName')) $('#projName').value = name;
-  PS_commitActive();
+  PS_writeData(slot, PS_currentJSON());       // pierwszy zapis — jak przy tworzeniu, nie podlega przełącznikowi
   PS_heartbeat();
   if (typeof Tabs_render === 'function') Tabs_render();
+}
+
+/* otwórz jako nową kartę projekt, który już istnieje w rejestrze, ale nie
+   jest otwarty w tym oknie (np. wcześniej zamknięty) */
+function PS_reopenProject(slot) {
+  if (PS_openSlots().includes(slot)) { PS_switchTo(slot); return; }
+  if (PS_isLiveElsewhere(slot)) {
+    if (typeof toast === 'function') toast(t('t.projLiveElsewhere'));
+    return;
+  }
+  PS_commitActive();
+  const open = PS_openSlots(); open.push(slot);
+  PS_active = slot; PS_setOpen(open, PS_active);
+  PS_loadInto(slot);
+  PS_heartbeat();
+  if (typeof Tabs_render === 'function') Tabs_render();
+}
+
+/* projekty w rejestrze, które NIE są otwarte jako karta w tym oknie —
+   lista do panelu "otwórz zapisany projekt" */
+function PS_closedProjects() {
+  const open = PS_openSlots();
+  return PS_registry().filter(p => !open.includes(p.slot));
 }
 
 /* zmiana nazwy aktywnego projektu (spięte z polem #projName) */
@@ -532,7 +589,8 @@ function PS_renameActive(name) {
   if (typeof Tabs_render === 'function') Tabs_render();
 }
 
-/* zamknij kartę (projekt zostaje zapisany w rejestrze i danych) */
+/* zamknij kartę — projekt ZOSTAJE w rejestrze i w danych, tylko chowa się
+   z paska; można go później otworzyć z panelu "otwórz zapisany projekt" */
 function PS_closeTab(slot) {
   PS_commitActive();
   let open = PS_openSlots().filter(s => s !== slot);
@@ -541,6 +599,23 @@ function PS_closeTab(slot) {
   const newActive = (slot === PS_active) ? open[open.length - 1] : PS_active;
   PS_setOpen(open, newActive);
   if (slot === PS_active) { PS_active = newActive; PS_loadInto(newActive); }
+  if (typeof Tabs_render === 'function') Tabs_render();
+}
+
+/* usuń projekt NA ZAWSZE — z rejestru, z danych, z karty (jeśli otwarty).
+   Nieodwracalne; wywołujący (UI) powinien wcześniej potwierdzić z użytkownikiem. */
+function PS_deleteProject(slot) {
+  let open = PS_openSlots();
+  if (open.includes(slot)) {
+    open = open.filter(s => s !== slot);
+    if (!open.length) { const np = PS_newProject(); open = [np.slot]; }
+    const newActive = (slot === PS_active) ? open[open.length - 1] : PS_active;
+    PS_setOpen(open, newActive);
+    if (slot === PS_active) { PS_active = newActive; PS_loadInto(newActive); }
+  }
+  PS_saveRegistry(PS_registry().filter(p => p.slot !== slot));
+  try { localStorage.removeItem(PS_keyFor(slot)); } catch (e) {}
+  const l = PS_readLive(); delete l[slot]; PS_writeLive(l);
   if (typeof Tabs_render === 'function') Tabs_render();
 }
 
@@ -561,17 +636,21 @@ function PS_migrateLegacy() {
   } catch (e) {}
 }
 
-/* ---------- start (woła 21-init.js) ---------- */
+/* ---------- start (woła 21-init.js) ----------
+   Karty otwarte przy poprzednim zamknięciu okna są trwale zapamiętane
+   (localStorage), więc po ponownym otwarciu apki/okna wracają WSZYSTKIE —
+   nie tylko jedna. Gniazdo aktualnie "żywe" w innym oknie jest pomijane,
+   żeby dwa okna nie edytowały tego samego projektu naraz. */
 function PS_init() {
   PS_migrateLegacy();
   const regSlots = PS_registry().map(p => p.slot);
-  let open = PS_openSlots().filter(s => regSlots.includes(s));
-  let active0 = 0; try { active0 = parseInt(sessionStorage.getItem(PS_ACTIVE_KEY), 10) || 0; } catch (e) {}
+  const sess = PS_session();
+  let open = sess.open.filter(s => regSlots.includes(s) && !PS_isLiveElsewhere(s));
   if (open.length) {
-    /* przeładowanie okna: odtwórz te same karty */
-    PS_active = (active0 && open.includes(active0)) ? active0 : open[0];
+    PS_active = (sess.active && open.includes(sess.active)) ? sess.active : open[0];
   } else {
-    /* świeże okno: otwórz projekt NIE otwarty w innym oknie, albo utwórz nowy */
+    /* brak zapamiętanej sesji (pierwszy start) albo wszystko żywe gdzie indziej:
+       otwórz projekt NIE otwarty w innym oknie, albo utwórz nowy */
     let pick = null;
     for (const p of PS_registry()) { if (!PS_isLiveElsewhere(p.slot)) { pick = p.slot; break; } }
     if (pick === null) pick = PS_newProject().slot;
@@ -620,6 +699,10 @@ const I18N = {
     'lib.root':'Bez folderu','lib.drag':'Przeciągnij do folderu','lib.dragHint':'Przeciągnij kafelek do folderu. Kliknij nagłówek, aby zwinąć.',
     'c.tmplOverwrite':'Szablon „{n}" już istnieje. Nadpisać?','c.delFolder':'Usunąć folder „{n}"? Elementy trafią do korzenia.',
     'set.about':'ProdRys — edytor instrukcji produkcyjnych.',
+    'set.autosave':'Autozapis','set.autosaveHint':'Wyłączenie: zmiany nie będą zapisywane automatycznie — zmiana/zamknięcie karty lub programu odrzuci niezapisane zmiany. Ręczny „Zapisz” (Ctrl+S) do pliku działa bez zmian.',
+    'ptab.openSaved':'Otwórz zapisany projekt','ptab.noClosed':'Brak zapisanych projektów do otwarcia.',
+    'ptab.delTitle':'Usuń projekt na zawsze','ptab.delConfirm':'Usunąć projekt „{n}” na zawsze? Tej operacji nie można odwrócić.',
+    't.projLiveElsewhere':'Ten projekt jest już otwarty w innym oknie.',
     'props.none':'Nic nie zaznaczono.','props.noneHint':'Narysuj kształt narzędziami po lewej, wklej zrzut (Ctrl+V) lub zaimportuj obraz z pliku XLSX.',
     'props.selected':'Zaznaczone','props.posSize':'Pozycja i rozmiar','props.linePts':'Punkty linii',
     'props.stroke':'Obrys','props.color':'Kolor','props.none2':'brak','props.width':'Grubość','props.style':'Styl',
@@ -692,6 +775,10 @@ const I18N = {
     'c.tmplOverwrite':'Template “{n}" already exists. Overwrite?','c.delFolder':'Delete folder “{n}"? Items move to root.',
     'set.zoomDiv':'Zoom divider','set.panel':'Panel','set.panelWidth':'Panel width (px)',
     'set.about':'ProdRys — production-instruction editor.',
+    'set.autosave':'Autosave','set.autosaveHint':'When off: changes are not saved automatically — switching/closing a tab or the app discards unsaved changes. Manual “Save” (Ctrl+S) to a file is unaffected.',
+    'ptab.openSaved':'Open a saved project','ptab.noClosed':'No saved projects to open.',
+    'ptab.delTitle':'Delete project forever','ptab.delConfirm':'Permanently delete project “{n}”? This cannot be undone.',
+    't.projLiveElsewhere':'This project is already open in another window.',
     'props.none':'Nothing selected.','props.noneHint':'Draw a shape with the tools on the left, paste a screenshot (Ctrl+V) or import an image from an XLSX file.',
     'props.selected':'Selected','props.posSize':'Position & size','props.linePts':'Line points',
     'props.stroke':'Stroke','props.color':'Color','props.none2':'none','props.width':'Width','props.style':'Style',
@@ -764,6 +851,10 @@ const I18N = {
     'c.tmplOverwrite':'Vorlage „{n}" existiert bereits. Überschreiben?','c.delFolder':'Ordner „{n}" löschen? Elemente wandern in die Wurzel.',
     'set.zoomDiv':'Zoom-Teiler','set.panel':'Panel','set.panelWidth':'Panelbreite (px)',
     'set.about':'ProdRys — Editor für Produktionsanweisungen.',
+    'set.autosave':'Automatisches Speichern','set.autosaveHint':'Deaktiviert: Änderungen werden nicht automatisch gespeichert — Tab-/Programmwechsel oder Schließen verwirft ungespeicherte Änderungen. Manuelles „Speichern” (Strg+S) in eine Datei bleibt unverändert.',
+    'ptab.openSaved':'Gespeichertes Projekt öffnen','ptab.noClosed':'Keine gespeicherten Projekte zum Öffnen.',
+    'ptab.delTitle':'Projekt endgültig löschen','ptab.delConfirm':'Projekt „{n}” endgültig löschen? Dies kann nicht rückgängig gemacht werden.',
+    't.projLiveElsewhere':'Dieses Projekt ist bereits in einem anderen Fenster geöffnet.',
     'props.none':'Nichts ausgewählt.','props.noneHint':'Zeichnen Sie eine Form mit den Werkzeugen links, fügen Sie einen Screenshot ein (Strg+V) oder importieren Sie ein Bild aus einer XLSX-Datei.',
     'props.selected':'Ausgewählt','props.posSize':'Position & Größe','props.linePts':'Linienpunkte',
     'props.stroke':'Kontur','props.color':'Farbe','props.none2':'keine','props.width':'Stärke','props.style':'Stil',
@@ -2924,6 +3015,7 @@ function loadProject(obj, fileName) {
 let autosaveTm = null;
 function autosave() {
   clearTimeout(autosaveTm);
+  if (settings.autosave === false) return;   /* wyłączony w Ustawieniach — nic nie zapisuj */
   autosaveTm = setTimeout(() => {
     try { localStorage.setItem(PS_autoKey(), projectJSON()); } catch (e) {}
   }, 400);
@@ -3555,6 +3647,10 @@ function renderSettings() {
     <div class="grp"><h4>${t('set.panel')}</h4>
       <div class="row"><label>${t('set.panelWidth')}</label><input class="in" type="number" id="setSideW" min="200" max="640" step="10" value="${settings.sideW}"></div>
     </div>
+    <div class="grp"><h4>${t('set.autosave')}</h4>
+      <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setAutosave" ${settings.autosave !== false ? 'checked' : ''}> ${t('set.autosave')}</label></div>
+      <div class="hint">${t('set.autosaveHint')}</div>
+    </div>
     <div class="grp"><h4>${t('set.defaults')}</h4>
       <div class="row"><label>${t('props.font')}</label><select class="in" id="dFont" style="width:130px">
         ${fonts.map(f => `<option value="${f}" ${D.font === f ? 'selected' : ''}>${f}</option>`).join('')}</select></div>
@@ -3570,6 +3666,7 @@ function renderSettings() {
     <div class="grp"><div class="hint">${t('set.about')}</div></div>`;
   $('#setLang').addEventListener('change', e => { settings.lang = e.target.value; saveSettingsLS(); applySettings(); });
   $('#setMx').addEventListener('change', e => { settings.mxMaster = e.target.checked; saveSettingsLS(); });
+  $('#setAutosave').addEventListener('change', e => { settings.autosave = e.target.checked; saveSettingsLS(); if (settings.autosave) autosave(); });
   $('#setZoomDiv').addEventListener('change', e => { settings.zoomDiv = clamp(parseFloat(e.target.value) || 4, 1, 20); saveSettingsLS(); });
   $('#setSideW').addEventListener('change', e => {
     settings.sideW = clamp(parseInt(e.target.value) || 272, 200, 640); saveSettingsLS();
@@ -3741,16 +3838,17 @@ document.addEventListener('keydown', e => {
 document.addEventListener('keyup', e => {
   if (e.code === 'Space') { spaceDown = false; cv.setAttribute('class', 't-' + tool); }
 });
-window.addEventListener('beforeunload', () => {
-  try { localStorage.setItem(PS_autoKey(), projectJSON()); } catch (e) {}
-});
+/* zapis przy zamknięciu okna — patrz PS_init() w js/projects.js (respektuje
+   przełącznik Autozapis i zwalnia gniazda w rejestrze "żywych" projektów) */
 
 
 "use strict";
 
 /**
- * Tabs module - renders and manages the project tab strip.
- * Calls existing global functions from projects.js to manage state.
+ * Tabs module - renders and manages the project tab strip, plus the
+ * "closed projects" popover (reopen an earlier project, or delete it
+ * forever). Pure DOM rendering + event wiring; all state logic lives in
+ * js/projects.js (PS_* functions).
  */
 
 /**
@@ -3813,8 +3911,19 @@ function Tabs_render() {
 	addBtn.addEventListener('click', function() {
 		openTemplatePicker();
 	});
-
 	bar.appendChild(addBtn);
+
+	// "Open a saved (closed) project" button — this is how you get back a
+	// project you previously closed with ×, or delete it forever.
+	var openBtn = document.createElement('button');
+	openBtn.className = 'ptab-add';
+	openBtn.id = 'ptabOpen';
+	openBtn.textContent = '📂';
+	openBtn.title = t('ptab.openSaved');
+	openBtn.addEventListener('click', Tabs_togglePanel);
+	bar.appendChild(openBtn);
+
+	if (_ptabPanelOpen) Tabs_renderClosedPanel();
 }
 
 /**
@@ -3826,6 +3935,80 @@ function Tabs_new() {
 		openTemplatePicker();
 	}
 }
+
+/* ---------- panel "otwórz zapisany projekt" ---------- */
+let _ptabPanelOpen = false;
+
+function Tabs_togglePanel(e) {
+	if (e) e.stopPropagation();
+	_ptabPanelOpen = !_ptabPanelOpen;
+	if (_ptabPanelOpen) Tabs_renderClosedPanel();
+	else Tabs_closePanel();
+}
+function Tabs_closePanel() {
+	_ptabPanelOpen = false;
+	const panel = document.getElementById('ptabPanel');
+	if (panel) panel.classList.remove('on');
+}
+
+function Tabs_renderClosedPanel() {
+	let panel = document.getElementById('ptabPanel');
+	if (!panel) {
+		panel = document.createElement('div');
+		panel.className = 'ptab-panel';
+		panel.id = 'ptabPanel';
+		panel.addEventListener('click', function (e) { e.stopPropagation(); });
+		document.body.appendChild(panel);
+	}
+	panel.innerHTML = '';
+
+	const closed = PS_closedProjects();
+	if (!closed.length) {
+		const empty = document.createElement('div');
+		empty.className = 'ptab-panel-empty';
+		empty.textContent = t('ptab.noClosed');
+		panel.appendChild(empty);
+	} else {
+		closed.forEach(function (p) {
+			const row = document.createElement('div');
+			row.className = 'ptab-panel-row';
+
+			const name = document.createElement('span');
+			name.className = 'ptab-panel-name';
+			name.textContent = p.name;
+			name.title = p.name;
+			name.addEventListener('click', function () {
+				PS_reopenProject(p.slot);
+				Tabs_closePanel();
+			});
+
+			const del = document.createElement('button');
+			del.className = 'ptab-panel-del';
+			del.textContent = '✕';
+			del.title = t('ptab.delTitle');
+			del.addEventListener('click', function (e) {
+				e.stopPropagation();
+				if (!confirm(t('ptab.delConfirm', { n: p.name }))) return;
+				PS_deleteProject(p.slot);
+				Tabs_renderClosedPanel();
+			});
+
+			row.appendChild(name);
+			row.appendChild(del);
+			panel.appendChild(row);
+		});
+	}
+
+	const btn = document.getElementById('ptabOpen');
+	if (btn) {
+		const r = btn.getBoundingClientRect();
+		panel.style.left = r.left + 'px';
+		panel.style.top = (r.bottom + 4) + 'px';
+	}
+	panel.classList.add('on');
+}
+
+document.addEventListener('click', function () { if (_ptabPanelOpen) Tabs_closePanel(); });
 
 "use strict";
 /* ---------- start ---------- */

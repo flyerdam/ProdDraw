@@ -136,7 +136,6 @@ document.addEventListener('keydown', e => {
 document.addEventListener('keyup', e => {
   if (e.code === 'Space') { spaceDown = false; cv.setAttribute('class', 't-' + tool); }
 });
-window.addEventListener('beforeunload', () => {
-  try { localStorage.setItem(PS_autoKey(), projectJSON()); } catch (e) {}
-});
+/* zapis przy zamknięciu okna — patrz PS_init() w js/projects.js (respektuje
+   przełącznik Autozapis i zwalnia gniazda w rejestrze "żywych" projektów) */
 

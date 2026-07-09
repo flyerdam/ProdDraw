@@ -1,8 +1,10 @@
 "use strict";
 
 /**
- * Tabs module - renders and manages the project tab strip.
- * Calls existing global functions from projects.js to manage state.
+ * Tabs module - renders and manages the project tab strip, plus the
+ * "closed projects" popover (reopen an earlier project, or delete it
+ * forever). Pure DOM rendering + event wiring; all state logic lives in
+ * js/projects.js (PS_* functions).
  */
 
 /**
@@ -65,8 +67,19 @@ function Tabs_render() {
 	addBtn.addEventListener('click', function() {
 		openTemplatePicker();
 	});
-
 	bar.appendChild(addBtn);
+
+	// "Open a saved (closed) project" button — this is how you get back a
+	// project you previously closed with ×, or delete it forever.
+	var openBtn = document.createElement('button');
+	openBtn.className = 'ptab-add';
+	openBtn.id = 'ptabOpen';
+	openBtn.textContent = '📂';
+	openBtn.title = t('ptab.openSaved');
+	openBtn.addEventListener('click', Tabs_togglePanel);
+	bar.appendChild(openBtn);
+
+	if (_ptabPanelOpen) Tabs_renderClosedPanel();
 }
 
 /**
@@ -78,3 +91,77 @@ function Tabs_new() {
 		openTemplatePicker();
 	}
 }
+
+/* ---------- panel "otwórz zapisany projekt" ---------- */
+let _ptabPanelOpen = false;
+
+function Tabs_togglePanel(e) {
+	if (e) e.stopPropagation();
+	_ptabPanelOpen = !_ptabPanelOpen;
+	if (_ptabPanelOpen) Tabs_renderClosedPanel();
+	else Tabs_closePanel();
+}
+function Tabs_closePanel() {
+	_ptabPanelOpen = false;
+	const panel = document.getElementById('ptabPanel');
+	if (panel) panel.classList.remove('on');
+}
+
+function Tabs_renderClosedPanel() {
+	let panel = document.getElementById('ptabPanel');
+	if (!panel) {
+		panel = document.createElement('div');
+		panel.className = 'ptab-panel';
+		panel.id = 'ptabPanel';
+		panel.addEventListener('click', function (e) { e.stopPropagation(); });
+		document.body.appendChild(panel);
+	}
+	panel.innerHTML = '';
+
+	const closed = PS_closedProjects();
+	if (!closed.length) {
+		const empty = document.createElement('div');
+		empty.className = 'ptab-panel-empty';
+		empty.textContent = t('ptab.noClosed');
+		panel.appendChild(empty);
+	} else {
+		closed.forEach(function (p) {
+			const row = document.createElement('div');
+			row.className = 'ptab-panel-row';
+
+			const name = document.createElement('span');
+			name.className = 'ptab-panel-name';
+			name.textContent = p.name;
+			name.title = p.name;
+			name.addEventListener('click', function () {
+				PS_reopenProject(p.slot);
+				Tabs_closePanel();
+			});
+
+			const del = document.createElement('button');
+			del.className = 'ptab-panel-del';
+			del.textContent = '✕';
+			del.title = t('ptab.delTitle');
+			del.addEventListener('click', function (e) {
+				e.stopPropagation();
+				if (!confirm(t('ptab.delConfirm', { n: p.name }))) return;
+				PS_deleteProject(p.slot);
+				Tabs_renderClosedPanel();
+			});
+
+			row.appendChild(name);
+			row.appendChild(del);
+			panel.appendChild(row);
+		});
+	}
+
+	const btn = document.getElementById('ptabOpen');
+	if (btn) {
+		const r = btn.getBoundingClientRect();
+		panel.style.left = r.left + 'px';
+		panel.style.top = (r.bottom + 4) + 'px';
+	}
+	panel.classList.add('on');
+}
+
+document.addEventListener('click', function () { if (_ptabPanelOpen) Tabs_closePanel(); });

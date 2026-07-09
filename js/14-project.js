@@ -93,6 +93,7 @@ function loadProject(obj, fileName) {
 let autosaveTm = null;
 function autosave() {
   clearTimeout(autosaveTm);
+  if (settings.autosave === false) return;   /* wyłączony w Ustawieniach — nic nie zapisuj */
   autosaveTm = setTimeout(() => {
     try { localStorage.setItem(PS_autoKey(), projectJSON()); } catch (e) {}
   }, 400);
