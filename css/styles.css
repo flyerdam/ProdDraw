@@ -12,9 +12,9 @@ html,body{height:100%; overflow:hidden;}
 body{
   font-family:"Segoe UI",system-ui,-apple-system,sans-serif;
   background:var(--bg); color:var(--txt);
-  display:grid; grid-template-rows:46px 1fr 30px;
+  display:grid; grid-template-rows:46px 32px 1fr 30px;
   grid-template-columns:46px 1fr 272px;
-  grid-template-areas:"tb tb tb" "rail canvas side" "status status status";
+  grid-template-areas:"tb tb tb" "tabs tabs tabs" "rail canvas side" "status status status";
 }
 /* ---------- top bar ---------- */
 .tb{grid-area:tb; display:flex; align-items:center; gap:8px; padding:0 10px;
@@ -165,6 +165,22 @@ body{grid-template-columns:46px 1fr var(--sideW,272px);}
 .sideResizer{grid-area:side;justify-self:start;width:6px;margin-left:-3px;cursor:ew-resize;z-index:5;
   background:transparent;position:relative;}
 .sideResizer:hover{background:var(--acc);opacity:.5;}
+/* ---------- pasek kart projektów ---------- */
+.tabsbar{grid-area:tabs;display:flex;align-items:stretch;gap:2px;padding:0 6px;
+  background:var(--panel2);border-bottom:1px solid var(--line);overflow-x:auto;overflow-y:hidden;}
+.ptab{display:flex;align-items:center;gap:6px;padding:0 4px 0 10px;
+  background:var(--panel);border:1px solid var(--line);border-bottom:none;
+  border-radius:4px 4px 0 0;margin-top:4px;color:var(--txt2);cursor:pointer;
+  font-size:12.5px;white-space:nowrap;}
+.ptab:hover{color:var(--txt);}
+.ptab.active{color:var(--acc);border-color:var(--acc);background:var(--bg);}
+.ptab .ptab-name{overflow:hidden;text-overflow:ellipsis;max-width:150px;}
+.ptab .ptab-x{background:none;border:none;color:var(--txt2);cursor:pointer;font-size:13px;
+  line-height:1;padding:2px 4px;border-radius:3px;}
+.ptab .ptab-x:hover{color:#ff5555;background:var(--panel2);}
+.ptab-add{align-self:center;margin:4px 2px 0;background:var(--panel);border:1px solid var(--line);
+  color:var(--txt);width:26px;height:24px;border-radius:4px;cursor:pointer;font-size:15px;line-height:1;}
+.ptab-add:hover{border-color:var(--acc);color:#fff;}
 /* ---------- settings tab ---------- */
 .setRow{margin-bottom:12px;}
 .setRow label.big{display:block;font-size:12px;color:var(--txt2);margin-bottom:4px;}

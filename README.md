@@ -21,6 +21,7 @@ Wszystko jest trzymane **lokalnie w przeglądarce** (localStorage), czyli oddzie
 
 | Klucz localStorage | Zawartość |
 |--------------------|-----------|
+| `prodrys_projects` | Rejestr kartek projektów — lista aktywnych projektów i ich slotów. |
 | `prodrys_auto:<n>` | Autozapis projektu w danej karcie (kształty + warianty + format strony); każda karta ma własny slot (n = 1, 2, 3, ...). Odtwarzany przy następnym otwarciu. |
 | `prodrys_live` | Rejestr aktywnych kart (heartbeat); śledzi które sloty są w użyciu. |
 | `prodrys_lib` | Biblioteka grup — elementy zapisane przyciskiem „Do biblioteki" |
@@ -38,6 +39,15 @@ Wcześniej wszystkie karty przeglądarki dzieliły jedno pole autosave (`prodrys
 **Teraz każda karta otrzymuje własny slot autosave** (`prodrys_auto:1`, `prodrys_auto:2`, ...), dzięki czemu możesz pracować nad różnymi projektami jednocześnie w kilka kartach/okienach — nie będą się już nawzajem zmieniać. Sloty są śledzone poprzez rejestr `prodrys_live` w localStorage; zamknięcie karty powoduje zwolnienie slotu do ponownego wykorzystania.
 
 **Migracja**: stare dane `prodrys_auto` są automatycznie przenoszone do slotu 1 przy pierwszym uruchomieniu.
+
+### Paski kart projektów
+
+Aplikacja wyświetla **pasek kart na górze** — każda karta to oddzielny projekt z własnym autosave:
+
+- **Otwieranie nowego projektu**: kliknij przycisk **+** aby dodać nową kartę (otrzyma nowy slot autosave).
+- **Zamykanie projektu**: kliknij **×** obok nazwy karty.
+- **Automatyczne zachowywanie**: każdy projekt na każdej karcie jest automatycznie zapisywany w swoim slecie localStorage (`prodrys_auto:1`, `prodrys_auto:2`, itd.).
+- **Trwałość**: wszystkie karty (ich nazwy i sloty) są przechowywane w `prodrys_projects` i przywracane przy ponownym otwarciu aplikacji.
 
 ---
 
@@ -65,7 +75,11 @@ Szablon jest przechowywany w `prodrys_template` w localStorage. Przeniesiesz go 
 
 ## Aplikacja desktopowa (Electron)
 
-Projekt zawiera konfigurację Electron do uruchamiania na pulpicie:
+Projekt zawiera konfigurację Electron do uruchamiania na pulpicie. Aplikacja ma **natywny pasek menu** (Plik / Edycja / Widok) z skrótami klawiszowymi:
+
+- **Plik** → Nowy, Otwórz, Zapisz, Eksportuj
+- **Edycja** → Cofnij, Ponów
+- **Widok** → Zoom (In, Out, Reset)
 
 ### Uruchomienie
 
@@ -82,11 +96,25 @@ Projekt zawiera konfigurację Electron do uruchamiania na pulpicie:
 
 ### Budowanie instalatora
 
-- **Windows**:
+- **Windows — pełny instalator NSIS**:
   ```bash
   npm run dist:win
   ```
-  Generuje instalator w folderze `dist-electron/`.
+  Generuje instalator w folderze `dist-electron/`. Wymaga zainstalowania na komputerze użytkownika.
+
+- **Windows — przenośny plik .exe** (NOWY):
+  ```bash
+  npm run dist:portable
+  ```
+  Generuje plik `ProdDraw-portable-<wersja>.exe` w folderze `dist-electron/`. **Bez instalacji** — wystarczy dwuklik, można kopiować na pendrive. Wymaga jednokrotnej budowy na maszynie z zainstalowanym Node.js (`npm install` najpierw). Idealny do przenoszenia na pendrive lub do szybkiego testowania na innym komputerze.
+
+### Porównanie sposobów dystrybuacji
+
+| Metoda | Opis | Użycie |
+|--------|------|-------|
+| **ProdDraw.html** | Jednoplikowy bundle (przeglądarka) | Zero instalacji, zero zależności — otwórz w dowolnej przeglądarce |
+| **Przenośny .exe** | `npm run dist:portable` → `ProdDraw-portable-<wersja>.exe` | Duplikuj na pendrive, brak instalacji, szybkie testowanie |
+| **Instalator Windows** | `npm run dist:win` → NSIS installer | Pełna instalacja dla użytkowników końcowych |
 
 ### Pliki Electrona
 

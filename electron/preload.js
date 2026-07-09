@@ -3,14 +3,15 @@
  *
  * This script runs in the isolated context between the main process and the renderer.
  * Due to contextIsolation: true, the web app code cannot access Node.js APIs.
- * The preload establishes the security boundary.
+ * The preload establishes the security boundary and exposes only safe IPC methods.
  */
 
-const { contextBridge } = require('electron');
+const { contextBridge, ipcRenderer } = require('electron');
 
 /**
- * Expose a minimal API to the renderer process to indicate desktop mode
+ * Expose a minimal API to the renderer process for desktop menu integration
  */
 contextBridge.exposeInMainWorld('prodrawDesktop', {
-  isDesktop: true
+  isDesktop: true,
+  onMenu: (cb) => ipcRenderer.on('menu-action', (_e, cmd) => cb(cmd))
 });

@@ -85,7 +85,9 @@ function loadProject(obj, fileName) {
     saveLib(); renderLib();
   }
   sel.clear(); previewRow = -1;
-  render(); renderProps(); renderVars(); autosave();
+  render(); renderProps(); renderVars();
+  if (typeof PS_renameActive === 'function') PS_renameActive(state.name);
+  autosave();
   toast(t('t.loaded') + state.name);
 }
 let autosaveTm = null;

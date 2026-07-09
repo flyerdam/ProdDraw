@@ -72,7 +72,7 @@ function openTemplatePicker() {
       });
       d.appendChild(del);
     }
-    d.addEventListener('click', () => { $('#tmplModal').classList.remove('on'); projectFromTemplate(card.tmpl); });
+    d.addEventListener('click', () => { $('#tmplModal').classList.remove('on'); PS_openNewTabFromTemplate(card.tmpl); });
     body.appendChild(d);
   }
   $('#tmplModal').classList.add('on');

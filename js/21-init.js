@@ -39,24 +39,8 @@
       vars: { cols: [], rows: [] }, page: { mode: 'a4l', w: PAGES.a4l.w, h: PAGES.a4l.h } });
     saveTemplatesLS();
   }
-  let restored = false;
-  try {
-    const a = localStorage.getItem(PS_autoKey());
-    if (a) {
-      const obj = JSON.parse(a);
-      if (isProjectApp(obj.app) && Array.isArray(obj.shapes) && obj.shapes.length) {
-        state.name = obj.name || state.name;
-        $('#projName').value = state.name;
-        state.shapes = obj.shapes.map(normalizeShape);
-        state.vars = obj.vars && obj.vars.cols ? obj.vars : { cols: [], rows: [] };
-        state.page = obj.page && obj.page.mode ? obj.page : { mode: 'off' };
-        restored = true;
-        toast(t('t.autorestore'));
-      }
-    }
-  } catch (e) {}
-  if (restored) { syncPageUI(); fitPage(); render(); renderProps(); renderVars(); }
-  else projectFromTemplate('builtin');
+  /* projekty + karty (rejestr wielu projektów, gniazda autozapisu per karta) */
+  PS_init();
   renderLib();
   renderSettings();
   renderHelp();

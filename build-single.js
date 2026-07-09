@@ -30,7 +30,9 @@ const JS_FILES = [
   'js/18-help.js',
   'js/19-settings.js',
   'js/20-menus-dnd.js',
-  'js/21-init.js'
+  'js/tabs.js',
+  'js/21-init.js',
+  'js/desktop.js'
 ].map(relPath => path.join(PROJECT_ROOT, relPath));
 
 // === Helper: check if file exists ===
