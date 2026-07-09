@@ -1,6 +1,17 @@
 # ProdDraw
 
-Jednoplikowy edytor wektorowy do instrukcji produkcyjnych — działa w całości w przeglądarce, bez serwera.
+Edytor wektorowy do instrukcji produkcyjnych — działa w całości w przeglądarce (lub na desktopie via Electron), bez serwera.
+
+---
+
+## Struktura projektu i architektura
+
+Projekt został refaktoryzowany z jednoplikowego HTML na modularną strukturę:
+
+- **`index.html`** — główny punkt wejścia; otwórz ten plik podczas tworzenia.
+- **`css/styles.css`** — wszystkie style aplikacji.
+- **`js/*.js`** — logika aplikacji podzielona na moduły (01-state.js, projects.js, 02-i18n.js, ... 21-init.js). Są to zwykłe skrypty (classic scripts) ładowane w określonej kolejności; współdzielą globalny scope. Brak kroku budowania — wystarczy otworzyć `index.html` lub serwować folder.
+- **`ProdDraw.html`** — WYGENEROWANY plik jednoplikowy (bundle) stworzony z powyższych źródeł. Utrzymywany dla łatwego wdrożenia na Netlify. **NIE edytuj tego ręcznie** — zamiast tego przebuduj go za pomocą `node build-single.js`.
 
 ---
 
@@ -10,12 +21,23 @@ Wszystko jest trzymane **lokalnie w przeglądarce** (localStorage), czyli oddzie
 
 | Klucz localStorage | Zawartość |
 |--------------------|-----------|
-| `prodrys_auto` | Autozapis bieżącego projektu (kształty + warianty + format strony); odtwarzany przy następnym otwarciu |
+| `prodrys_auto:<n>` | Autozapis projektu w danej karcie (kształty + warianty + format strony); każda karta ma własny slot (n = 1, 2, 3, ...). Odtwarzany przy następnym otwarciu. |
+| `prodrys_live` | Rejestr aktywnych kart (heartbeat); śledzi które sloty są w użyciu. |
 | `prodrys_lib` | Biblioteka grup — elementy zapisane przyciskiem „Do biblioteki" |
 | `prodrys_template` | Domyślny szablon nowego projektu (zapisany przyciskiem **Szablon ↓**); jeśli brak, używany jest wbudowany szablon A4 |
 
 ### Wbudowane elementy biblioteki
 Domyślne elementy biblioteki (`Linia wymiarowa`, `Balon nr części`) są zdefiniowane w funkcji `defaultLibItems()` w kodzie źródłowym i odświeżane przy każdym uruchomieniu.
+
+---
+
+## Wiele projektów — autosave z wieloma kartami
+
+Wcześniej wszystkie karty przeglądarki dzieliły jedno pole autosave (`prodrys_auto`), co powodowało, że otwieranie aplikacji w kilka kartach unieważniało dane z poprzednich kart. 
+
+**Teraz każda karta otrzymuje własny slot autosave** (`prodrys_auto:1`, `prodrys_auto:2`, ...), dzięki czemu możesz pracować nad różnymi projektami jednocześnie w kilka kartach/okienach — nie będą się już nawzajem zmieniać. Sloty są śledzone poprzez rejestr `prodrys_live` w localStorage; zamknięcie karty powoduje zwolnienie slotu do ponownego wykorzystania.
+
+**Migracja**: stare dane `prodrys_auto` są automatycznie przenoszone do slotu 1 przy pierwszym uruchomieniu.
 
 ---
 
@@ -41,6 +63,38 @@ Szablon jest przechowywany w `prodrys_template` w localStorage. Przeniesiesz go 
 
 ---
 
+## Aplikacja desktopowa (Electron)
+
+Projekt zawiera konfigurację Electron do uruchamiania na pulpicie:
+
+### Uruchomienie
+
+1. **Jedna jedyna instalacja**:
+   ```bash
+   npm install
+   ```
+
+2. **Uruchom aplikację desktopową**:
+   ```bash
+   npm start
+   ```
+   Spowoduje otwarcie okna Electron z aplikacją.
+
+### Budowanie instalatora
+
+- **Windows**:
+  ```bash
+  npm run dist:win
+  ```
+  Generuje instalator w folderze `dist-electron/`.
+
+### Pliki Electrona
+
+- **`electron/main.js`** — proces główny Electrona.
+- **`electron/preload.js`** — skrypt preload do komunikacji między contextami.
+
+---
+
 ## Układ macierzowy — odstęp i zmiana rozmiaru
 
 W panelu Właściwości (przy zaznaczeniu ≥ 2 kształtów):
@@ -55,17 +109,36 @@ W panelu Właściwości (przy zaznaczeniu ≥ 2 kształtów):
 
 ---
 
+## Budowanie bundla jednoplikowego
+
+Aby przebudować `ProdDraw.html` z modularnych źródeł:
+
+```bash
+node build-single.js
+```
+
+lub
+
+```bash
+npm run build:single
+```
+
+Spowoduje wygenerowanie `ProdDraw.html` z zawartością `index.html`, `css/` i `js/`. Skrypt łączy wszystkie moduły w jeden plik gotowy do wdrożenia.
+
+---
+
 ## Wdrożenie (Netlify i inne)
 
-Aplikacja to jeden plik HTML — wdrożenie jest trywialne.
+Aplikacja może być wdrażana jako modułowa struktura folderów lub jako jednoplikowy bundle (`ProdDraw.html`).
 
 ### Netlify (zalecane)
 
 1. Utwórz konto na [netlify.com](https://netlify.com).
-2. Przeciągnij i upuść folder projektu na stronę [app.netlify.com/drop](https://app.netlify.com/drop).
-3. Gotowe — plik `netlify.toml` w repozytorium skieruje ruch z `/` na `ProdDraw.html`.
+2. Najpierw przebuduj bundle jednoplikowy: `node build-single.js`
+3. Przeciągnij i upuść folder projektu na stronę [app.netlify.com/drop](https://app.netlify.com/drop).
+4. Gotowe — plik `netlify.toml` w repozytorium skieruje ruch z `/` na `ProdDraw.html`.
 
-Alternatywnie: połącz repozytorium GitHub z Netlify (Sites → Add new site → Import from Git).
+Alternatywnie: połącz repozytorium GitHub z Netlify (Sites → Add new site → Import from Git). GitHub Actions mogą automatycznie budować bundle przy każdym push'u.
 
 ### GitHub Pages
 

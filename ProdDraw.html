@@ -184,6 +184,7 @@ body{grid-template-columns:46px 1fr var(--sideW,272px);}
 .tmplCard .tdel{position:absolute;top:3px;right:3px;background:rgba(255,255,255,.85);border:1px solid var(--line);
   color:#c00;border-radius:3px;cursor:pointer;font-size:11px;line-height:1;padding:2px 5px;}
 .tmplCard.blank svg{background:#f6f7f9;}
+
 </style>
 </head>
 <body>
@@ -317,6 +318,7 @@ body{grid-template-columns:46px 1fr var(--sideW,272px);}
 <input type="file" id="fImg" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" hidden>
 <input type="file" id="fSettings" accept=".json" hidden>
 
+<!-- ======= SCRIPTS (classic, shared global scope — order matters) ======= -->
 <script>
 "use strict";
 /* =====================================================================
@@ -359,6 +361,119 @@ let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, sideW: 272,
 let templates = [];         // [{name, shapes, vars, page}]
 let imgCascade = 0;         // przesunięcie kolejnych wstawianych obrazów
 
+
+"use strict";
+
+// Slot assignment for per-tab autosave to prevent overwrites in multi-tab scenario
+let PS_SLOT = 0;
+
+// Configuration constants
+const PS_LIVE_KEY = 'prodrys_live';       // localStorage key holding slot -> timestamp mapping
+const PS_SESSION_KEY = 'prodrys_slot';    // sessionStorage key for this tab's slot persistence
+const PS_STALE_MS = 6000;                 // slot stale threshold (6 seconds)
+const PS_HEARTBEAT_MS = 2000;             // heartbeat interval (2 seconds)
+
+// Helper: read live registry from localStorage
+function PS_readLive() {
+  try {
+    var data = localStorage.getItem(PS_LIVE_KEY);
+    return data ? JSON.parse(data) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+// Helper: write live registry to localStorage
+function PS_writeLive(obj) {
+  try {
+    localStorage.setItem(PS_LIVE_KEY, JSON.stringify(obj));
+  } catch (e) {
+    // ignore errors (quota exceeded, etc.)
+  }
+}
+
+// Helper: check if slot is free (stale or missing)
+function PS_isFree(slot, live, now) {
+  return live[slot] === undefined || (now - live[slot]) > PS_STALE_MS;
+}
+
+// Claim a slot for this tab, reusing if possible
+function PS_claimSlot() {
+  // Try to reuse slot from sessionStorage (page reload scenario)
+  try {
+    var saved = sessionStorage.getItem(PS_SESSION_KEY);
+    if (saved) {
+      var slot = parseInt(saved, 10);
+      if (slot > 0) {
+        PS_SLOT = slot;
+        return slot;
+      }
+    }
+  } catch (e) {
+    // sessionStorage unavailable; fall through to slot 1
+  }
+
+  // Find first free slot starting from 1
+  var live = PS_readLive();
+  var now = Date.now();
+  var n = 1;
+  while (!PS_isFree(n, live, now)) {
+    n++;
+  }
+
+  // Claim and persist slot
+  try {
+    sessionStorage.setItem(PS_SESSION_KEY, String(n));
+  } catch (e) {
+    // sessionStorage unavailable; just use it in memory
+  }
+  PS_SLOT = n;
+  live[n] = now;
+  PS_writeLive(live);
+
+  return n;
+}
+
+// Public API: return autosave key for this tab
+function PS_autoKey() {
+  return 'prodrys_auto:' + PS_SLOT;
+}
+
+// Heartbeat: update this tab's timestamp to mark slot as active
+function PS_heartbeat() {
+  var live = PS_readLive();
+  live[PS_SLOT] = Date.now();
+  PS_writeLive(live);
+}
+
+// Release: remove this tab's slot from registry on close
+function PS_release() {
+  var live = PS_readLive();
+  delete live[PS_SLOT];
+  PS_writeLive(live);
+}
+
+// One-time migration: copy legacy autosave to slot 1 if needed
+function PS_migrateLegacy() {
+  try {
+    var legacy = localStorage.getItem('prodrys_auto');
+    var slot1 = localStorage.getItem('prodrys_auto:1');
+    if (legacy && !slot1) {
+      localStorage.setItem('prodrys_auto:1', legacy);
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+
+// Initialization: run immediately (before other scripts)
+PS_migrateLegacy();
+PS_claimSlot();
+PS_heartbeat();   // stamp immediately so a reused (reload) slot isn't seen as stale
+setInterval(PS_heartbeat, PS_HEARTBEAT_MS);
+window.addEventListener('beforeunload', PS_release);
+
+"use strict";
 /* =====================================================================
    I18N — tłumaczenia interfejsu (PL / EN / DE)
    ===================================================================== */
@@ -592,6 +707,8 @@ function applyI18n() {
   document.documentElement.lang = settings.lang;
 }
 
+
+"use strict";
 let uidN = 1;
 const uid = () => 'S' + (uidN++) + '_' + Date.now().toString(36);
 const isProjectApp = app => app === 'prodrys' || app === 'proddraw';
@@ -647,6 +764,8 @@ function redo() {
   sel.clear(); render(); renderProps(); autosave();
 }
 
+
+"use strict";
 /* ---------- narzędzia pomocnicze ---------- */
 function toast(msg, ms = 2600) {
   const t = $('#toast'); t.textContent = msg; t.classList.add('on');
@@ -714,6 +833,8 @@ function expandGroup(id) {
   return state.shapes.filter(a => a.g === s.g).map(a => a.id);
 }
 
+
+"use strict";
 /* ---------- ZIP: zapis (STORE) + odczyt ---------- */
 const CRC_T = (() => { const t = new Uint32Array(256);
   for (let n = 0; n < 256; n++) { let c = n;
@@ -1089,6 +1210,8 @@ function downloadBlob(blob, name) {
 /* =====================================================================
    RENDEROWANIE
    ===================================================================== */
+
+"use strict";
 function getDash(dash, sw) {
   switch (dash) {
     case 'dash':    return `${sw * 4} ${sw * 2.5}`;
@@ -1440,6 +1563,8 @@ function svgToPngBlob(svgStr, w, h, scale = 2, mime = 'image/png') {
 /* =====================================================================
    PRZYCIĄGANIE
    ===================================================================== */
+
+"use strict";
 function snapCandidates(excludeIds) {
   const xs = [], ys = [];
   for (const s of state.shapes) {
@@ -1501,6 +1626,8 @@ function snapMove(dx, dy, b0, excludeIds) {
 /* =====================================================================
    INTERAKCJE MYSZY
    ===================================================================== */
+
+"use strict";
 let drag = null;
 function newShapeDefaults(type, p) {
   const D = settings.defaults || { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' };
@@ -1923,6 +2050,8 @@ txtEd.addEventListener('keydown', e => {
 /* =====================================================================
    PANEL WŁAŚCIWOŚCI
    ===================================================================== */
+
+"use strict";
 const DASH_OPTS = [['solid', 'ciągła'], ['dash', 'kreskowa'], ['longdash', 'długa kreska'],
   ['dot', 'kropkowa'], ['dashdot', 'kreska-kropka']];
 function refreshXYWH() {
@@ -2239,6 +2368,8 @@ function zOrder(kind) {
   }
   render(); autosave();
 }
+
+"use strict";
 /* ---------- grupy ---------- */
 function groupSel() {
   if (sel.size < 2) return;
@@ -2279,6 +2410,8 @@ function deleteSel() {
 /* =====================================================================
    BIBLIOTEKA GRUP
    ===================================================================== */
+
+"use strict";
 function saveToLib() {
   const ss = selShapes(); if (!ss.length) return toast(t('t.min2'));
   const name = prompt(t('p.libName'), t('lib.default1'));
@@ -2403,6 +2536,8 @@ function defaultLibItems() {
 }
 function seedLib() { lib = defaultLibItems(); saveLib(); }
 
+
+"use strict";
 /* ---------- kształty dodatkowe (modal) ---------- */
 const EXTRA_SHAPES = [
   { preset: 'triangle', label: 'Trójkąt' },
@@ -2454,6 +2589,8 @@ function openShapeModal() {
 /* =====================================================================
    WARIANTY — macierz zmiennych, generowanie zestawu PNG
    ===================================================================== */
+
+"use strict";
 function renderVars() {
   const el = $('#tab-vars');
   const V = state.vars;
@@ -2548,6 +2685,8 @@ async function generateVariants() {
 /* =====================================================================
    PROJEKT: zapis / odczyt / autozapis / eksport PNG
    ===================================================================== */
+
+"use strict";
 function projectJSON() {
   return JSON.stringify({ app: 'prodrys', version: 2,
     name: $('#projName').value, shapes: state.shapes, vars: state.vars,
@@ -2641,7 +2780,7 @@ let autosaveTm = null;
 function autosave() {
   clearTimeout(autosaveTm);
   autosaveTm = setTimeout(() => {
-    try { localStorage.setItem('prodrys_auto', projectJSON()); } catch (e) {}
+    try { localStorage.setItem(PS_autoKey(), projectJSON()); } catch (e) {}
   }, 400);
 }
 const exportHandles = { png: null, jpg: null };   /* zapamiętane pliki eksportu (jak zapis) */
@@ -2677,6 +2816,8 @@ async function exportImage(fmt, forcePicker = false) {
 /* =====================================================================
    OBRAZY: wstawianie, wklejanie, import XLSX
    ===================================================================== */
+
+"use strict";
 function insertImageURL(url) {
   const img = new Image();
   img.onload = () => {
@@ -2940,6 +3081,8 @@ $$('.tab').forEach(b => b.addEventListener('click', () => {
   $$('.tab').forEach(t => t.classList.toggle('on', t === b));
   $$('.tabBody').forEach(t => t.classList.toggle('on', t.id === 'tab-' + b.dataset.tab));
 }));
+
+"use strict";
 /* ---------- format kanwy + szablon ---------- */
 function pageRegion() {
   const P = state.page;
@@ -3033,6 +3176,8 @@ function saveAsTemplate() {
   saveTemplatesLS();
   toast(t('t.tmplSaved') + name);
 }
+
+"use strict";
 function saveSettingsLS() { try { localStorage.setItem('prodrys_settings', JSON.stringify(settings)); } catch (e) {} }
 function saveTemplatesLS() { try { localStorage.setItem('prodrys_templates', JSON.stringify(templates)); } catch (e) {} }
 /* konfiguracja = ustawienia + biblioteka + szablony (jeden plik) */
@@ -3079,6 +3224,8 @@ function applySettings() {
   applyI18n();
   render(); renderProps(); renderVars(); renderLib(); renderSettings(); renderHelp();
 }
+
+"use strict";
 /* ---------- zakładka Pomoc: instrukcje + skróty ---------- */
 const HELP_HTML = {
   pl: `<div class="grp"><h4>Do czego to jest</h4><div class="hint">
@@ -3238,6 +3385,8 @@ const HELP_HTML = {
     „Speichern" schreibt dieselbe Datei (Chrome/Edge), „Speichern unter" wählt eine neue. PNG/JPG-Export
     ebenso (merkt sich die Datei), Schnell-Button = JPG. .pdraw/.json/.xlsx/.xlsm oder Bilder aufs Fenster ziehen.</div></div>`
 };
+
+"use strict";
 function renderHelp() {
   const el = $('#tab-help'); if (!el) return;
   el.innerHTML = HELP_HTML[settings.lang] || HELP_HTML.pl;
@@ -3308,6 +3457,8 @@ $('#pageSel').addEventListener('change', () => {
   state.page.h = Math.max(50, +$('#pageH').value || 794);
   fitPage(); render(); autosave();
 }));
+
+"use strict";
 /* ---------- menu rozwijane ---------- */
 function closeMenus() { $$('.menu.open').forEach(m => m.classList.remove('open')); }
 $$('.menu > [data-menu]').forEach(btn => btn.addEventListener('click', e => {
@@ -3446,9 +3597,11 @@ document.addEventListener('keyup', e => {
   if (e.code === 'Space') { spaceDown = false; cv.setAttribute('class', 't-' + tool); }
 });
 window.addEventListener('beforeunload', () => {
-  try { localStorage.setItem('prodrys_auto', projectJSON()); } catch (e) {}
+  try { localStorage.setItem(PS_autoKey(), projectJSON()); } catch (e) {}
 });
 
+
+"use strict";
 /* ---------- start ---------- */
 (function init() {
   /* ustawienia aplikacji */
@@ -3491,7 +3644,7 @@ window.addEventListener('beforeunload', () => {
   }
   let restored = false;
   try {
-    const a = localStorage.getItem('prodrys_auto');
+    const a = localStorage.getItem(PS_autoKey());
     if (a) {
       const obj = JSON.parse(a);
       if (isProjectApp(obj.app) && Array.isArray(obj.shapes) && obj.shapes.length) {
@@ -3511,6 +3664,6 @@ window.addEventListener('beforeunload', () => {
   renderSettings();
   renderHelp();
 })();
-</script>
-</body>
+
+</script></body>
 </html>

@@ -1,0 +1,33 @@
+{
+  "name": "proddraw",
+  "version": "1.0.0",
+  "description": "ProdDraw - A desktop application for drawing and design",
+  "private": true,
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "build:single": "node build-single.js"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.proddraw.app",
+    "productName": "ProdDraw",
+    "files": [
+      "index.html",
+      "css/**/*",
+      "js/**/*",
+      "electron/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "directories": {
+      "output": "dist-electron"
+    }
+  }
+}

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProdRys — edytor instrukcji produkcyjnych</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- ======= TOP BAR ======= -->
+<div class="tb">
+  <div class="logo">PR</div>
+  <input id="projName" value="Instrukcja_01" spellcheck="false" data-i18n-title="tt.projName">
+  <div class="sep"></div>
+
+  <div class="menu" id="mFile">
+    <button class="btn" data-menu><span data-i18n="menu.file">Plik</span><span class="caret">▼</span></button>
+    <div class="menuPop">
+      <button class="menuItem" id="bNew"><span data-i18n="file.new">Nowy…</span></button>
+      <button class="menuItem" id="bOpen"><span data-i18n="file.open">Otwórz…</span><span class="sc">Ctrl+O</span></button>
+      <button class="menuItem" id="bSave"><span data-i18n="file.save">Zapisz projekt</span><span class="sc">Ctrl+S</span></button>
+      <button class="menuItem" id="bSaveAs"><span data-i18n="file.saveAs">Zapisz jako…</span></button>
+      <div class="menuSep"></div>
+      <button class="menuItem" id="bXlsx"><span data-i18n="file.importXlsx">Import XLSX/XLSM</span></button>
+      <button class="menuItem" id="bImg"><span data-i18n="file.insertImg">Wstaw obraz…</span></button>
+    </div>
+  </div>
+
+  <div class="menu" id="mExport">
+    <button class="btn" data-menu><span data-i18n="menu.export">Eksport</span><span class="caret">▼</span></button>
+    <div class="menuPop">
+      <button class="menuItem" id="bPng"><span data-i18n="export.png">Eksportuj PNG</span></button>
+      <button class="menuItem" id="bPngAs"><span data-i18n="export.pngAs">Eksportuj PNG jako…</span></button>
+      <div class="menuSep"></div>
+      <button class="menuItem" id="bJpg"><span data-i18n="export.jpg">Eksportuj JPG</span></button>
+      <button class="menuItem" id="bJpgAs"><span data-i18n="export.jpgAs">Eksportuj JPG jako…</span></button>
+    </div>
+  </div>
+
+  <div class="sep"></div>
+  <button class="btn primary" id="bJpgQuick" data-i18n="export.jpgQuick">Eksport JPG</button>
+  <div class="spacer"></div>
+  <button class="btn" id="bUndo" data-i18n-title="tt.undo">&#x21B6;</button>
+  <button class="btn" id="bRedo" data-i18n-title="tt.redo">&#x21B7;</button>
+</div>
+
+<!-- ======= TOOL RAIL ======= -->
+<div class="rail">
+  <button class="tool on" data-tool="select" data-i18n-title="tt.tool.select"><svg viewBox="0 0 24 24"><path d="M6 3l12 9-6 1 3 7-3 1-3-7-4 4z"/></svg></button>
+  <button class="tool" data-tool="rect" data-i18n-title="tt.tool.rect"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12"/></svg></button>
+  <button class="tool" data-tool="ellipse" data-i18n-title="tt.tool.ellipse"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg></button>
+  <button class="tool" data-tool="line" data-i18n-title="tt.tool.line"><svg viewBox="0 0 24 24"><path d="M4 20L20 4"/></svg></button>
+  <button class="tool" data-tool="arrow" data-i18n-title="tt.tool.arrow"><svg viewBox="0 0 24 24"><path d="M4 20L18 6M18 6h-6M18 6v6"/></svg></button>
+  <button class="tool" data-tool="text" data-i18n-title="tt.tool.text"><svg viewBox="0 0 24 24"><path d="M5 6h14M12 6v13"/></svg></button>
+  <button class="tool" data-tool="shapes" data-i18n-title="tt.tool.shapes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><polygon points="12,3 22,21 2,21"/></svg></button>
+  <button class="tool" data-tool="image" data-i18n-title="tt.tool.image"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14"/><path d="M4 15l5-5 4 4 3-3 4 4"/><circle cx="9" cy="9" r="1.4"/></svg></button>
+</div>
+
+<!-- ======= CANVAS ======= -->
+<div class="canvasWrap" id="cwrap">
+  <svg id="cv" class="t-select"></svg>
+  <textarea id="txtEd" spellcheck="false"></textarea>
+</div>
+
+<!-- ======= SIDE PANEL ======= -->
+<div class="sideResizer" id="sideResizer" title="Przeciągnij, aby zmienić szerokość"></div>
+<div class="side">
+  <div class="tabbar">
+    <button class="tab on" data-tab="props" data-i18n="tab.props">Właściwości</button>
+    <button class="tab" data-tab="lib" data-i18n="tab.lib">Biblioteka</button>
+    <button class="tab" data-tab="vars" data-i18n="tab.vars">Warianty</button>
+    <button class="tab" data-tab="settings" data-i18n="tab.settings">Ustawienia</button>
+    <button class="tab" data-tab="help" data-i18n="tab.help">Pomoc</button>
+  </div>
+  <div class="tabBody on" id="tab-props"></div>
+  <div class="tabBody" id="tab-lib"></div>
+  <div class="tabBody" id="tab-vars"></div>
+  <div class="tabBody" id="tab-settings"></div>
+  <div class="tabBody" id="tab-help"></div>
+</div>
+
+<!-- ======= STATUS ======= -->
+<div class="status">
+  <label><span data-i18n="status.format">Format</span> <select class="in" id="pageSel" style="width:118px">
+    <option value="a4l" data-i18n="page.a4l">A4 poziomo</option>
+    <option value="a4p" data-i18n="page.a4p">A4 pionowo</option>
+    <option value="hd">1600×900</option>
+    <option value="custom" data-i18n="page.custom">Własny</option>
+    <option value="off" data-i18n="page.off">∞ nieskończony</option>
+  </select></label>
+  <span id="pageWH" style="display:none">
+    <input class="in" type="number" id="pageW" value="1123" min="50"> ×
+    <input class="in" type="number" id="pageH" value="794" min="50"> px
+  </span>
+  <div class="sep"></div>
+  <label><input type="checkbox" id="snapG" checked> <span data-i18n="status.snapGrid">Przyciągaj do siatki</span></label>
+  <label><span data-i18n="status.grid">Siatka</span> <input class="in" type="number" id="gridSize" value="10" min="1" max="200"> px</label>
+  <label><input type="checkbox" id="snapO" checked> <span data-i18n="status.snapObj">Przyciągaj do obiektów</span></label>
+  <div class="spacer"></div>
+  <button class="miniBtn" id="bZoomOut" title="Zoom -">-</button>
+  <span id="zoomLbl">100%</span>
+  <button class="miniBtn" id="bZoomIn" title="Zoom +">+</button>
+  <span data-i18n="status.hint">Kółko = zoom &nbsp;|&nbsp; Spacja/środkowy = przesuwanie &nbsp;|&nbsp; 2×klik = tekst</span>
+</div>
+
+<!-- ======= MODAL: XLSX ======= -->
+<div class="modalBg" id="xlModal">
+  <div class="modal">
+    <h3 data-i18n="xlsx.title">Obrazy znalezione w pliku — kliknij, aby wstawić</h3>
+    <div class="modalBody" id="xlBody"></div>
+    <div class="modalFoot"><button class="btn" id="xlClose" data-i18n="btn.close">Zamknij</button></div>
+  </div>
+</div>
+
+<!-- ======= MODAL: SHAPES ======= -->
+<div class="modalBg" id="shapeModal">
+  <div class="modal" style="width:520px">
+    <h3 data-i18n="shapes.title">Kształty dodatkowe — kliknij, aby dodać</h3>
+    <div class="modalBody" id="shapeBody"></div>
+    <div class="modalFoot"><button class="btn" id="shapeClose" data-i18n="btn.close">Zamknij</button></div>
+  </div>
+</div>
+
+<!-- ======= MODAL: TEMPLATE PICKER ======= -->
+<div class="modalBg" id="tmplModal">
+  <div class="modal">
+    <h3 data-i18n="tmpl.title">Wybierz szablon nowego projektu</h3>
+    <div class="modalBody" id="tmplBody"></div>
+    <div class="modalFoot"><button class="btn" id="tmplClose" data-i18n="btn.cancel">Anuluj</button></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<input type="file" id="fOpen" accept=".pdraw,.json,.prodrys" hidden>
+<input type="file" id="fXlsx" accept=".xlsx,.xlsm" hidden>
+<input type="file" id="fImg" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" hidden>
+<input type="file" id="fSettings" accept=".json" hidden>
+
+<!-- ======= SCRIPTS (classic, shared global scope — order matters) ======= -->
+<script src="js/01-state.js"></script>
+<script src="js/projects.js"></script>
+<script src="js/02-i18n.js"></script>
+<script src="js/03-undo.js"></script>
+<script src="js/04-geometry.js"></script>
+<script src="js/05-zip.js"></script>
+<script src="js/06-svg.js"></script>
+<script src="js/07-snap.js"></script>
+<script src="js/08-interaction.js"></script>
+<script src="js/09-props.js"></script>
+<script src="js/10-groups.js"></script>
+<script src="js/11-library.js"></script>
+<script src="js/12-shapes-modal.js"></script>
+<script src="js/13-variants.js"></script>
+<script src="js/14-project.js"></script>
+<script src="js/15-xlsx.js"></script>
+<script src="js/16-canvas-format.js"></script>
+<script src="js/17-config.js"></script>
+<script src="js/18-help.js"></script>
+<script src="js/19-settings.js"></script>
+<script src="js/20-menus-dnd.js"></script>
+<script src="js/21-init.js"></script>
+</body>
+</html>
