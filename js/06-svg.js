@@ -243,6 +243,13 @@ function xlsxCropOverlaySVG() {
   out += `<rect x="${-M}" y="${b.y}" width="${b.x + M}" height="${b.h}" fill="${dim}"/>`;                   // lewo
   out += `<rect x="${b.x + b.w}" y="${b.y}" width="${M - (b.x + b.w)}" height="${b.h}" fill="${dim}"/>`;    // prawo
   out += `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="none" stroke="#fff" stroke-width="${2 / z}"/>`;
+  /* linie pomocnicze przyciągania (siatka/obiekty) — jak przy przesuwaniu kształtów */
+  for (const g of guides) {
+    if (g.v !== undefined)
+      out += `<line x1="${g.v}" y1="-50000" x2="${g.v}" y2="50000" stroke="var(--guide)" stroke-width="${1 / z}"/>`;
+    else
+      out += `<line x1="-50000" y1="${g.h}" x2="50000" y2="${g.h}" stroke="var(--guide)" stroke-width="${1 / z}"/>`;
+  }
   return out;
 }
 function overlaySVG() {
@@ -331,8 +338,10 @@ function buildSVG(shapes, vals, pad = 16, region = null) {
   } else {
     const b = unionBBox(shapes);
     if (!b) return null;
-    /* uwzględnij grubość linii */
-    const m = pad + Math.max(0, ...shapes.map(s => (s.sw || 0)));
+    /* uwzględnij grubość linii — obrys SVG jest wyśrodkowany na ścieżce, więc
+       na zewnątrz wystaje tylko POŁOWA stroke-width, nie cała (wcześniej cały
+       sw dawał kilka pikseli zbędnego marginesu nawet przy pad=0) */
+    const m = pad + Math.max(0, ...shapes.map(s => (s.sw || 0))) / 2;
     vb = { x: b.x - m, y: b.y - m, w: b.w + 2 * m, h: b.h + 2 * m };
   }
   let body = '';

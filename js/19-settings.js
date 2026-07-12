@@ -30,6 +30,10 @@ function renderSettings() {
       <div class="row"><label>${t('set.infMargin')}</label><input class="in" type="number" id="setInfMargin" min="0" max="500" step="1" value="${settings.infiniteCanvasMargin ?? 16}"></div>
       <div class="hint">${t('set.infMarginHint')}</div>
     </div>
+    <div class="grp"><h4>${t('set.xlsxImport')}</h4>
+      <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setXlsxAutoCrop" ${settings.xlsxAutoCrop !== false ? 'checked' : ''}> ${t('set.xlsxAutoCrop')}</label></div>
+      <div class="hint">${t('set.xlsxAutoCropHint')}</div>
+    </div>
     <div class="grp"><h4>${t('set.defaults')}</h4>
       <div class="row"><label>${t('props.font')}</label><select class="in" id="dFont" style="width:130px">
         ${fonts.map(f => `<option value="${f}" ${D.font === f ? 'selected' : ''}>${f}</option>`).join('')}</select></div>
@@ -47,6 +51,7 @@ function renderSettings() {
   $('#setMx').addEventListener('change', e => { settings.mxMaster = e.target.checked; saveSettingsLS(); });
   $('#setAutosave').addEventListener('change', e => { settings.autosave = e.target.checked; saveSettingsLS(); if (settings.autosave) autosave(); });
   $('#setInfMargin').addEventListener('change', e => { settings.infiniteCanvasMargin = clamp(parseInt(e.target.value) || 0, 0, 500); saveSettingsLS(); });
+  $('#setXlsxAutoCrop').addEventListener('change', e => { settings.xlsxAutoCrop = e.target.checked; saveSettingsLS(); });
   $('#setZoomDiv').addEventListener('change', e => { settings.zoomDiv = clamp(parseFloat(e.target.value) || 4, 1, 20); saveSettingsLS(); });
   $('#setSideW').addEventListener('change', e => {
     settings.sideW = clamp(parseInt(e.target.value) || 272, 200, 640); saveSettingsLS();

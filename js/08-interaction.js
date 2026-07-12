@@ -50,9 +50,12 @@ cv.addEventListener('pointerdown', e => {
     cropMode = null; render(); renderProps(); return;   /* klik poza ramką = koniec */
   }
 
-  /* kreator kadru roboczego po imporcie XLSX — przeciągnięcie rysuje/zmienia obszar */
+  /* kreator kadru roboczego po imporcie XLSX — przeciągnięcie rysuje/zmienia
+     obszar; przyciąga do siatki/obiektów wg tych samych checkboxów co reszta
+     narzędzi (#snapG/#snapO) */
   if (xlsxCropActive) {
-    drag = { mode: 'xlsxcrop', sx: p.x, sy: p.y };
+    const sp = snapPt(p); guides = [];
+    drag = { mode: 'xlsxcrop', sx: sp.x, sy: sp.y };
     render(); return;
   }
 
@@ -153,7 +156,8 @@ cv.addEventListener('pointermove', e => {
     render(); return;
   }
   if (drag.mode === 'xlsxcrop') {
-    drag.cx = p.x; drag.cy = p.y;
+    const sp = snapPt(p);
+    drag.cx = sp.x; drag.cy = sp.y;
     xlsxCropBox = {
       x: Math.min(drag.sx, drag.cx), y: Math.min(drag.sy, drag.cy),
       w: Math.abs(drag.cx - drag.sx), h: Math.abs(drag.cy - drag.sy)

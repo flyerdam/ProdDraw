@@ -274,6 +274,7 @@ body.desktop-mode #mExport { display: none; }
   <div class="xlsxCropBar" id="xlsxCropBar">
     <span data-i18n="xlsxcrop.hint">Przeciągnij na kanwie, aby zaznaczyć obszar roboczy arkusza.</span>
     <label><input type="checkbox" id="xlsxCropRemoveOutside"> <span data-i18n="xlsxcrop.removeOutside">Usuń kształty poza obszarem</span></label>
+    <button class="btn" id="xlsxCropSkip" data-i18n="xlsxcrop.skip">Nie przycinaj</button>
     <button class="btn" id="xlsxCropCancel" data-i18n="btn.cancel">Anuluj</button>
     <button class="btn primary" id="xlsxCropConfirm" data-i18n="xlsxcrop.confirm">Zatwierdź</button>
   </div>
@@ -407,7 +408,7 @@ const ROT_STEP = 10;        // krok skokowego obrotu
 let currentProjectHandle = null;  // uchwyt pliku (zapis w miejscu, File System Access API)
 
 /* ---------- ustawienia aplikacji + szablony ---------- */
-let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, sideW: 272, autosave: true, infiniteCanvasMargin: 16,
+let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, sideW: 272, autosave: true, infiniteCanvasMargin: 16, xlsxAutoCrop: true,
   defaults: { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' } };
 let templates = [];         // [{name, shapes, vars, page}]
 let imgCascade = 0;         // przesunięcie kolejnych wstawianych obrazów
@@ -694,9 +695,12 @@ const I18N = {
     'set.canvas':'Kanwa nieskończona','set.infMargin':'Margines przy eksporcie (px)',
     'set.infMarginHint':'Odstęp wokół kształtów przy eksporcie/generowaniu wariantów, gdy format strony to „∞ nieskończony”. Bez znaczenia, gdy ustawiono konkretny format strony.',
     'xlsxcrop.hint':'Przeciągnij na kanwie, aby zaznaczyć obszar roboczy arkusza.',
-    'xlsxcrop.removeOutside':'Usuń kształty poza obszarem','xlsxcrop.confirm':'Zatwierdź',
+    'xlsxcrop.removeOutside':'Usuń kształty poza obszarem','xlsxcrop.confirm':'Zatwierdź','xlsxcrop.skip':'Nie przycinaj',
     'xlsxcrop.badBox':'Zaznacz obszar o rozsądnym rozmiarze przed zatwierdzeniem.',
-    'xlsxcrop.done':'Kadr zastosowany.','xlsxcrop.cancelled':'Anulowano kadrowanie — import bez zmian.',
+    'xlsxcrop.done':'Kadr zastosowany.','xlsxcrop.skipped':'Import zachowany bez przycinania.',
+    'xlsxcrop.aborted':'Import odrzucony.',
+    'set.xlsxImport':'Import XLSX','set.xlsxAutoCrop':'Automatycznie otwórz kreator kadru po imporcie',
+    'set.xlsxAutoCropHint':'Wyłączenie: import trafia od razu na kanwę, bez pytania o obszar roboczy (jak kliknięcie „Nie przycinaj”).',
     'set.defaults':'Domyślne nowych kształtów','set.config':'Konfiguracja',
     'set.colStroke':'Kolor obrysu','set.colText':'Kolor tekstu','set.colFill':'Kolor wypełnienia',
     'props.flip':'Odbicie','props.flipH':'Odbij w poziomie','props.flipV':'Odbij w pionie',
@@ -782,9 +786,12 @@ const I18N = {
     'set.canvas':'Infinite canvas','set.infMargin':'Export margin (px)',
     'set.infMarginHint':'Padding around shapes when exporting/generating variants while page format is "∞ infinite". Has no effect when a fixed page format is set.',
     'xlsxcrop.hint':'Drag on the canvas to select the sheet\'s working area.',
-    'xlsxcrop.removeOutside':'Remove shapes outside the area','xlsxcrop.confirm':'Confirm',
+    'xlsxcrop.removeOutside':'Remove shapes outside the area','xlsxcrop.confirm':'Confirm','xlsxcrop.skip':'Don\'t crop',
     'xlsxcrop.badBox':'Select an area of a reasonable size before confirming.',
-    'xlsxcrop.done':'Crop applied.','xlsxcrop.cancelled':'Crop cancelled — import left unchanged.',
+    'xlsxcrop.done':'Crop applied.','xlsxcrop.skipped':'Import kept without cropping.',
+    'xlsxcrop.aborted':'Import discarded.',
+    'set.xlsxImport':'XLSX import','set.xlsxAutoCrop':'Automatically open the crop wizard after import',
+    'set.xlsxAutoCropHint':'Off: the import lands on the canvas immediately, without asking for a work area (same as clicking "Don\'t crop").',
     'set.about':'ProdRys — production-instruction editor.',
     'set.autosave':'Autosave','set.autosaveHint':'When off: changes are not saved automatically — switching/closing a tab or the app discards unsaved changes. Manual “Save” (Ctrl+S) to a file is unaffected.',
     'c.closeUnsaved':'Close “{n}” without saving changes? The project will be permanently deleted.',
@@ -862,9 +869,12 @@ const I18N = {
     'set.canvas':'Unendliche Kanvas','set.infMargin':'Rand beim Export (px)',
     'set.infMarginHint':'Abstand um die Formen beim Export/Varianten-Export, wenn das Seitenformat „∞ unendlich" ist. Ohne Wirkung bei festem Seitenformat.',
     'xlsxcrop.hint':'Auf der Kanvas ziehen, um den Arbeitsbereich des Arbeitsblatts festzulegen.',
-    'xlsxcrop.removeOutside':'Formen außerhalb des Bereichs entfernen','xlsxcrop.confirm':'Bestätigen',
+    'xlsxcrop.removeOutside':'Formen außerhalb des Bereichs entfernen','xlsxcrop.confirm':'Bestätigen','xlsxcrop.skip':'Nicht zuschneiden',
     'xlsxcrop.badBox':'Wählen Sie vor dem Bestätigen einen ausreichend großen Bereich.',
-    'xlsxcrop.done':'Zuschnitt angewendet.','xlsxcrop.cancelled':'Zuschnitt abgebrochen — Import unverändert.',
+    'xlsxcrop.done':'Zuschnitt angewendet.','xlsxcrop.skipped':'Import ohne Zuschnitt beibehalten.',
+    'xlsxcrop.aborted':'Import verworfen.',
+    'set.xlsxImport':'XLSX-Import','set.xlsxAutoCrop':'Zuschnitt-Assistent nach dem Import automatisch öffnen',
+    'set.xlsxAutoCropHint':'Deaktiviert: der Import landet sofort auf der Kanvas, ohne nach einem Arbeitsbereich zu fragen (wie „Nicht zuschneiden").',
     'set.about':'ProdRys — Editor für Produktionsanweisungen.',
     'set.autosave':'Automatisches Speichern','set.autosaveHint':'Deaktiviert: Änderungen werden nicht automatisch gespeichert — Tab-/Programmwechsel oder Schließen verwirft ungespeicherte Änderungen. Manuelles „Speichern” (Strg+S) in eine Datei bleibt unverändert.',
     'c.closeUnsaved':'„{n}” ohne Speichern schließen? Das Projekt wird endgültig gelöscht.',
@@ -1735,6 +1745,13 @@ function xlsxCropOverlaySVG() {
   out += `<rect x="${-M}" y="${b.y}" width="${b.x + M}" height="${b.h}" fill="${dim}"/>`;                   // lewo
   out += `<rect x="${b.x + b.w}" y="${b.y}" width="${M - (b.x + b.w)}" height="${b.h}" fill="${dim}"/>`;    // prawo
   out += `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="none" stroke="#fff" stroke-width="${2 / z}"/>`;
+  /* linie pomocnicze przyciągania (siatka/obiekty) — jak przy przesuwaniu kształtów */
+  for (const g of guides) {
+    if (g.v !== undefined)
+      out += `<line x1="${g.v}" y1="-50000" x2="${g.v}" y2="50000" stroke="var(--guide)" stroke-width="${1 / z}"/>`;
+    else
+      out += `<line x1="-50000" y1="${g.h}" x2="50000" y2="${g.h}" stroke="var(--guide)" stroke-width="${1 / z}"/>`;
+  }
   return out;
 }
 function overlaySVG() {
@@ -1823,8 +1840,10 @@ function buildSVG(shapes, vals, pad = 16, region = null) {
   } else {
     const b = unionBBox(shapes);
     if (!b) return null;
-    /* uwzględnij grubość linii */
-    const m = pad + Math.max(0, ...shapes.map(s => (s.sw || 0)));
+    /* uwzględnij grubość linii — obrys SVG jest wyśrodkowany na ścieżce, więc
+       na zewnątrz wystaje tylko POŁOWA stroke-width, nie cała (wcześniej cały
+       sw dawał kilka pikseli zbędnego marginesu nawet przy pad=0) */
+    const m = pad + Math.max(0, ...shapes.map(s => (s.sw || 0))) / 2;
     vb = { x: b.x - m, y: b.y - m, w: b.w + 2 * m, h: b.h + 2 * m };
   }
   let body = '';
@@ -1972,9 +1991,12 @@ cv.addEventListener('pointerdown', e => {
     cropMode = null; render(); renderProps(); return;   /* klik poza ramką = koniec */
   }
 
-  /* kreator kadru roboczego po imporcie XLSX — przeciągnięcie rysuje/zmienia obszar */
+  /* kreator kadru roboczego po imporcie XLSX — przeciągnięcie rysuje/zmienia
+     obszar; przyciąga do siatki/obiektów wg tych samych checkboxów co reszta
+     narzędzi (#snapG/#snapO) */
   if (xlsxCropActive) {
-    drag = { mode: 'xlsxcrop', sx: p.x, sy: p.y };
+    const sp = snapPt(p); guides = [];
+    drag = { mode: 'xlsxcrop', sx: sp.x, sy: sp.y };
     render(); return;
   }
 
@@ -2075,7 +2097,8 @@ cv.addEventListener('pointermove', e => {
     render(); return;
   }
   if (drag.mode === 'xlsxcrop') {
-    drag.cx = p.x; drag.cy = p.y;
+    const sp = snapPt(p);
+    drag.cx = sp.x; drag.cy = sp.y;
     xlsxCropBox = {
       x: Math.min(drag.sx, drag.cx), y: Math.min(drag.sy, drag.cy),
       w: Math.abs(drag.cx - drag.sx), h: Math.abs(drag.cy - drag.sy)
@@ -3344,9 +3367,9 @@ async function applySelectedXlsxItems() {
   render(); renderProps(); autosave();
   closeXlsxModal();
   toast(t('xl.done', { i: imageN, s: shapeN }));
-  /* zamiast od razu kończyć — pokaż kreator kadru roboczego nad świeżo
-     zaimportowanymi elementami (patrz xlsxCropStart poniżej) */
-  xlsxCropStart(normalized);
+  /* pokaż kreator kadru roboczego nad świeżo zaimportowanymi elementami —
+     chyba że wyłączone w Ustawieniach (wtedy zachowaj się jak "Nie przycinaj") */
+  if (settings.xlsxAutoCrop !== false) xlsxCropStart(normalized);
 }
 
 /* =====================================================================
@@ -3400,8 +3423,27 @@ function xlsxCropConfirm() {
   fitPage(); render(); renderProps(); renderVars(); autosave();
   toast(t('xlsxcrop.done'));
 }
+/* "Nie przycinaj" — zachowaj import dokładnie tak, jak został wczytany
+   (bez kadrowania/przesunięcia), tylko zamknij kreator */
+function xlsxCropSkip() {
+  xlsxCropEnd();
+  toast(t('xlsxcrop.skipped'));
+}
+/* "Anuluj" — odrzuć import: usuń kształty pochodzące z TEGO importu (patrz
+   xlsxCropImportedIds), jakby import się nie odbył */
+function xlsxCropAbort() {
+  if (xlsxCropImportedIds && xlsxCropImportedIds.size) {
+    pushUndo();
+    state.shapes = state.shapes.filter(s => !xlsxCropImportedIds.has(s.id));
+    sel.clear();
+    render(); renderProps(); renderVars(); autosave();
+  }
+  xlsxCropEnd();
+  toast(t('xlsxcrop.aborted'));
+}
 $('#xlsxCropConfirm').addEventListener('click', xlsxCropConfirm);
-$('#xlsxCropCancel').addEventListener('click', () => { xlsxCropEnd(); toast(t('xlsxcrop.cancelled')); });
+$('#xlsxCropSkip').addEventListener('click', xlsxCropSkip);
+$('#xlsxCropCancel').addEventListener('click', xlsxCropAbort);
 /* import XLSX/XLSM — obrazy + kształty wektorowe (z pozycjami z arkusza) */
 async function importXlsx(file) {
   try {
@@ -3850,6 +3892,10 @@ function renderSettings() {
       <div class="row"><label>${t('set.infMargin')}</label><input class="in" type="number" id="setInfMargin" min="0" max="500" step="1" value="${settings.infiniteCanvasMargin ?? 16}"></div>
       <div class="hint">${t('set.infMarginHint')}</div>
     </div>
+    <div class="grp"><h4>${t('set.xlsxImport')}</h4>
+      <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setXlsxAutoCrop" ${settings.xlsxAutoCrop !== false ? 'checked' : ''}> ${t('set.xlsxAutoCrop')}</label></div>
+      <div class="hint">${t('set.xlsxAutoCropHint')}</div>
+    </div>
     <div class="grp"><h4>${t('set.defaults')}</h4>
       <div class="row"><label>${t('props.font')}</label><select class="in" id="dFont" style="width:130px">
         ${fonts.map(f => `<option value="${f}" ${D.font === f ? 'selected' : ''}>${f}</option>`).join('')}</select></div>
@@ -3867,6 +3913,7 @@ function renderSettings() {
   $('#setMx').addEventListener('change', e => { settings.mxMaster = e.target.checked; saveSettingsLS(); });
   $('#setAutosave').addEventListener('change', e => { settings.autosave = e.target.checked; saveSettingsLS(); if (settings.autosave) autosave(); });
   $('#setInfMargin').addEventListener('change', e => { settings.infiniteCanvasMargin = clamp(parseInt(e.target.value) || 0, 0, 500); saveSettingsLS(); });
+  $('#setXlsxAutoCrop').addEventListener('change', e => { settings.xlsxAutoCrop = e.target.checked; saveSettingsLS(); });
   $('#setZoomDiv').addEventListener('change', e => { settings.zoomDiv = clamp(parseFloat(e.target.value) || 4, 1, 20); saveSettingsLS(); });
   $('#setSideW').addEventListener('change', e => {
     settings.sideW = clamp(parseInt(e.target.value) || 272, 200, 640); saveSettingsLS();

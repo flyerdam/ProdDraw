@@ -187,9 +187,9 @@ async function applySelectedXlsxItems() {
   render(); renderProps(); autosave();
   closeXlsxModal();
   toast(t('xl.done', { i: imageN, s: shapeN }));
-  /* zamiast od razu kończyć — pokaż kreator kadru roboczego nad świeżo
-     zaimportowanymi elementami (patrz xlsxCropStart poniżej) */
-  xlsxCropStart(normalized);
+  /* pokaż kreator kadru roboczego nad świeżo zaimportowanymi elementami —
+     chyba że wyłączone w Ustawieniach (wtedy zachowaj się jak "Nie przycinaj") */
+  if (settings.xlsxAutoCrop !== false) xlsxCropStart(normalized);
 }
 
 /* =====================================================================
@@ -243,8 +243,27 @@ function xlsxCropConfirm() {
   fitPage(); render(); renderProps(); renderVars(); autosave();
   toast(t('xlsxcrop.done'));
 }
+/* "Nie przycinaj" — zachowaj import dokładnie tak, jak został wczytany
+   (bez kadrowania/przesunięcia), tylko zamknij kreator */
+function xlsxCropSkip() {
+  xlsxCropEnd();
+  toast(t('xlsxcrop.skipped'));
+}
+/* "Anuluj" — odrzuć import: usuń kształty pochodzące z TEGO importu (patrz
+   xlsxCropImportedIds), jakby import się nie odbył */
+function xlsxCropAbort() {
+  if (xlsxCropImportedIds && xlsxCropImportedIds.size) {
+    pushUndo();
+    state.shapes = state.shapes.filter(s => !xlsxCropImportedIds.has(s.id));
+    sel.clear();
+    render(); renderProps(); renderVars(); autosave();
+  }
+  xlsxCropEnd();
+  toast(t('xlsxcrop.aborted'));
+}
 $('#xlsxCropConfirm').addEventListener('click', xlsxCropConfirm);
-$('#xlsxCropCancel').addEventListener('click', () => { xlsxCropEnd(); toast(t('xlsxcrop.cancelled')); });
+$('#xlsxCropSkip').addEventListener('click', xlsxCropSkip);
+$('#xlsxCropCancel').addEventListener('click', xlsxCropAbort);
 /* import XLSX/XLSM — obrazy + kształty wektorowe (z pozycjami z arkusza) */
 async function importXlsx(file) {
   try {
