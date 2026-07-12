@@ -29,12 +29,14 @@ let matrixGap = 0;          // odstęp w układzie macierzowym
 let rotStepOn = true;       // skokowe obracanie (co ROT_STEP°) — domyślnie włączone
 let libFolders = [];        // nazwy folderów biblioteki (do segregacji)
 let cropMode = null;        // id obrazka w trybie przycinania
+let xlsxCropActive = false; // kreator kadru roboczego po imporcie XLSX (patrz js/15-xlsx.js)
+let xlsxCropBox = null;     // {x,y,w,h} aktualnie rysowany/dostosowywany obszar kadru
 let libCollapsed = {};      // zwinięte foldery biblioteki {nazwa:true}
 const ROT_STEP = 10;        // krok skokowego obrotu
 let currentProjectHandle = null;  // uchwyt pliku (zapis w miejscu, File System Access API)
 
 /* ---------- ustawienia aplikacji + szablony ---------- */
-let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, sideW: 272, autosave: true,
+let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, sideW: 272, autosave: true, infiniteCanvasMargin: 16,
   defaults: { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' } };
 let templates = [];         // [{name, shapes, vars, page}]
 let imgCascade = 0;         // przesunięcie kolejnych wstawianych obrazów

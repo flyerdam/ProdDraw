@@ -50,6 +50,12 @@ cv.addEventListener('pointerdown', e => {
     cropMode = null; render(); renderProps(); return;   /* klik poza ramką = koniec */
   }
 
+  /* kreator kadru roboczego po imporcie XLSX — przeciągnięcie rysuje/zmienia obszar */
+  if (xlsxCropActive) {
+    drag = { mode: 'xlsxcrop', sx: p.x, sy: p.y };
+    render(); return;
+  }
+
   if (tool === 'select') {
     const hEl = e.target.closest('[data-handle]');
     if (hEl && sel.size >= 1) {
@@ -144,6 +150,14 @@ cv.addEventListener('pointermove', e => {
     if (h.includes('s')) B = clamp(pt.y, T + min, F.y + F.h);
     s.x = L; s.y = T; s.w = R - L; s.h = B - T;
     s.crop = { l: (L - F.x) / F.w, t: (T - F.y) / F.h, r: (F.x + F.w - R) / F.w, b: (F.y + F.h - B) / F.h };
+    render(); return;
+  }
+  if (drag.mode === 'xlsxcrop') {
+    drag.cx = p.x; drag.cy = p.y;
+    xlsxCropBox = {
+      x: Math.min(drag.sx, drag.cx), y: Math.min(drag.sy, drag.cy),
+      w: Math.abs(drag.cx - drag.sx), h: Math.abs(drag.cy - drag.sy)
+    };
     render(); return;
   }
   if (drag.mode === 'pan') {
@@ -278,6 +292,7 @@ cv.addEventListener('pointerup', e => {
   if (!drag) return;
   const d = drag; drag = null; guides = [];
   cv.classList.remove('panning');
+  if (d.mode === 'xlsxcrop') { render(); return; }   /* xlsxCropBox już ustawiony w pointermove */
   if (d.mode === 'pan') { render(); return; }
   if (d.mode === 'marquee') {
     const x = Math.min(d.sx, d.cx ?? d.sx), y = Math.min(d.sy, d.cy ?? d.sy);

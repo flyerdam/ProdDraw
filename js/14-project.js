@@ -22,7 +22,7 @@ function setNameFromFilename(fn) {
 }
 async function saveProject(forcePicker = false) {
   state.name = $('#projName').value;
-  const name = sanitizeFile($('#projName').value);
+  const name = stripExt(sanitizeFile($('#projName').value));
   if (hasNativeFS()) {
     try {
       if (!currentProjectHandle || forcePicker) {
@@ -94,21 +94,32 @@ let autosaveTm = null;
 function autosave() {
   clearTimeout(autosaveTm);
   if (settings.autosave === false) return;   /* wyłączony w Ustawieniach — nic nie zapisuj */
+  /* przechwyć KLUCZ gniazda i TREŚĆ od razu, synchronicznie — nie w momencie
+     odpalenia timera 400ms. Gdyby czytać PS_autoKey()/projectJSON() dopiero
+     w callbacku, przełączenie karty w tym oknie w międzyczasie (PS_active
+     wskazuje już na inne gniazdo, state to już inny projekt) nadpisałoby złe
+     gniazdo złą, nieaktualną zawartością. Zamrożenie obu wartości TERAZ usuwa
+     ten wyścig całkowicie — timer tylko opóźnia zapis, nie odczyt. */
+  const key = PS_autoKey();
+  const json = projectJSON();
   autosaveTm = setTimeout(() => {
-    try { localStorage.setItem(PS_autoKey(), projectJSON()); } catch (e) {}
+    try { localStorage.setItem(key, json); } catch (e) {}
   }, 400);
 }
 const exportHandles = { png: null, jpg: null };   /* zapamiętane pliki eksportu (jak zapis) */
 async function exportImage(fmt, forcePicker = false) {
   const region = pageRegion();
   if (!state.shapes.length && !region) return toast(t('t.emptyCanvas'));
-  const b = buildSVG(state.shapes, currentVals(), 16, region);
+  /* margines dla kanwy nieskończonej (bez strony) — konfigurowalny w Ustawieniach;
+     gdy jest region (strona ma format), pad jest przez buildSVG i tak ignorowany */
+  const pad = (settings.infiniteCanvasMargin != null) ? settings.infiniteCanvasMargin : 16;
+  const b = buildSVG(state.shapes, currentVals(), pad, region);
   const mime = fmt === 'jpg' ? 'image/jpeg' : 'image/png';
   const ext = fmt === 'jpg' ? '.jpg' : '.png';
   const blob = await svgToPngBlob(b.svg, b.w, b.h, 2, mime);
-  let name = sanitizeFile($('#projName').value);
+  let name = stripExt(sanitizeFile($('#projName').value));
   if (previewRow >= 0 && state.vars.rows[previewRow])
-    name += '_' + sanitizeFile(state.vars.rows[previewRow].name);
+    name += '_' + stripExt(sanitizeFile(state.vars.rows[previewRow].name));
   if (hasNativeFS()) {
     try {
       if (!exportHandles[fmt] || forcePicker) {

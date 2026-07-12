@@ -14,6 +14,11 @@ function rotatePt(px, py, cx, cy, deg) {
 const escXml = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
   .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const sanitizeFile = s => (s || 'projekt').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'projekt';
+/* usuń ewentualne "resztki" rozszerzenia z końca nazwy przed doklejeniem właściwego
+   (np. nazwa projektu wpisana ręcznie jako "Rysunek.pdraw" -> eksport dawałby
+   "Rysunek.pdraw.jpg"); stosowane tylko przy budowaniu nazwy pliku, nie zmienia
+   widocznej nazwy projektu */
+const stripExt = s => (s || '').replace(/\.[a-z0-9]{1,6}$/i, '');
 
 function worldPt(e) {
   const r = cv.getBoundingClientRect();

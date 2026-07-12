@@ -181,12 +181,70 @@ async function applySelectedXlsxItems() {
     }
   }
   if (!add.length) return toast(t('xl.fail'));
-  state.shapes.push(...add.map(normalizeShape));
-  setSelection(add.map(a => a.id));
+  const normalized = add.map(normalizeShape);
+  state.shapes.push(...normalized);
+  setSelection(normalized.map(a => a.id));
   render(); renderProps(); autosave();
   closeXlsxModal();
   toast(t('xl.done', { i: imageN, s: shapeN }));
+  /* zamiast od razu kończyć — pokaż kreator kadru roboczego nad świeżo
+     zaimportowanymi elementami (patrz xlsxCropStart poniżej) */
+  xlsxCropStart(normalized);
 }
+
+/* =====================================================================
+   KREATOR KADRU po imporcie XLSX — pozwala zaznaczyć obszar roboczy
+   (przeciągnięciem na kanwie) i dopasować do niego format strony,
+   opcjonalnie usuwając kształty leżące całkowicie poza nim.
+   ===================================================================== */
+function xlsxCropDefaultBox(shapes) {
+  const b = unionBBox(shapes);
+  if (!b) return { x: 0, y: 0, w: 400, h: 300 };
+  const pad = 20;
+  return { x: Math.round(b.x - pad), y: Math.round(b.y - pad), w: Math.round(b.w + pad * 2), h: Math.round(b.h + pad * 2) };
+}
+let xlsxCropImportedIds = null;   // id-y kształtów pochodzących z TEGO importu (do filtra "usuń poza obszarem")
+function xlsxCropStart(justImportedShapes) {
+  xlsxCropBox = xlsxCropDefaultBox(justImportedShapes);
+  xlsxCropImportedIds = new Set(justImportedShapes.map(s => s.id));
+  xlsxCropActive = true;
+  const bar = $('#xlsxCropBar'); if (bar) bar.classList.add('on');
+  const cb = $('#xlsxCropRemoveOutside'); if (cb) cb.checked = false;
+  render();
+}
+function xlsxCropEnd() {
+  xlsxCropActive = false; xlsxCropBox = null; xlsxCropImportedIds = null;
+  const bar = $('#xlsxCropBar'); if (bar) bar.classList.remove('on');
+  render();
+}
+function xlsxCropConfirm() {
+  const box = xlsxCropBox;
+  if (!box || box.w < 2 || box.h < 2) { toast(t('xlsxcrop.badBox')); return; }
+  const removeOutside = !!($('#xlsxCropRemoveOutside') && $('#xlsxCropRemoveOutside').checked);
+  const importedIds = xlsxCropImportedIds || new Set();
+  pushUndo();
+  if (removeOutside) {
+    state.shapes = state.shapes.filter(s => {
+      if (!importedIds.has(s.id)) return true;   /* nie ruszaj kształtów spoza tego importu */
+      const b = aabbOf(s);
+      /* usuń tylko te CAŁKOWICIE poza kadrem — zostaw wszystko, co choć trochę zachodzi */
+      return b.x < box.x + box.w && b.x + b.w > box.x && b.y < box.y + box.h && b.y + b.h > box.y;
+    });
+  }
+  const dx = -box.x, dy = -box.y;
+  for (const s of state.shapes) {
+    if (s.type === 'line') { s.x1 += dx; s.y1 += dy; s.x2 += dx; s.y2 += dy; }
+    else { s.x += dx; s.y += dy; }
+  }
+  state.page = { mode: 'custom', w: Math.max(10, Math.round(box.w)), h: Math.max(10, Math.round(box.h)) };
+  syncPageUI();
+  xlsxCropEnd();
+  sel.clear();
+  fitPage(); render(); renderProps(); renderVars(); autosave();
+  toast(t('xlsxcrop.done'));
+}
+$('#xlsxCropConfirm').addEventListener('click', xlsxCropConfirm);
+$('#xlsxCropCancel').addEventListener('click', () => { xlsxCropEnd(); toast(t('xlsxcrop.cancelled')); });
 /* import XLSX/XLSM — obrazy + kształty wektorowe (z pozycjami z arkusza) */
 async function importXlsx(file) {
   try {
@@ -198,8 +256,28 @@ async function importXlsx(file) {
     const mediaFiles = allFiles.filter(f => /^xl\/media\//i.test(f.name) && /\.(png|jpe?g|gif|bmp|webp)$/i.test(f.name));
     const mediaMap = {};
     mediaFiles.forEach(m => mediaMap[m.name] = { data: m.data, mime: mediaMimeFromName(m.name) });
-    const sheetFile = allFiles.find(f => /^xl\/worksheets\/sheet\d+\.xml$/i.test(f.name));
-    const dims = parseSheetDims(sheetFile ? td.decode(sheetFile.data) : '');
+    /* zmapuj każdy arkusz (sheetK.xml) na jego drawingN.xml (przez sheetK.xml.rels),
+       żeby użyć WŁAŚCIWYCH wymiarów kolumn/wierszy TEGO arkusza — wcześniej zawsze
+       brano pierwszy napotkany arkusz w archiwum, co psuło skalowanie/pozycję
+       rysunków należących do arkusza 2, 3 itd. w skoroszytach wielo-arkuszowych */
+    const sheetFiles = allFiles.filter(f => /^xl\/worksheets\/sheet\d+\.xml$/i.test(f.name));
+    const drawingDims = {};   // 'xl/drawings/drawingN.xml' -> {colWidths, rowHeights} arkusza-właściciela
+    for (const sf of sheetFiles) {
+      const relPath = sf.name.replace(/^xl\/worksheets\//i, 'xl/worksheets/_rels/') + '.rels';
+      const relFile = allFiles.find(f => f.name === relPath);
+      if (!relFile) continue;
+      const relXml = td.decode(relFile.data);
+      for (const rm of relXml.matchAll(/<Relationship\b[^>]*\/?>/g)) {
+        const tag = rm[0];
+        const typeM = tag.match(/\bType="([^"]+)"/), targetM = tag.match(/\bTarget="([^"]+)"/);
+        if (!typeM || !targetM || !/\/drawing$/i.test(typeM[1])) continue;
+        const drawingPath = resolveRelTarget(sf.name, targetM[1]);
+        if (drawingPath) drawingDims[drawingPath] = parseSheetDims(td.decode(sf.data));
+      }
+    }
+    /* awaryjnie (brak .rels albo relacji arkusz->rysunek) — wymiary pierwszego arkusza */
+    const fallbackDims = sheetFiles.length ? parseSheetDims(td.decode(sheetFiles[0].data)) : parseSheetDims('');
+
     const drawingFiles = allFiles.filter(f => /^xl\/drawings\/drawing\d+\.xml$/i.test(f.name));
     const importedShapes = [];
     const anchoredPictures = [];
@@ -208,6 +286,7 @@ async function importXlsx(file) {
       const relPath = df.name.replace(/^xl\/drawings\//i, 'xl/drawings/_rels/') + '.rels';
       const relFile = allFiles.find(f => f.name === relPath);
       const relMap = relFile ? parseDrawingRels(td.decode(relFile.data), df.name) : {};
+      const dims = drawingDims[df.name] || fallbackDims;
       const parsed = parseDrawingShapes(td.decode(df.data), dims, relMap, mediaMap);
       importedShapes.push(...parsed.shapes);
       anchoredPictures.push(...parsed.pictures.map(p => ({ ...p, anchored: true })));
@@ -219,10 +298,26 @@ async function importXlsx(file) {
     closeXlsxModal();
     xlsxImportItems = [];
     const usedAnchored = new Set(anchoredPictures.map(p => 'xl/media/' + p.name.replace(/^xl\/media\//i, '')));
-    for (const p of anchoredPictures) {
-      xlsxImportItems.push({ kind: 'image', name: p.name, data: p.data, mime: p.mime, anchored: true,
-        x: p.x, y: p.y, w: p.w, h: p.h,
-        previewUrl: URL.createObjectURL(new Blob([p.data], { type: p.mime })), selected: true });
+
+    /* uszereguj zakotwiczone elementy wg powierzchni MALEJĄCO, żeby duże tła trafiały
+       na spód stosu (dodawane pierwsze = niższy z-order), a drobne detale i podpisy
+       zostały na wierzchu, zamiast być przysłonięte przez większe kontenery */
+    const anchoredCombined = [
+      ...anchoredPictures.map(p => ({ kind: 'image', p, area: (p.w || 0) * (p.h || 0) })),
+      ...importedShapes.map(s => ({ kind: 'shape', s, area: (s.w || 0) * (s.h || 0) }))
+    ];
+    anchoredCombined.sort((a, b) => b.area - a.area);
+
+    let shapeIdx = 0;
+    for (const it of anchoredCombined) {
+      if (it.kind === 'image') {
+        const p = it.p;
+        xlsxImportItems.push({ kind: 'image', name: p.name, data: p.data, mime: p.mime, anchored: true,
+          x: p.x, y: p.y, w: p.w, h: p.h,
+          previewUrl: URL.createObjectURL(new Blob([p.data], { type: p.mime })), selected: true });
+      } else {
+        xlsxImportItems.push({ kind: 'shape', name: `${it.s.type}_${++shapeIdx}`, shape: it.s, selected: true });
+      }
     }
     for (const m of mediaFiles) {
       if (usedAnchored.has(m.name)) continue;
@@ -230,7 +325,6 @@ async function importXlsx(file) {
       xlsxImportItems.push({ kind: 'image', name: m.name.replace('xl/media/', ''), data: m.data, mime, anchored: false,
         previewUrl: URL.createObjectURL(new Blob([m.data], { type: mime })), selected: true });
     }
-    importedShapes.forEach((s, i) => xlsxImportItems.push({ kind: 'shape', name: `${s.type}_${i + 1}`, shape: s, selected: true }));
     const imgN = xlsxImportItems.filter(i => i.kind === 'image').length;
     const shapeN = xlsxImportItems.length - imgN;
     $('#xlModal').querySelector('h3').textContent = t('xl.count', { i: imgN, s: shapeN });

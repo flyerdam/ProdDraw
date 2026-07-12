@@ -72,18 +72,19 @@ function variantName(row) {
 }
 async function generateVariants() {
   if (!state.shapes.length) return toast(t('t.emptyCanvas'));
-  const proj = sanitizeFile($('#projName').value);
+  const proj = stripExt(sanitizeFile($('#projName').value));
   const files = [];
   const used = {};
   const region = pageRegion();
+  const pad = (settings.infiniteCanvasMargin != null) ? settings.infiniteCanvasMargin : 16;
   toast(t('t.genVariants'));
   for (const row of state.vars.rows) {
-    const b = buildSVG(state.shapes, row.vals, 16, region);
+    const b = buildSVG(state.shapes, row.vals, pad, region);
     if (!b) continue;
-    const png = await svgToPngBlob(b.svg, b.w, b.h, 2);
+    const jpg = await svgToPngBlob(b.svg, b.w, b.h, 2, 'image/jpeg');   /* JPG zamiast PNG — mniejsze pliki przy masowym eksporcie */
     let nm = variantName(row);
     if (used[nm]) nm += '_' + (++used[nm]); else used[nm] = 1;   /* unikaj kolizji nazw */
-    files.push({ name: proj + '_' + nm + '.png', data: new Uint8Array(await png.arrayBuffer()) });
+    files.push({ name: proj + '_' + nm + '.jpg', data: new Uint8Array(await jpg.arrayBuffer()) });
   }
   if (!files.length) return toast(t('t.noVariants'));
   downloadBlob(makeZip(files), proj + '_warianty.zip');

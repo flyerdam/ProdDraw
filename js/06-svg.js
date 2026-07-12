@@ -232,8 +232,22 @@ function cropOverlaySVG() {
     out += `<rect data-crop="1" data-handle="${k}" x="${x - hw}" y="${y - hw}" width="${hw * 2}" height="${hw * 2}" fill="var(--acc)" stroke="#111" stroke-width="${1 / z}"/>`;
   return `<g${rotAttr(s)}>${out}</g>`;
 }
+/* nakładka kreatora kadru XLSX — przygasza wszystko poza wybranym obszarem */
+function xlsxCropOverlaySVG() {
+  if (!xlsxCropBox) return '';
+  const z = view.z, dim = 'rgba(0,0,0,.45)', M = 50000;
+  const b = xlsxCropBox;
+  let out = '';
+  out += `<rect x="${-M}" y="${-M}" width="${2 * M}" height="${b.y + M}" fill="${dim}"/>`;                 // góra
+  out += `<rect x="${-M}" y="${b.y + b.h}" width="${2 * M}" height="${M - (b.y + b.h)}" fill="${dim}"/>`;   // dół
+  out += `<rect x="${-M}" y="${b.y}" width="${b.x + M}" height="${b.h}" fill="${dim}"/>`;                   // lewo
+  out += `<rect x="${b.x + b.w}" y="${b.y}" width="${M - (b.x + b.w)}" height="${b.h}" fill="${dim}"/>`;    // prawo
+  out += `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="none" stroke="#fff" stroke-width="${2 / z}"/>`;
+  return out;
+}
 function overlaySVG() {
   if (cropMode) return cropOverlaySVG();
+  if (xlsxCropActive) return xlsxCropOverlaySVG();
   const z = view.z; let out = '';
   const hw = 4 / z, hs = `width="${hw * 2}" height="${hw * 2}" fill="#fff" stroke="var(--sel)" stroke-width="${1.2 / z}"`;
   const ss = selShapes();

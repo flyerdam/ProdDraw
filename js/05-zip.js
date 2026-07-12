@@ -101,16 +101,21 @@ function parseSheetDims(xml) {
   for (const m of xml.matchAll(/<col\s[^>]+>/g)) {
     const s = m[0];
     const minM = s.match(/\bmin="(\d+)"/), maxM = s.match(/\bmax="(\d+)"/);
+    if (!minM || !maxM) continue;
+    /* kolumna ukryta (hidden="1") -> szerokość 0, żeby nie wstrzykiwać "widma" odstępu */
+    const hidden = /\bhidden="1"/.test(s);
     const wM = s.match(/\bwidth="([\d.]+)"/);
-    if (minM && maxM && wM) {
-      const px = Math.max(4, Math.round(parseFloat(wM[1]) * 7 + 5));
-      for (let c = +minM[1] - 1; c <= +maxM[1] - 1 && c < 1024; c++) colWidths[c] = px;
-    }
+    const px = hidden ? 0 : (wM ? Math.max(4, Math.round(parseFloat(wM[1]) * 7 + 5)) : null);
+    if (px !== null) for (let c = +minM[1] - 1; c <= +maxM[1] - 1 && c < 1024; c++) colWidths[c] = px;
   }
   for (const m of xml.matchAll(/<row\s[^>]+>/g)) {
     const s = m[0];
-    const rM = s.match(/\br="(\d+)"/), htM = s.match(/\bht="([\d.]+)"/);
-    if (rM && htM) rowHeights[+rM[1] - 1] = Math.max(4, Math.round(parseFloat(htM[1]) * 96 / 72));
+    const rM = s.match(/\br="(\d+)"/);
+    if (!rM) continue;
+    /* wiersz ukryty (hidden="1") -> wysokość 0 */
+    if (/\bhidden="1"/.test(s)) { rowHeights[+rM[1] - 1] = 0; continue; }
+    const htM = s.match(/\bht="([\d.]+)"/);
+    if (htM) rowHeights[+rM[1] - 1] = Math.max(4, Math.round(parseFloat(htM[1]) * 96 / 72));
   }
   return { colWidths, rowHeights };
 }
@@ -125,18 +130,32 @@ function xlColor(xml) {
   const m = xml.match(/<a:srgbClr\s+val="([0-9a-fA-F]{6})"/);
   return m ? '#' + m[1] : null;
 }
+/* wyciągnij liczbowe atrybuty z tagu XML niezależnie od kolejności ich zapisu
+   (niektóre generatory/kopie zapisują np. cy przed cx) */
+function xmlNums(tagXml, ...names) {
+  const out = {};
+  for (const n of names) {
+    const m = tagXml && tagXml.match(new RegExp('\\b' + n + '="(-?\\d+)"'));
+    out[n] = m ? +m[1] : undefined;
+  }
+  return out;
+}
 function parseNodeXfrm(xml) {
   const xfrm = xml.match(/<a:xfrm[^>]*>([\s\S]*?)<\/a:xfrm>/)?.[1];
   if (!xfrm) return null;
-  const off = xfrm.match(/<a:off\s+x="(-?\d+)"\s+y="(-?\d+)"/);
-  const ext = xfrm.match(/<a:ext\s+cx="(-?\d+)"\s+cy="(-?\d+)"/);
-  const chOff = xfrm.match(/<a:chOff\s+x="(-?\d+)"\s+y="(-?\d+)"/);
-  const chExt = xfrm.match(/<a:chExt\s+cx="(-?\d+)"\s+cy="(-?\d+)"/);
+  const offTag = xfrm.match(/<a:off\b[^>]*\/?>/)?.[0];
+  const extTag = xfrm.match(/<a:ext\b[^>]*\/?>/)?.[0];
+  const chOffTag = xfrm.match(/<a:chOff\b[^>]*\/?>/)?.[0];
+  const chExtTag = xfrm.match(/<a:chExt\b[^>]*\/?>/)?.[0];
+  const off = xmlNums(offTag, 'x', 'y');
+  const ext = xmlNums(extTag, 'cx', 'cy');
+  const chOff = xmlNums(chOffTag, 'x', 'y');
+  const chExt = xmlNums(chExtTag, 'cx', 'cy');
   return {
-    offX: off ? +off[1] : 0, offY: off ? +off[2] : 0,
-    extX: ext ? +ext[1] : 0, extY: ext ? +ext[2] : 0,
-    chOffX: chOff ? +chOff[1] : 0, chOffY: chOff ? +chOff[2] : 0,
-    chExtX: chExt ? +chExt[1] : 0, chExtY: chExt ? +chExt[2] : 0
+    offX: off.x || 0, offY: off.y || 0,
+    extX: ext.cx || 0, extY: ext.cy || 0,
+    chOffX: chOff.x || 0, chOffY: chOff.y || 0,
+    chExtX: chExt.cx || 0, chExtY: chExt.cy || 0
   };
 }
 function parseShapeNode(nodeXml, box) {
@@ -165,7 +184,14 @@ function parseShapeNode(nodeXml, box) {
     for (const tm of txM[1].matchAll(/<a:t>([^<]*)<\/a:t>/g)) parts.push(tm[1]);
     text = parts.join('');
     const fontM = txM[1].match(/typeface="([^"]+)"/);
-    if (fontM && fontM[1]) font = fontM[1];
+    if (fontM && fontM[1]) {
+      const raw = fontM[1];
+      /* "+mn-lt"/"+mj-lt" to odwołania do czcionki motywu (Minor/Major Latin), nie realna
+         nazwa fontu — CSS font-family jej nie rozpozna i renderer wpada w domyślny szeryfowy */
+      font = (raw === '+mn-lt' || raw === '+mj-lt')
+        ? ((typeof settings !== 'undefined' && settings.defaults && settings.defaults.font) || 'Calibri')
+        : raw;
+    }
     const rPrM = txM[1].match(/<a:rPr\s([^>]+)/);
     if (rPrM) {
       const szM = rPrM[1].match(/\bsz="(\d+)"/);
@@ -275,10 +301,11 @@ function parseDrawingShapes(xml, dims, relMap = {}, mediaMap = {}) {
     let x, y, w, h;
     try {
       if (aType === 'absoluteAnchor') {
-        const pm = aXml.match(/<xdr:pos\s+x="(\d+)"\s+y="(\d+)"/);
-        const em = aXml.match(/<xdr:ext\s+cx="(\d+)"\s+cy="(\d+)"/);
-        if (!pm || !em) continue;
-        x = +pm[1] / EPX; y = +pm[2] / EPX; w = +em[1] / EPX; h = +em[2] / EPX;
+        const posTag = aXml.match(/<xdr:pos\b[^>]*\/?>/)?.[0];
+        const extTag = aXml.match(/<xdr:ext\b[^>]*\/?>/)?.[0];
+        const pos = xmlNums(posTag, 'x', 'y'), ext = xmlNums(extTag, 'cx', 'cy');
+        if (pos.x === undefined || pos.y === undefined || ext.cx === undefined || ext.cy === undefined) continue;
+        x = pos.x / EPX; y = pos.y / EPX; w = ext.cx / EPX; h = ext.cy / EPX;
       } else if (aType === 'twoCellAnchor') {
         const fm = aXml.match(/<xdr:from>([\s\S]*?)<\/xdr:from>/);
         const tm = aXml.match(/<xdr:to>([\s\S]*?)<\/xdr:to>/);
@@ -292,27 +319,27 @@ function parseDrawingShapes(xml, dims, relMap = {}, mediaMap = {}) {
         x = fp.x; y = fp.y; w = tp.x - fp.x; h = tp.y - fp.y;
       } else {
         const fm = aXml.match(/<xdr:from>([\s\S]*?)<\/xdr:from>/);
-        const em = aXml.match(/<xdr:ext\s+cx="(\d+)"\s+cy="(\d+)"/);
-        if (!fm || !em) continue;
+        const extTag = aXml.match(/<xdr:ext\b[^>]*\/?>/)?.[0];
+        const ext = xmlNums(extTag, 'cx', 'cy');
+        if (!fm || ext.cx === undefined || ext.cy === undefined) continue;
         const fi = fm[1], g = s => parseInt(s || '0');
         const fc = g(fi.match(/<xdr:col>(\d+)/)?.[1]), fco = g(fi.match(/<xdr:colOff>(\d+)/)?.[1]);
         const fr = g(fi.match(/<xdr:row>(\d+)/)?.[1]), fro = g(fi.match(/<xdr:rowOff>(\d+)/)?.[1]);
         const fp = cellPx(fc, fco, fr, fro, dims);
-        x = fp.x; y = fp.y; w = +em[1] / EPX; h = +em[2] / EPX;
+        x = fp.x; y = fp.y; w = ext.cx / EPX; h = ext.cy / EPX;
       }
     } catch (e) { continue; }
     if (!w || !h || w < 2 || h < 2) continue;
     const box = { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) };
+    /* dysjunktywny łańcuch if/else-if — kotwica z zagnieżdżoną grupą (grpSp) NIGDY nie
+       przechodzi dalej do sp/cxnSp/pic (te tagi też występują WEWNĄTRZ grpSp, więc bez
+       "else" doszłoby do podwójnego parsowania i pominięcia dalszych gałęzi) */
     if (/<xdr:grpSp[\s>]/.test(aXml)) {
       const g = parseGroupedShapes(aXml, box, relMap, mediaMap);
-      if (g.shapes.length || g.pictures.length) {
-        shapes.push(...g.shapes);
-        pictures.push(...g.pictures);
-        unsupportedFallbacks += g.unsupportedFallbacks;
-        continue;
-      }
-    }
-    if (/<xdr:sp[\s>]/.test(aXml)) {
+      shapes.push(...g.shapes);
+      pictures.push(...g.pictures);
+      unsupportedFallbacks += g.unsupportedFallbacks;
+    } else if (/<xdr:sp[\s>]/.test(aXml)) {
       const spXml = aXml.match(/<xdr:sp[\s>][\s\S]*?<\/xdr:sp>/)?.[0];
       if (spXml) {
         const s = parseShapeNode(spXml, box);

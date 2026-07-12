@@ -214,6 +214,13 @@ body{grid-template-columns:46px 1fr var(--sideW,272px);}
 /* w Electron natywne menu (File/Edit/View) zastępuje te przyciski */
 body.desktop-mode #mFile,
 body.desktop-mode #mExport { display: none; }
+/* ---------- kreator kadru roboczego po imporcie XLSX ---------- */
+.xlsxCropBar{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:15;
+  display:none;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--acc);
+  border-radius:6px;padding:8px 12px;box-shadow:0 4px 16px rgba(0,0,0,.35);font-size:12.5px;color:var(--txt);
+  max-width:92%;flex-wrap:wrap;}
+.xlsxCropBar.on{display:flex;}
+.xlsxCropBar label{display:flex;align-items:center;gap:5px;white-space:nowrap;cursor:pointer;}
 
 </style>
 </head>
@@ -275,6 +282,12 @@ body.desktop-mode #mExport { display: none; }
 <div class="canvasWrap" id="cwrap">
   <svg id="cv" class="t-select"></svg>
   <textarea id="txtEd" spellcheck="false"></textarea>
+  <div class="xlsxCropBar" id="xlsxCropBar">
+    <span data-i18n="xlsxcrop.hint">Przeciągnij na kanwie, aby zaznaczyć obszar roboczy arkusza.</span>
+    <label><input type="checkbox" id="xlsxCropRemoveOutside"> <span data-i18n="xlsxcrop.removeOutside">Usuń kształty poza obszarem</span></label>
+    <button class="btn" id="xlsxCropCancel" data-i18n="btn.cancel">Anuluj</button>
+    <button class="btn primary" id="xlsxCropConfirm" data-i18n="xlsxcrop.confirm">Zatwierdź</button>
+  </div>
 </div>
 
 <!-- ======= SIDE PANEL ======= -->
@@ -398,12 +411,14 @@ let matrixGap = 0;          // odstęp w układzie macierzowym
 let rotStepOn = true;       // skokowe obracanie (co ROT_STEP°) — domyślnie włączone
 let libFolders = [];        // nazwy folderów biblioteki (do segregacji)
 let cropMode = null;        // id obrazka w trybie przycinania
+let xlsxCropActive = false; // kreator kadru roboczego po imporcie XLSX (patrz js/15-xlsx.js)
+let xlsxCropBox = null;     // {x,y,w,h} aktualnie rysowany/dostosowywany obszar kadru
 let libCollapsed = {};      // zwinięte foldery biblioteki {nazwa:true}
 const ROT_STEP = 10;        // krok skokowego obrotu
 let currentProjectHandle = null;  // uchwyt pliku (zapis w miejscu, File System Access API)
 
 /* ---------- ustawienia aplikacji + szablony ---------- */
-let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, sideW: 272, autosave: true,
+let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, sideW: 272, autosave: true, infiniteCanvasMargin: 16,
   defaults: { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' } };
 let templates = [];         // [{name, shapes, vars, page}]
 let imgCascade = 0;         // przesunięcie kolejnych wstawianych obrazów
@@ -690,6 +705,12 @@ const I18N = {
     'set.language':'Język','set.zoom':'Sterowanie zoomem','set.mxMaster':'Wolniejszy zoom',
     'set.mxMasterHint':'Włącz, jeśli kółko myszy przewija zbyt szybko. Wyższy dzielnik = wolniejszy zoom.',
     'set.zoomDiv':'Dzielnik zoomu','set.panel':'Panel','set.panelWidth':'Szerokość panelu (px)',
+    'set.canvas':'Kanwa nieskończona','set.infMargin':'Margines przy eksporcie (px)',
+    'set.infMarginHint':'Odstęp wokół kształtów przy eksporcie/generowaniu wariantów, gdy format strony to „∞ nieskończony”. Bez znaczenia, gdy ustawiono konkretny format strony.',
+    'xlsxcrop.hint':'Przeciągnij na kanwie, aby zaznaczyć obszar roboczy arkusza.',
+    'xlsxcrop.removeOutside':'Usuń kształty poza obszarem','xlsxcrop.confirm':'Zatwierdź',
+    'xlsxcrop.badBox':'Zaznacz obszar o rozsądnym rozmiarze przed zatwierdzeniem.',
+    'xlsxcrop.done':'Kadr zastosowany.','xlsxcrop.cancelled':'Anulowano kadrowanie — import bez zmian.',
     'set.defaults':'Domyślne nowych kształtów','set.config':'Konfiguracja',
     'set.colStroke':'Kolor obrysu','set.colText':'Kolor tekstu','set.colFill':'Kolor wypełnienia',
     'props.flip':'Odbicie','props.flipH':'Odbij w poziomie','props.flipV':'Odbij w pionie',
@@ -774,6 +795,12 @@ const I18N = {
     'lib.root':'No folder','lib.drag':'Drag to a folder','lib.dragHint':'Drag a tile into a folder. Click a header to collapse.',
     'c.tmplOverwrite':'Template “{n}" already exists. Overwrite?','c.delFolder':'Delete folder “{n}"? Items move to root.',
     'set.zoomDiv':'Zoom divider','set.panel':'Panel','set.panelWidth':'Panel width (px)',
+    'set.canvas':'Infinite canvas','set.infMargin':'Export margin (px)',
+    'set.infMarginHint':'Padding around shapes when exporting/generating variants while page format is "∞ infinite". Has no effect when a fixed page format is set.',
+    'xlsxcrop.hint':'Drag on the canvas to select the sheet\'s working area.',
+    'xlsxcrop.removeOutside':'Remove shapes outside the area','xlsxcrop.confirm':'Confirm',
+    'xlsxcrop.badBox':'Select an area of a reasonable size before confirming.',
+    'xlsxcrop.done':'Crop applied.','xlsxcrop.cancelled':'Crop cancelled — import left unchanged.',
     'set.about':'ProdRys — production-instruction editor.',
     'set.autosave':'Autosave','set.autosaveHint':'When off: changes are not saved automatically — switching/closing a tab or the app discards unsaved changes. Manual “Save” (Ctrl+S) to a file is unaffected.',
     'ptab.openSaved':'Open a saved project','ptab.noClosed':'No saved projects to open.',
@@ -850,6 +877,12 @@ const I18N = {
     'lib.root':'Kein Ordner','lib.drag':'In Ordner ziehen','lib.dragHint':'Kachel in einen Ordner ziehen. Kopf klicken zum Einklappen.',
     'c.tmplOverwrite':'Vorlage „{n}" existiert bereits. Überschreiben?','c.delFolder':'Ordner „{n}" löschen? Elemente wandern in die Wurzel.',
     'set.zoomDiv':'Zoom-Teiler','set.panel':'Panel','set.panelWidth':'Panelbreite (px)',
+    'set.canvas':'Unendliche Kanvas','set.infMargin':'Rand beim Export (px)',
+    'set.infMarginHint':'Abstand um die Formen beim Export/Varianten-Export, wenn das Seitenformat „∞ unendlich" ist. Ohne Wirkung bei festem Seitenformat.',
+    'xlsxcrop.hint':'Auf der Kanvas ziehen, um den Arbeitsbereich des Arbeitsblatts festzulegen.',
+    'xlsxcrop.removeOutside':'Formen außerhalb des Bereichs entfernen','xlsxcrop.confirm':'Bestätigen',
+    'xlsxcrop.badBox':'Wählen Sie vor dem Bestätigen einen ausreichend großen Bereich.',
+    'xlsxcrop.done':'Zuschnitt angewendet.','xlsxcrop.cancelled':'Zuschnitt abgebrochen — Import unverändert.',
     'set.about':'ProdRys — Editor für Produktionsanweisungen.',
     'set.autosave':'Automatisches Speichern','set.autosaveHint':'Deaktiviert: Änderungen werden nicht automatisch gespeichert — Tab-/Programmwechsel oder Schließen verwirft ungespeicherte Änderungen. Manuelles „Speichern” (Strg+S) in eine Datei bleibt unverändert.',
     'ptab.openSaved':'Gespeichertes Projekt öffnen','ptab.noClosed':'Keine gespeicherten Projekte zum Öffnen.',
@@ -1015,6 +1048,11 @@ function rotatePt(px, py, cx, cy, deg) {
 const escXml = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
   .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const sanitizeFile = s => (s || 'projekt').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'projekt';
+/* usuń ewentualne "resztki" rozszerzenia z końca nazwy przed doklejeniem właściwego
+   (np. nazwa projektu wpisana ręcznie jako "Rysunek.pdraw" -> eksport dawałby
+   "Rysunek.pdraw.jpg"); stosowane tylko przy budowaniu nazwy pliku, nie zmienia
+   widocznej nazwy projektu */
+const stripExt = s => (s || '').replace(/\.[a-z0-9]{1,6}$/i, '');
 
 function worldPt(e) {
   const r = cv.getBoundingClientRect();
@@ -1171,16 +1209,21 @@ function parseSheetDims(xml) {
   for (const m of xml.matchAll(/<col\s[^>]+>/g)) {
     const s = m[0];
     const minM = s.match(/\bmin="(\d+)"/), maxM = s.match(/\bmax="(\d+)"/);
+    if (!minM || !maxM) continue;
+    /* kolumna ukryta (hidden="1") -> szerokość 0, żeby nie wstrzykiwać "widma" odstępu */
+    const hidden = /\bhidden="1"/.test(s);
     const wM = s.match(/\bwidth="([\d.]+)"/);
-    if (minM && maxM && wM) {
-      const px = Math.max(4, Math.round(parseFloat(wM[1]) * 7 + 5));
-      for (let c = +minM[1] - 1; c <= +maxM[1] - 1 && c < 1024; c++) colWidths[c] = px;
-    }
+    const px = hidden ? 0 : (wM ? Math.max(4, Math.round(parseFloat(wM[1]) * 7 + 5)) : null);
+    if (px !== null) for (let c = +minM[1] - 1; c <= +maxM[1] - 1 && c < 1024; c++) colWidths[c] = px;
   }
   for (const m of xml.matchAll(/<row\s[^>]+>/g)) {
     const s = m[0];
-    const rM = s.match(/\br="(\d+)"/), htM = s.match(/\bht="([\d.]+)"/);
-    if (rM && htM) rowHeights[+rM[1] - 1] = Math.max(4, Math.round(parseFloat(htM[1]) * 96 / 72));
+    const rM = s.match(/\br="(\d+)"/);
+    if (!rM) continue;
+    /* wiersz ukryty (hidden="1") -> wysokość 0 */
+    if (/\bhidden="1"/.test(s)) { rowHeights[+rM[1] - 1] = 0; continue; }
+    const htM = s.match(/\bht="([\d.]+)"/);
+    if (htM) rowHeights[+rM[1] - 1] = Math.max(4, Math.round(parseFloat(htM[1]) * 96 / 72));
   }
   return { colWidths, rowHeights };
 }
@@ -1195,18 +1238,32 @@ function xlColor(xml) {
   const m = xml.match(/<a:srgbClr\s+val="([0-9a-fA-F]{6})"/);
   return m ? '#' + m[1] : null;
 }
+/* wyciągnij liczbowe atrybuty z tagu XML niezależnie od kolejności ich zapisu
+   (niektóre generatory/kopie zapisują np. cy przed cx) */
+function xmlNums(tagXml, ...names) {
+  const out = {};
+  for (const n of names) {
+    const m = tagXml && tagXml.match(new RegExp('\\b' + n + '="(-?\\d+)"'));
+    out[n] = m ? +m[1] : undefined;
+  }
+  return out;
+}
 function parseNodeXfrm(xml) {
   const xfrm = xml.match(/<a:xfrm[^>]*>([\s\S]*?)<\/a:xfrm>/)?.[1];
   if (!xfrm) return null;
-  const off = xfrm.match(/<a:off\s+x="(-?\d+)"\s+y="(-?\d+)"/);
-  const ext = xfrm.match(/<a:ext\s+cx="(-?\d+)"\s+cy="(-?\d+)"/);
-  const chOff = xfrm.match(/<a:chOff\s+x="(-?\d+)"\s+y="(-?\d+)"/);
-  const chExt = xfrm.match(/<a:chExt\s+cx="(-?\d+)"\s+cy="(-?\d+)"/);
+  const offTag = xfrm.match(/<a:off\b[^>]*\/?>/)?.[0];
+  const extTag = xfrm.match(/<a:ext\b[^>]*\/?>/)?.[0];
+  const chOffTag = xfrm.match(/<a:chOff\b[^>]*\/?>/)?.[0];
+  const chExtTag = xfrm.match(/<a:chExt\b[^>]*\/?>/)?.[0];
+  const off = xmlNums(offTag, 'x', 'y');
+  const ext = xmlNums(extTag, 'cx', 'cy');
+  const chOff = xmlNums(chOffTag, 'x', 'y');
+  const chExt = xmlNums(chExtTag, 'cx', 'cy');
   return {
-    offX: off ? +off[1] : 0, offY: off ? +off[2] : 0,
-    extX: ext ? +ext[1] : 0, extY: ext ? +ext[2] : 0,
-    chOffX: chOff ? +chOff[1] : 0, chOffY: chOff ? +chOff[2] : 0,
-    chExtX: chExt ? +chExt[1] : 0, chExtY: chExt ? +chExt[2] : 0
+    offX: off.x || 0, offY: off.y || 0,
+    extX: ext.cx || 0, extY: ext.cy || 0,
+    chOffX: chOff.x || 0, chOffY: chOff.y || 0,
+    chExtX: chExt.cx || 0, chExtY: chExt.cy || 0
   };
 }
 function parseShapeNode(nodeXml, box) {
@@ -1235,7 +1292,14 @@ function parseShapeNode(nodeXml, box) {
     for (const tm of txM[1].matchAll(/<a:t>([^<]*)<\/a:t>/g)) parts.push(tm[1]);
     text = parts.join('');
     const fontM = txM[1].match(/typeface="([^"]+)"/);
-    if (fontM && fontM[1]) font = fontM[1];
+    if (fontM && fontM[1]) {
+      const raw = fontM[1];
+      /* "+mn-lt"/"+mj-lt" to odwołania do czcionki motywu (Minor/Major Latin), nie realna
+         nazwa fontu — CSS font-family jej nie rozpozna i renderer wpada w domyślny szeryfowy */
+      font = (raw === '+mn-lt' || raw === '+mj-lt')
+        ? ((typeof settings !== 'undefined' && settings.defaults && settings.defaults.font) || 'Calibri')
+        : raw;
+    }
     const rPrM = txM[1].match(/<a:rPr\s([^>]+)/);
     if (rPrM) {
       const szM = rPrM[1].match(/\bsz="(\d+)"/);
@@ -1345,10 +1409,11 @@ function parseDrawingShapes(xml, dims, relMap = {}, mediaMap = {}) {
     let x, y, w, h;
     try {
       if (aType === 'absoluteAnchor') {
-        const pm = aXml.match(/<xdr:pos\s+x="(\d+)"\s+y="(\d+)"/);
-        const em = aXml.match(/<xdr:ext\s+cx="(\d+)"\s+cy="(\d+)"/);
-        if (!pm || !em) continue;
-        x = +pm[1] / EPX; y = +pm[2] / EPX; w = +em[1] / EPX; h = +em[2] / EPX;
+        const posTag = aXml.match(/<xdr:pos\b[^>]*\/?>/)?.[0];
+        const extTag = aXml.match(/<xdr:ext\b[^>]*\/?>/)?.[0];
+        const pos = xmlNums(posTag, 'x', 'y'), ext = xmlNums(extTag, 'cx', 'cy');
+        if (pos.x === undefined || pos.y === undefined || ext.cx === undefined || ext.cy === undefined) continue;
+        x = pos.x / EPX; y = pos.y / EPX; w = ext.cx / EPX; h = ext.cy / EPX;
       } else if (aType === 'twoCellAnchor') {
         const fm = aXml.match(/<xdr:from>([\s\S]*?)<\/xdr:from>/);
         const tm = aXml.match(/<xdr:to>([\s\S]*?)<\/xdr:to>/);
@@ -1362,27 +1427,27 @@ function parseDrawingShapes(xml, dims, relMap = {}, mediaMap = {}) {
         x = fp.x; y = fp.y; w = tp.x - fp.x; h = tp.y - fp.y;
       } else {
         const fm = aXml.match(/<xdr:from>([\s\S]*?)<\/xdr:from>/);
-        const em = aXml.match(/<xdr:ext\s+cx="(\d+)"\s+cy="(\d+)"/);
-        if (!fm || !em) continue;
+        const extTag = aXml.match(/<xdr:ext\b[^>]*\/?>/)?.[0];
+        const ext = xmlNums(extTag, 'cx', 'cy');
+        if (!fm || ext.cx === undefined || ext.cy === undefined) continue;
         const fi = fm[1], g = s => parseInt(s || '0');
         const fc = g(fi.match(/<xdr:col>(\d+)/)?.[1]), fco = g(fi.match(/<xdr:colOff>(\d+)/)?.[1]);
         const fr = g(fi.match(/<xdr:row>(\d+)/)?.[1]), fro = g(fi.match(/<xdr:rowOff>(\d+)/)?.[1]);
         const fp = cellPx(fc, fco, fr, fro, dims);
-        x = fp.x; y = fp.y; w = +em[1] / EPX; h = +em[2] / EPX;
+        x = fp.x; y = fp.y; w = ext.cx / EPX; h = ext.cy / EPX;
       }
     } catch (e) { continue; }
     if (!w || !h || w < 2 || h < 2) continue;
     const box = { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) };
+    /* dysjunktywny łańcuch if/else-if — kotwica z zagnieżdżoną grupą (grpSp) NIGDY nie
+       przechodzi dalej do sp/cxnSp/pic (te tagi też występują WEWNĄTRZ grpSp, więc bez
+       "else" doszłoby do podwójnego parsowania i pominięcia dalszych gałęzi) */
     if (/<xdr:grpSp[\s>]/.test(aXml)) {
       const g = parseGroupedShapes(aXml, box, relMap, mediaMap);
-      if (g.shapes.length || g.pictures.length) {
-        shapes.push(...g.shapes);
-        pictures.push(...g.pictures);
-        unsupportedFallbacks += g.unsupportedFallbacks;
-        continue;
-      }
-    }
-    if (/<xdr:sp[\s>]/.test(aXml)) {
+      shapes.push(...g.shapes);
+      pictures.push(...g.pictures);
+      unsupportedFallbacks += g.unsupportedFallbacks;
+    } else if (/<xdr:sp[\s>]/.test(aXml)) {
       const spXml = aXml.match(/<xdr:sp[\s>][\s\S]*?<\/xdr:sp>/)?.[0];
       if (spXml) {
         const s = parseShapeNode(spXml, box);
@@ -1679,8 +1744,22 @@ function cropOverlaySVG() {
     out += `<rect data-crop="1" data-handle="${k}" x="${x - hw}" y="${y - hw}" width="${hw * 2}" height="${hw * 2}" fill="var(--acc)" stroke="#111" stroke-width="${1 / z}"/>`;
   return `<g${rotAttr(s)}>${out}</g>`;
 }
+/* nakładka kreatora kadru XLSX — przygasza wszystko poza wybranym obszarem */
+function xlsxCropOverlaySVG() {
+  if (!xlsxCropBox) return '';
+  const z = view.z, dim = 'rgba(0,0,0,.45)', M = 50000;
+  const b = xlsxCropBox;
+  let out = '';
+  out += `<rect x="${-M}" y="${-M}" width="${2 * M}" height="${b.y + M}" fill="${dim}"/>`;                 // góra
+  out += `<rect x="${-M}" y="${b.y + b.h}" width="${2 * M}" height="${M - (b.y + b.h)}" fill="${dim}"/>`;   // dół
+  out += `<rect x="${-M}" y="${b.y}" width="${b.x + M}" height="${b.h}" fill="${dim}"/>`;                   // lewo
+  out += `<rect x="${b.x + b.w}" y="${b.y}" width="${M - (b.x + b.w)}" height="${b.h}" fill="${dim}"/>`;    // prawo
+  out += `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="none" stroke="#fff" stroke-width="${2 / z}"/>`;
+  return out;
+}
 function overlaySVG() {
   if (cropMode) return cropOverlaySVG();
+  if (xlsxCropActive) return xlsxCropOverlaySVG();
   const z = view.z; let out = '';
   const hw = 4 / z, hs = `width="${hw * 2}" height="${hw * 2}" fill="#fff" stroke="var(--sel)" stroke-width="${1.2 / z}"`;
   const ss = selShapes();
@@ -1913,6 +1992,12 @@ cv.addEventListener('pointerdown', e => {
     cropMode = null; render(); renderProps(); return;   /* klik poza ramką = koniec */
   }
 
+  /* kreator kadru roboczego po imporcie XLSX — przeciągnięcie rysuje/zmienia obszar */
+  if (xlsxCropActive) {
+    drag = { mode: 'xlsxcrop', sx: p.x, sy: p.y };
+    render(); return;
+  }
+
   if (tool === 'select') {
     const hEl = e.target.closest('[data-handle]');
     if (hEl && sel.size >= 1) {
@@ -2007,6 +2092,14 @@ cv.addEventListener('pointermove', e => {
     if (h.includes('s')) B = clamp(pt.y, T + min, F.y + F.h);
     s.x = L; s.y = T; s.w = R - L; s.h = B - T;
     s.crop = { l: (L - F.x) / F.w, t: (T - F.y) / F.h, r: (F.x + F.w - R) / F.w, b: (F.y + F.h - B) / F.h };
+    render(); return;
+  }
+  if (drag.mode === 'xlsxcrop') {
+    drag.cx = p.x; drag.cy = p.y;
+    xlsxCropBox = {
+      x: Math.min(drag.sx, drag.cx), y: Math.min(drag.sy, drag.cy),
+      w: Math.abs(drag.cx - drag.sx), h: Math.abs(drag.cy - drag.sy)
+    };
     render(); return;
   }
   if (drag.mode === 'pan') {
@@ -2141,6 +2234,7 @@ cv.addEventListener('pointerup', e => {
   if (!drag) return;
   const d = drag; drag = null; guides = [];
   cv.classList.remove('panning');
+  if (d.mode === 'xlsxcrop') { render(); return; }   /* xlsxCropBox już ustawiony w pointermove */
   if (d.mode === 'pan') { render(); return; }
   if (d.mode === 'marquee') {
     const x = Math.min(d.sx, d.cx ?? d.sx), y = Math.min(d.sy, d.cy ?? d.sy);
@@ -2898,18 +2992,19 @@ function variantName(row) {
 }
 async function generateVariants() {
   if (!state.shapes.length) return toast(t('t.emptyCanvas'));
-  const proj = sanitizeFile($('#projName').value);
+  const proj = stripExt(sanitizeFile($('#projName').value));
   const files = [];
   const used = {};
   const region = pageRegion();
+  const pad = (settings.infiniteCanvasMargin != null) ? settings.infiniteCanvasMargin : 16;
   toast(t('t.genVariants'));
   for (const row of state.vars.rows) {
-    const b = buildSVG(state.shapes, row.vals, 16, region);
+    const b = buildSVG(state.shapes, row.vals, pad, region);
     if (!b) continue;
-    const png = await svgToPngBlob(b.svg, b.w, b.h, 2);
+    const jpg = await svgToPngBlob(b.svg, b.w, b.h, 2, 'image/jpeg');   /* JPG zamiast PNG — mniejsze pliki przy masowym eksporcie */
     let nm = variantName(row);
     if (used[nm]) nm += '_' + (++used[nm]); else used[nm] = 1;   /* unikaj kolizji nazw */
-    files.push({ name: proj + '_' + nm + '.png', data: new Uint8Array(await png.arrayBuffer()) });
+    files.push({ name: proj + '_' + nm + '.jpg', data: new Uint8Array(await jpg.arrayBuffer()) });
   }
   if (!files.length) return toast(t('t.noVariants'));
   downloadBlob(makeZip(files), proj + '_warianty.zip');
@@ -2944,7 +3039,7 @@ function setNameFromFilename(fn) {
 }
 async function saveProject(forcePicker = false) {
   state.name = $('#projName').value;
-  const name = sanitizeFile($('#projName').value);
+  const name = stripExt(sanitizeFile($('#projName').value));
   if (hasNativeFS()) {
     try {
       if (!currentProjectHandle || forcePicker) {
@@ -3016,21 +3111,32 @@ let autosaveTm = null;
 function autosave() {
   clearTimeout(autosaveTm);
   if (settings.autosave === false) return;   /* wyłączony w Ustawieniach — nic nie zapisuj */
+  /* przechwyć KLUCZ gniazda i TREŚĆ od razu, synchronicznie — nie w momencie
+     odpalenia timera 400ms. Gdyby czytać PS_autoKey()/projectJSON() dopiero
+     w callbacku, przełączenie karty w tym oknie w międzyczasie (PS_active
+     wskazuje już na inne gniazdo, state to już inny projekt) nadpisałoby złe
+     gniazdo złą, nieaktualną zawartością. Zamrożenie obu wartości TERAZ usuwa
+     ten wyścig całkowicie — timer tylko opóźnia zapis, nie odczyt. */
+  const key = PS_autoKey();
+  const json = projectJSON();
   autosaveTm = setTimeout(() => {
-    try { localStorage.setItem(PS_autoKey(), projectJSON()); } catch (e) {}
+    try { localStorage.setItem(key, json); } catch (e) {}
   }, 400);
 }
 const exportHandles = { png: null, jpg: null };   /* zapamiętane pliki eksportu (jak zapis) */
 async function exportImage(fmt, forcePicker = false) {
   const region = pageRegion();
   if (!state.shapes.length && !region) return toast(t('t.emptyCanvas'));
-  const b = buildSVG(state.shapes, currentVals(), 16, region);
+  /* margines dla kanwy nieskończonej (bez strony) — konfigurowalny w Ustawieniach;
+     gdy jest region (strona ma format), pad jest przez buildSVG i tak ignorowany */
+  const pad = (settings.infiniteCanvasMargin != null) ? settings.infiniteCanvasMargin : 16;
+  const b = buildSVG(state.shapes, currentVals(), pad, region);
   const mime = fmt === 'jpg' ? 'image/jpeg' : 'image/png';
   const ext = fmt === 'jpg' ? '.jpg' : '.png';
   const blob = await svgToPngBlob(b.svg, b.w, b.h, 2, mime);
-  let name = sanitizeFile($('#projName').value);
+  let name = stripExt(sanitizeFile($('#projName').value));
   if (previewRow >= 0 && state.vars.rows[previewRow])
-    name += '_' + sanitizeFile(state.vars.rows[previewRow].name);
+    name += '_' + stripExt(sanitizeFile(state.vars.rows[previewRow].name));
   if (hasNativeFS()) {
     try {
       if (!exportHandles[fmt] || forcePicker) {
@@ -3237,12 +3343,70 @@ async function applySelectedXlsxItems() {
     }
   }
   if (!add.length) return toast(t('xl.fail'));
-  state.shapes.push(...add.map(normalizeShape));
-  setSelection(add.map(a => a.id));
+  const normalized = add.map(normalizeShape);
+  state.shapes.push(...normalized);
+  setSelection(normalized.map(a => a.id));
   render(); renderProps(); autosave();
   closeXlsxModal();
   toast(t('xl.done', { i: imageN, s: shapeN }));
+  /* zamiast od razu kończyć — pokaż kreator kadru roboczego nad świeżo
+     zaimportowanymi elementami (patrz xlsxCropStart poniżej) */
+  xlsxCropStart(normalized);
 }
+
+/* =====================================================================
+   KREATOR KADRU po imporcie XLSX — pozwala zaznaczyć obszar roboczy
+   (przeciągnięciem na kanwie) i dopasować do niego format strony,
+   opcjonalnie usuwając kształty leżące całkowicie poza nim.
+   ===================================================================== */
+function xlsxCropDefaultBox(shapes) {
+  const b = unionBBox(shapes);
+  if (!b) return { x: 0, y: 0, w: 400, h: 300 };
+  const pad = 20;
+  return { x: Math.round(b.x - pad), y: Math.round(b.y - pad), w: Math.round(b.w + pad * 2), h: Math.round(b.h + pad * 2) };
+}
+let xlsxCropImportedIds = null;   // id-y kształtów pochodzących z TEGO importu (do filtra "usuń poza obszarem")
+function xlsxCropStart(justImportedShapes) {
+  xlsxCropBox = xlsxCropDefaultBox(justImportedShapes);
+  xlsxCropImportedIds = new Set(justImportedShapes.map(s => s.id));
+  xlsxCropActive = true;
+  const bar = $('#xlsxCropBar'); if (bar) bar.classList.add('on');
+  const cb = $('#xlsxCropRemoveOutside'); if (cb) cb.checked = false;
+  render();
+}
+function xlsxCropEnd() {
+  xlsxCropActive = false; xlsxCropBox = null; xlsxCropImportedIds = null;
+  const bar = $('#xlsxCropBar'); if (bar) bar.classList.remove('on');
+  render();
+}
+function xlsxCropConfirm() {
+  const box = xlsxCropBox;
+  if (!box || box.w < 2 || box.h < 2) { toast(t('xlsxcrop.badBox')); return; }
+  const removeOutside = !!($('#xlsxCropRemoveOutside') && $('#xlsxCropRemoveOutside').checked);
+  const importedIds = xlsxCropImportedIds || new Set();
+  pushUndo();
+  if (removeOutside) {
+    state.shapes = state.shapes.filter(s => {
+      if (!importedIds.has(s.id)) return true;   /* nie ruszaj kształtów spoza tego importu */
+      const b = aabbOf(s);
+      /* usuń tylko te CAŁKOWICIE poza kadrem — zostaw wszystko, co choć trochę zachodzi */
+      return b.x < box.x + box.w && b.x + b.w > box.x && b.y < box.y + box.h && b.y + b.h > box.y;
+    });
+  }
+  const dx = -box.x, dy = -box.y;
+  for (const s of state.shapes) {
+    if (s.type === 'line') { s.x1 += dx; s.y1 += dy; s.x2 += dx; s.y2 += dy; }
+    else { s.x += dx; s.y += dy; }
+  }
+  state.page = { mode: 'custom', w: Math.max(10, Math.round(box.w)), h: Math.max(10, Math.round(box.h)) };
+  syncPageUI();
+  xlsxCropEnd();
+  sel.clear();
+  fitPage(); render(); renderProps(); renderVars(); autosave();
+  toast(t('xlsxcrop.done'));
+}
+$('#xlsxCropConfirm').addEventListener('click', xlsxCropConfirm);
+$('#xlsxCropCancel').addEventListener('click', () => { xlsxCropEnd(); toast(t('xlsxcrop.cancelled')); });
 /* import XLSX/XLSM — obrazy + kształty wektorowe (z pozycjami z arkusza) */
 async function importXlsx(file) {
   try {
@@ -3254,8 +3418,28 @@ async function importXlsx(file) {
     const mediaFiles = allFiles.filter(f => /^xl\/media\//i.test(f.name) && /\.(png|jpe?g|gif|bmp|webp)$/i.test(f.name));
     const mediaMap = {};
     mediaFiles.forEach(m => mediaMap[m.name] = { data: m.data, mime: mediaMimeFromName(m.name) });
-    const sheetFile = allFiles.find(f => /^xl\/worksheets\/sheet\d+\.xml$/i.test(f.name));
-    const dims = parseSheetDims(sheetFile ? td.decode(sheetFile.data) : '');
+    /* zmapuj każdy arkusz (sheetK.xml) na jego drawingN.xml (przez sheetK.xml.rels),
+       żeby użyć WŁAŚCIWYCH wymiarów kolumn/wierszy TEGO arkusza — wcześniej zawsze
+       brano pierwszy napotkany arkusz w archiwum, co psuło skalowanie/pozycję
+       rysunków należących do arkusza 2, 3 itd. w skoroszytach wielo-arkuszowych */
+    const sheetFiles = allFiles.filter(f => /^xl\/worksheets\/sheet\d+\.xml$/i.test(f.name));
+    const drawingDims = {};   // 'xl/drawings/drawingN.xml' -> {colWidths, rowHeights} arkusza-właściciela
+    for (const sf of sheetFiles) {
+      const relPath = sf.name.replace(/^xl\/worksheets\//i, 'xl/worksheets/_rels/') + '.rels';
+      const relFile = allFiles.find(f => f.name === relPath);
+      if (!relFile) continue;
+      const relXml = td.decode(relFile.data);
+      for (const rm of relXml.matchAll(/<Relationship\b[^>]*\/?>/g)) {
+        const tag = rm[0];
+        const typeM = tag.match(/\bType="([^"]+)"/), targetM = tag.match(/\bTarget="([^"]+)"/);
+        if (!typeM || !targetM || !/\/drawing$/i.test(typeM[1])) continue;
+        const drawingPath = resolveRelTarget(sf.name, targetM[1]);
+        if (drawingPath) drawingDims[drawingPath] = parseSheetDims(td.decode(sf.data));
+      }
+    }
+    /* awaryjnie (brak .rels albo relacji arkusz->rysunek) — wymiary pierwszego arkusza */
+    const fallbackDims = sheetFiles.length ? parseSheetDims(td.decode(sheetFiles[0].data)) : parseSheetDims('');
+
     const drawingFiles = allFiles.filter(f => /^xl\/drawings\/drawing\d+\.xml$/i.test(f.name));
     const importedShapes = [];
     const anchoredPictures = [];
@@ -3264,6 +3448,7 @@ async function importXlsx(file) {
       const relPath = df.name.replace(/^xl\/drawings\//i, 'xl/drawings/_rels/') + '.rels';
       const relFile = allFiles.find(f => f.name === relPath);
       const relMap = relFile ? parseDrawingRels(td.decode(relFile.data), df.name) : {};
+      const dims = drawingDims[df.name] || fallbackDims;
       const parsed = parseDrawingShapes(td.decode(df.data), dims, relMap, mediaMap);
       importedShapes.push(...parsed.shapes);
       anchoredPictures.push(...parsed.pictures.map(p => ({ ...p, anchored: true })));
@@ -3275,10 +3460,26 @@ async function importXlsx(file) {
     closeXlsxModal();
     xlsxImportItems = [];
     const usedAnchored = new Set(anchoredPictures.map(p => 'xl/media/' + p.name.replace(/^xl\/media\//i, '')));
-    for (const p of anchoredPictures) {
-      xlsxImportItems.push({ kind: 'image', name: p.name, data: p.data, mime: p.mime, anchored: true,
-        x: p.x, y: p.y, w: p.w, h: p.h,
-        previewUrl: URL.createObjectURL(new Blob([p.data], { type: p.mime })), selected: true });
+
+    /* uszereguj zakotwiczone elementy wg powierzchni MALEJĄCO, żeby duże tła trafiały
+       na spód stosu (dodawane pierwsze = niższy z-order), a drobne detale i podpisy
+       zostały na wierzchu, zamiast być przysłonięte przez większe kontenery */
+    const anchoredCombined = [
+      ...anchoredPictures.map(p => ({ kind: 'image', p, area: (p.w || 0) * (p.h || 0) })),
+      ...importedShapes.map(s => ({ kind: 'shape', s, area: (s.w || 0) * (s.h || 0) }))
+    ];
+    anchoredCombined.sort((a, b) => b.area - a.area);
+
+    let shapeIdx = 0;
+    for (const it of anchoredCombined) {
+      if (it.kind === 'image') {
+        const p = it.p;
+        xlsxImportItems.push({ kind: 'image', name: p.name, data: p.data, mime: p.mime, anchored: true,
+          x: p.x, y: p.y, w: p.w, h: p.h,
+          previewUrl: URL.createObjectURL(new Blob([p.data], { type: p.mime })), selected: true });
+      } else {
+        xlsxImportItems.push({ kind: 'shape', name: `${it.s.type}_${++shapeIdx}`, shape: it.s, selected: true });
+      }
     }
     for (const m of mediaFiles) {
       if (usedAnchored.has(m.name)) continue;
@@ -3286,7 +3487,6 @@ async function importXlsx(file) {
       xlsxImportItems.push({ kind: 'image', name: m.name.replace('xl/media/', ''), data: m.data, mime, anchored: false,
         previewUrl: URL.createObjectURL(new Blob([m.data], { type: mime })), selected: true });
     }
-    importedShapes.forEach((s, i) => xlsxImportItems.push({ kind: 'shape', name: `${s.type}_${i + 1}`, shape: s, selected: true }));
     const imgN = xlsxImportItems.filter(i => i.kind === 'image').length;
     const shapeN = xlsxImportItems.length - imgN;
     $('#xlModal').querySelector('h3').textContent = t('xl.count', { i: imgN, s: shapeN });
@@ -3651,6 +3851,10 @@ function renderSettings() {
       <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setAutosave" ${settings.autosave !== false ? 'checked' : ''}> ${t('set.autosave')}</label></div>
       <div class="hint">${t('set.autosaveHint')}</div>
     </div>
+    <div class="grp"><h4>${t('set.canvas')}</h4>
+      <div class="row"><label>${t('set.infMargin')}</label><input class="in" type="number" id="setInfMargin" min="0" max="500" step="1" value="${settings.infiniteCanvasMargin ?? 16}"></div>
+      <div class="hint">${t('set.infMarginHint')}</div>
+    </div>
     <div class="grp"><h4>${t('set.defaults')}</h4>
       <div class="row"><label>${t('props.font')}</label><select class="in" id="dFont" style="width:130px">
         ${fonts.map(f => `<option value="${f}" ${D.font === f ? 'selected' : ''}>${f}</option>`).join('')}</select></div>
@@ -3667,6 +3871,7 @@ function renderSettings() {
   $('#setLang').addEventListener('change', e => { settings.lang = e.target.value; saveSettingsLS(); applySettings(); });
   $('#setMx').addEventListener('change', e => { settings.mxMaster = e.target.checked; saveSettingsLS(); });
   $('#setAutosave').addEventListener('change', e => { settings.autosave = e.target.checked; saveSettingsLS(); if (settings.autosave) autosave(); });
+  $('#setInfMargin').addEventListener('change', e => { settings.infiniteCanvasMargin = clamp(parseInt(e.target.value) || 0, 0, 500); saveSettingsLS(); });
   $('#setZoomDiv').addEventListener('change', e => { settings.zoomDiv = clamp(parseFloat(e.target.value) || 4, 1, 20); saveSettingsLS(); });
   $('#setSideW').addEventListener('change', e => {
     settings.sideW = clamp(parseInt(e.target.value) || 272, 200, 640); saveSettingsLS();
