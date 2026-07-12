@@ -32,6 +32,7 @@ async function saveProject(forcePicker = false) {
       const fn = currentProjectHandle.name || (name + '.pdraw');
       setNameFromFilename(fn);
       toast(t('t.nativeSaved') + fn, 6000); autosave();
+      PS_setDirty(PS_activeSlot(), false);   /* zapisane do pliku — nadpisz mark dirty=true z autosave() powyżej */
       return;
     } catch (err) {
       if (err && err.name === 'AbortError') return;   /* użytkownik anulował */
@@ -41,6 +42,7 @@ async function saveProject(forcePicker = false) {
   /* fallback: pobranie pliku */
   downloadBlob(new Blob([projectJSON()], { type: 'application/json' }), name + '.json');
   toast(t('t.saved') + name + '.json', 6000);
+  PS_setDirty(PS_activeSlot(), false);
 }
 async function saveProjectAs() {
   if (!hasNativeFS()) {
@@ -88,11 +90,13 @@ function loadProject(obj, fileName) {
   render(); renderProps(); renderVars();
   if (typeof PS_renameActive === 'function') PS_renameActive(state.name);
   autosave();
+  PS_setDirty(PS_activeSlot(), false);   /* świeżo otwarty z pliku = zgodny z plikiem, nie "niezapisany" */
   toast(t('t.loaded') + state.name);
 }
 let autosaveTm = null;
 function autosave() {
   clearTimeout(autosaveTm);
+  PS_setDirty(PS_activeSlot(), true);   /* niezapisane zmiany do pliku — niezależnie od przełącznika Autozapis */
   if (settings.autosave === false) return;   /* wyłączony w Ustawieniach — nic nie zapisuj */
   /* przechwyć KLUCZ gniazda i TREŚĆ od razu, synchronicznie — nie w momencie
      odpalenia timera 400ms. Gdyby czytać PS_autoKey()/projectJSON() dopiero
@@ -106,7 +110,17 @@ function autosave() {
     try { localStorage.setItem(key, json); } catch (e) {}
   }, 400);
 }
-const exportHandles = { png: null, jpg: null };   /* zapamiętane pliki eksportu (jak zapis) */
+/* zapamiętane pliki eksportu (jak zapis w miejscu) — PER PROJEKT (slot), nie
+   globalnie. Wcześniej to był jeden wspólny obiekt {png,jpg}, więc eksport w
+   projekcie B po przełączeniu karty cicho nadpisywał plik zapamiętany jeszcze
+   z projektu A. Klucz gniazda wraca do stanu "brak zapamiętanego pliku" tylko
+   przy pełnym przeładowaniu apki (uchwyty i tak nie da się zserializować). */
+const exportHandlesBySlot = new Map();
+function exportHandlesFor(slot) {
+  let h = exportHandlesBySlot.get(slot);
+  if (!h) { h = { png: null, jpg: null }; exportHandlesBySlot.set(slot, h); }
+  return h;
+}
 async function exportImage(fmt, forcePicker = false) {
   const region = pageRegion();
   if (!state.shapes.length && !region) return toast(t('t.emptyCanvas'));
@@ -120,15 +134,16 @@ async function exportImage(fmt, forcePicker = false) {
   let name = stripExt(sanitizeFile($('#projName').value));
   if (previewRow >= 0 && state.vars.rows[previewRow])
     name += '_' + stripExt(sanitizeFile(state.vars.rows[previewRow].name));
+  const handles = exportHandlesFor(PS_activeSlot());
   if (hasNativeFS()) {
     try {
-      if (!exportHandles[fmt] || forcePicker) {
-        exportHandles[fmt] = await window.showSaveFilePicker({
+      if (!handles[fmt] || forcePicker) {
+        handles[fmt] = await window.showSaveFilePicker({
           suggestedName: name + ext, types: [{ description: fmt.toUpperCase(), accept: { [mime]: [ext] } }] });
       }
-      const w = await exportHandles[fmt].createWritable();
+      const w = await handles[fmt].createWritable();
       await w.write(blob); await w.close();
-      toast(t('t.exported') + (exportHandles[fmt].name || name + ext), 6000);
+      toast(t('t.exported') + (handles[fmt].name || name + ext), 6000);
       return;
     } catch (err) {
       if (err && err.name === 'AbortError') return;

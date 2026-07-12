@@ -14,9 +14,9 @@
                    otwarty *teraz* w innym oknie — zabezpieczenie przed
                    nadpisaniem się dwóch okien edytujących to samo gniazdo)
 
-   Zamknięcie karty (×) NIE usuwa projektu — tylko chowa go z paska kart.
-   Każdy zamknięty projekt można później otworzyć z panelu „Otwórz zapisany
-   projekt" albo trwale usunąć (js/tabs.js).
+   Zamknięcie karty (×) TRWALE odrzuca projekt (jak w Paint/Office) — pyta o
+   potwierdzenie tylko, jeśli ma on niezapisane zmiany (patrz PS_isDirty/
+   PS_setDirty). Nie ma listy "ostatnio zamkniętych" do przywrócenia.
 
    Autozapis można wyłączyć w Ustawieniach (settings.autosave) — wtedy
    zmiany w bieżącej karcie nie są zapisywane (przełączenie/zamknięcie
@@ -143,31 +143,30 @@ function PS_openNewTabFromTemplate(tmpl) {
   projectFromTemplate(tmpl);                 // ustawia świeży state + autosave() -> PS_autoKey()=slot
   state.name = name; if ($('#projName')) $('#projName').value = name;
   PS_writeData(slot, PS_currentJSON());       // pierwszy zapis — jak przy tworzeniu, nie podlega przełącznikowi
+  PS_setDirty(slot, false);                   // świeży projekt = nic do stracenia, nadpisz mark z autosave() powyżej
   PS_heartbeat();
   if (typeof Tabs_render === 'function') Tabs_render();
 }
 
-/* otwórz jako nową kartę projekt, który już istnieje w rejestrze, ale nie
-   jest otwarty w tym oknie (np. wcześniej zamknięty) */
-function PS_reopenProject(slot) {
-  if (PS_openSlots().includes(slot)) { PS_switchTo(slot); return; }
-  if (PS_isLiveElsewhere(slot)) {
-    if (typeof toast === 'function') toast(t('t.projLiveElsewhere'));
-    return;
-  }
-  PS_commitActive();
-  const open = PS_openSlots(); open.push(slot);
-  PS_active = slot; PS_setOpen(open, PS_active);
-  PS_loadInto(slot);
-  PS_heartbeat();
-  if (typeof Tabs_render === 'function') Tabs_render();
+/* ---------- flaga "niezapisane zmiany" (do pliku), per projekt ----------
+   Trzymana w rejestrze (przetrwa przeładowanie apki, jak reszta rejestru).
+   Ustawiana na true przy KAŻDEJ edycji (patrz autosave() w 14-project.js),
+   niezależnie od przełącznika Autozapis — to osobna rzecz: autosave pisze do
+   localStorage jako siatkę bezpieczeństwa, "dirty" pyta o realny zapis do
+   pliku (Ctrl+S / Zapisz). Czyszczona po udanym zapisie do pliku i przy
+   świeżym utworzeniu/otwarciu projektu (patrz saveProject/loadProject/
+   PS_openNewTabFromTemplate) — NIE przy zwykłym przełączeniu karty
+   (PS_loadInto), bo samo przeglądanie projektu nie zmienia tego, czy ma on
+   niezapisane zmiany. */
+function PS_setDirty(slot, val) {
+  if (!slot) return;
+  const reg = PS_registry();
+  const p = reg.find(x => x.slot === slot);
+  if (p && !!p.dirty !== !!val) { p.dirty = !!val; PS_saveRegistry(reg); }
 }
-
-/* projekty w rejestrze, które NIE są otwarte jako karta w tym oknie —
-   lista do panelu "otwórz zapisany projekt" */
-function PS_closedProjects() {
-  const open = PS_openSlots();
-  return PS_registry().filter(p => !open.includes(p.slot));
+function PS_isDirty(slot) {
+  const p = PS_registry().find(x => x.slot === slot);
+  return !!(p && p.dirty);
 }
 
 /* zmiana nazwy aktywnego projektu (spięte z polem #projName) */
@@ -178,17 +177,15 @@ function PS_renameActive(name) {
   if (typeof Tabs_render === 'function') Tabs_render();
 }
 
-/* zamknij kartę — projekt ZOSTAJE w rejestrze i w danych, tylko chowa się
-   z paska; można go później otworzyć z panelu "otwórz zapisany projekt" */
+/* zamknij kartę (×) — jak w Paint/Office: jeśli projekt ma niezapisane zmiany
+   (do pliku), zapytaj o potwierdzenie; w przeciwnym razie zamknij po cichu.
+   Po potwierdzeniu projekt jest TRWALE odrzucany (nie trafia do żadnej listy
+   "ostatnio zamkniętych" — patrz PS_deleteProject). */
 function PS_closeTab(slot) {
-  PS_commitActive();
-  let open = PS_openSlots().filter(s => s !== slot);
-  if (!open.length) { const np = PS_newProject(); open = [np.slot]; }   // okno nigdy bez karty
-  const l = PS_readLive(); delete l[slot]; PS_writeLive(l);
-  const newActive = (slot === PS_active) ? open[open.length - 1] : PS_active;
-  PS_setOpen(open, newActive);
-  if (slot === PS_active) { PS_active = newActive; PS_loadInto(newActive); }
-  if (typeof Tabs_render === 'function') Tabs_render();
+  if (PS_isDirty(slot)) {
+    if (!confirm(t('c.closeUnsaved', { n: PS_projectName(slot) }))) return;   // anulowano — karta zostaje
+  }
+  PS_deleteProject(slot);
 }
 
 /* usuń projekt NA ZAWSZE — z rejestru, z danych, z karty (jeśli otwarty).

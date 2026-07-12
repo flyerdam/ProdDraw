@@ -188,17 +188,6 @@ body{grid-template-columns:46px 1fr var(--sideW,272px);}
 .ptab-add{align-self:center;margin:4px 2px 0;background:var(--panel);border:1px solid var(--line);
   color:var(--txt);width:26px;height:24px;border-radius:4px;cursor:pointer;font-size:15px;line-height:1;}
 .ptab-add:hover{border-color:var(--acc);color:#fff;}
-/* ---------- panel "otwórz zapisany projekt" ---------- */
-.ptab-panel{position:fixed;display:none;background:var(--panel2);border:1px solid var(--line);
-  border-radius:5px;min-width:220px;max-width:320px;max-height:60vh;overflow-y:auto;
-  box-shadow:0 4px 16px rgba(0,0,0,.35);z-index:45;padding:4px;}
-.ptab-panel.on{display:block;}
-.ptab-panel-empty{color:var(--txt2);font-size:12px;padding:10px;text-align:center;}
-.ptab-panel-row{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:4px;cursor:pointer;}
-.ptab-panel-row:hover{background:var(--panel);}
-.ptab-panel-name{flex:1;font-size:12.5px;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.ptab-panel-del{background:none;border:none;color:var(--txt2);cursor:pointer;font-size:12px;padding:2px 5px;border-radius:3px;}
-.ptab-panel-del:hover{color:#ff5555;background:var(--panel2);}
 /* ---------- settings tab ---------- */
 .setRow{margin-bottom:12px;}
 .setRow label.big{display:block;font-size:12px;color:var(--txt2);margin-bottom:4px;}
@@ -440,9 +429,9 @@ let imgCascade = 0;         // przesunięcie kolejnych wstawianych obrazów
                    otwarty *teraz* w innym oknie — zabezpieczenie przed
                    nadpisaniem się dwóch okien edytujących to samo gniazdo)
 
-   Zamknięcie karty (×) NIE usuwa projektu — tylko chowa go z paska kart.
-   Każdy zamknięty projekt można później otworzyć z panelu „Otwórz zapisany
-   projekt" albo trwale usunąć (js/tabs.js).
+   Zamknięcie karty (×) TRWALE odrzuca projekt (jak w Paint/Office) — pyta o
+   potwierdzenie tylko, jeśli ma on niezapisane zmiany (patrz PS_isDirty/
+   PS_setDirty). Nie ma listy "ostatnio zamkniętych" do przywrócenia.
 
    Autozapis można wyłączyć w Ustawieniach (settings.autosave) — wtedy
    zmiany w bieżącej karcie nie są zapisywane (przełączenie/zamknięcie
@@ -569,31 +558,30 @@ function PS_openNewTabFromTemplate(tmpl) {
   projectFromTemplate(tmpl);                 // ustawia świeży state + autosave() -> PS_autoKey()=slot
   state.name = name; if ($('#projName')) $('#projName').value = name;
   PS_writeData(slot, PS_currentJSON());       // pierwszy zapis — jak przy tworzeniu, nie podlega przełącznikowi
+  PS_setDirty(slot, false);                   // świeży projekt = nic do stracenia, nadpisz mark z autosave() powyżej
   PS_heartbeat();
   if (typeof Tabs_render === 'function') Tabs_render();
 }
 
-/* otwórz jako nową kartę projekt, który już istnieje w rejestrze, ale nie
-   jest otwarty w tym oknie (np. wcześniej zamknięty) */
-function PS_reopenProject(slot) {
-  if (PS_openSlots().includes(slot)) { PS_switchTo(slot); return; }
-  if (PS_isLiveElsewhere(slot)) {
-    if (typeof toast === 'function') toast(t('t.projLiveElsewhere'));
-    return;
-  }
-  PS_commitActive();
-  const open = PS_openSlots(); open.push(slot);
-  PS_active = slot; PS_setOpen(open, PS_active);
-  PS_loadInto(slot);
-  PS_heartbeat();
-  if (typeof Tabs_render === 'function') Tabs_render();
+/* ---------- flaga "niezapisane zmiany" (do pliku), per projekt ----------
+   Trzymana w rejestrze (przetrwa przeładowanie apki, jak reszta rejestru).
+   Ustawiana na true przy KAŻDEJ edycji (patrz autosave() w 14-project.js),
+   niezależnie od przełącznika Autozapis — to osobna rzecz: autosave pisze do
+   localStorage jako siatkę bezpieczeństwa, "dirty" pyta o realny zapis do
+   pliku (Ctrl+S / Zapisz). Czyszczona po udanym zapisie do pliku i przy
+   świeżym utworzeniu/otwarciu projektu (patrz saveProject/loadProject/
+   PS_openNewTabFromTemplate) — NIE przy zwykłym przełączeniu karty
+   (PS_loadInto), bo samo przeglądanie projektu nie zmienia tego, czy ma on
+   niezapisane zmiany. */
+function PS_setDirty(slot, val) {
+  if (!slot) return;
+  const reg = PS_registry();
+  const p = reg.find(x => x.slot === slot);
+  if (p && !!p.dirty !== !!val) { p.dirty = !!val; PS_saveRegistry(reg); }
 }
-
-/* projekty w rejestrze, które NIE są otwarte jako karta w tym oknie —
-   lista do panelu "otwórz zapisany projekt" */
-function PS_closedProjects() {
-  const open = PS_openSlots();
-  return PS_registry().filter(p => !open.includes(p.slot));
+function PS_isDirty(slot) {
+  const p = PS_registry().find(x => x.slot === slot);
+  return !!(p && p.dirty);
 }
 
 /* zmiana nazwy aktywnego projektu (spięte z polem #projName) */
@@ -604,17 +592,15 @@ function PS_renameActive(name) {
   if (typeof Tabs_render === 'function') Tabs_render();
 }
 
-/* zamknij kartę — projekt ZOSTAJE w rejestrze i w danych, tylko chowa się
-   z paska; można go później otworzyć z panelu "otwórz zapisany projekt" */
+/* zamknij kartę (×) — jak w Paint/Office: jeśli projekt ma niezapisane zmiany
+   (do pliku), zapytaj o potwierdzenie; w przeciwnym razie zamknij po cichu.
+   Po potwierdzeniu projekt jest TRWALE odrzucany (nie trafia do żadnej listy
+   "ostatnio zamkniętych" — patrz PS_deleteProject). */
 function PS_closeTab(slot) {
-  PS_commitActive();
-  let open = PS_openSlots().filter(s => s !== slot);
-  if (!open.length) { const np = PS_newProject(); open = [np.slot]; }   // okno nigdy bez karty
-  const l = PS_readLive(); delete l[slot]; PS_writeLive(l);
-  const newActive = (slot === PS_active) ? open[open.length - 1] : PS_active;
-  PS_setOpen(open, newActive);
-  if (slot === PS_active) { PS_active = newActive; PS_loadInto(newActive); }
-  if (typeof Tabs_render === 'function') Tabs_render();
+  if (PS_isDirty(slot)) {
+    if (!confirm(t('c.closeUnsaved', { n: PS_projectName(slot) }))) return;   // anulowano — karta zostaje
+  }
+  PS_deleteProject(slot);
 }
 
 /* usuń projekt NA ZAWSZE — z rejestru, z danych, z karty (jeśli otwarty).
@@ -721,9 +707,7 @@ const I18N = {
     'c.tmplOverwrite':'Szablon „{n}" już istnieje. Nadpisać?','c.delFolder':'Usunąć folder „{n}"? Elementy trafią do korzenia.',
     'set.about':'ProdRys — edytor instrukcji produkcyjnych.',
     'set.autosave':'Autozapis','set.autosaveHint':'Wyłączenie: zmiany nie będą zapisywane automatycznie — zmiana/zamknięcie karty lub programu odrzuci niezapisane zmiany. Ręczny „Zapisz” (Ctrl+S) do pliku działa bez zmian.',
-    'ptab.openSaved':'Otwórz zapisany projekt','ptab.noClosed':'Brak zapisanych projektów do otwarcia.',
-    'ptab.delTitle':'Usuń projekt na zawsze','ptab.delConfirm':'Usunąć projekt „{n}” na zawsze? Tej operacji nie można odwrócić.',
-    't.projLiveElsewhere':'Ten projekt jest już otwarty w innym oknie.',
+    'c.closeUnsaved':'Zamknąć „{n}” bez zapisywania zmian? Projekt zostanie trwale usunięty.',
     'props.none':'Nic nie zaznaczono.','props.noneHint':'Narysuj kształt narzędziami po lewej, wklej zrzut (Ctrl+V) lub zaimportuj obraz z pliku XLSX.',
     'props.selected':'Zaznaczone','props.posSize':'Pozycja i rozmiar','props.linePts':'Punkty linii',
     'props.stroke':'Obrys','props.color':'Kolor','props.none2':'brak','props.width':'Grubość','props.style':'Styl',
@@ -803,9 +787,7 @@ const I18N = {
     'xlsxcrop.done':'Crop applied.','xlsxcrop.cancelled':'Crop cancelled — import left unchanged.',
     'set.about':'ProdRys — production-instruction editor.',
     'set.autosave':'Autosave','set.autosaveHint':'When off: changes are not saved automatically — switching/closing a tab or the app discards unsaved changes. Manual “Save” (Ctrl+S) to a file is unaffected.',
-    'ptab.openSaved':'Open a saved project','ptab.noClosed':'No saved projects to open.',
-    'ptab.delTitle':'Delete project forever','ptab.delConfirm':'Permanently delete project “{n}”? This cannot be undone.',
-    't.projLiveElsewhere':'This project is already open in another window.',
+    'c.closeUnsaved':'Close “{n}” without saving changes? The project will be permanently deleted.',
     'props.none':'Nothing selected.','props.noneHint':'Draw a shape with the tools on the left, paste a screenshot (Ctrl+V) or import an image from an XLSX file.',
     'props.selected':'Selected','props.posSize':'Position & size','props.linePts':'Line points',
     'props.stroke':'Stroke','props.color':'Color','props.none2':'none','props.width':'Width','props.style':'Style',
@@ -885,9 +867,7 @@ const I18N = {
     'xlsxcrop.done':'Zuschnitt angewendet.','xlsxcrop.cancelled':'Zuschnitt abgebrochen — Import unverändert.',
     'set.about':'ProdRys — Editor für Produktionsanweisungen.',
     'set.autosave':'Automatisches Speichern','set.autosaveHint':'Deaktiviert: Änderungen werden nicht automatisch gespeichert — Tab-/Programmwechsel oder Schließen verwirft ungespeicherte Änderungen. Manuelles „Speichern” (Strg+S) in eine Datei bleibt unverändert.',
-    'ptab.openSaved':'Gespeichertes Projekt öffnen','ptab.noClosed':'Keine gespeicherten Projekte zum Öffnen.',
-    'ptab.delTitle':'Projekt endgültig löschen','ptab.delConfirm':'Projekt „{n}” endgültig löschen? Dies kann nicht rückgängig gemacht werden.',
-    't.projLiveElsewhere':'Dieses Projekt ist bereits in einem anderen Fenster geöffnet.',
+    'c.closeUnsaved':'„{n}” ohne Speichern schließen? Das Projekt wird endgültig gelöscht.',
     'props.none':'Nichts ausgewählt.','props.noneHint':'Zeichnen Sie eine Form mit den Werkzeugen links, fügen Sie einen Screenshot ein (Strg+V) oder importieren Sie ein Bild aus einer XLSX-Datei.',
     'props.selected':'Ausgewählt','props.posSize':'Position & Größe','props.linePts':'Linienpunkte',
     'props.stroke':'Kontur','props.color':'Farbe','props.none2':'keine','props.width':'Stärke','props.style':'Stil',
@@ -3049,6 +3029,7 @@ async function saveProject(forcePicker = false) {
       const fn = currentProjectHandle.name || (name + '.pdraw');
       setNameFromFilename(fn);
       toast(t('t.nativeSaved') + fn, 6000); autosave();
+      PS_setDirty(PS_activeSlot(), false);   /* zapisane do pliku — nadpisz mark dirty=true z autosave() powyżej */
       return;
     } catch (err) {
       if (err && err.name === 'AbortError') return;   /* użytkownik anulował */
@@ -3058,6 +3039,7 @@ async function saveProject(forcePicker = false) {
   /* fallback: pobranie pliku */
   downloadBlob(new Blob([projectJSON()], { type: 'application/json' }), name + '.json');
   toast(t('t.saved') + name + '.json', 6000);
+  PS_setDirty(PS_activeSlot(), false);
 }
 async function saveProjectAs() {
   if (!hasNativeFS()) {
@@ -3105,11 +3087,13 @@ function loadProject(obj, fileName) {
   render(); renderProps(); renderVars();
   if (typeof PS_renameActive === 'function') PS_renameActive(state.name);
   autosave();
+  PS_setDirty(PS_activeSlot(), false);   /* świeżo otwarty z pliku = zgodny z plikiem, nie "niezapisany" */
   toast(t('t.loaded') + state.name);
 }
 let autosaveTm = null;
 function autosave() {
   clearTimeout(autosaveTm);
+  PS_setDirty(PS_activeSlot(), true);   /* niezapisane zmiany do pliku — niezależnie od przełącznika Autozapis */
   if (settings.autosave === false) return;   /* wyłączony w Ustawieniach — nic nie zapisuj */
   /* przechwyć KLUCZ gniazda i TREŚĆ od razu, synchronicznie — nie w momencie
      odpalenia timera 400ms. Gdyby czytać PS_autoKey()/projectJSON() dopiero
@@ -3123,7 +3107,17 @@ function autosave() {
     try { localStorage.setItem(key, json); } catch (e) {}
   }, 400);
 }
-const exportHandles = { png: null, jpg: null };   /* zapamiętane pliki eksportu (jak zapis) */
+/* zapamiętane pliki eksportu (jak zapis w miejscu) — PER PROJEKT (slot), nie
+   globalnie. Wcześniej to był jeden wspólny obiekt {png,jpg}, więc eksport w
+   projekcie B po przełączeniu karty cicho nadpisywał plik zapamiętany jeszcze
+   z projektu A. Klucz gniazda wraca do stanu "brak zapamiętanego pliku" tylko
+   przy pełnym przeładowaniu apki (uchwyty i tak nie da się zserializować). */
+const exportHandlesBySlot = new Map();
+function exportHandlesFor(slot) {
+  let h = exportHandlesBySlot.get(slot);
+  if (!h) { h = { png: null, jpg: null }; exportHandlesBySlot.set(slot, h); }
+  return h;
+}
 async function exportImage(fmt, forcePicker = false) {
   const region = pageRegion();
   if (!state.shapes.length && !region) return toast(t('t.emptyCanvas'));
@@ -3137,15 +3131,16 @@ async function exportImage(fmt, forcePicker = false) {
   let name = stripExt(sanitizeFile($('#projName').value));
   if (previewRow >= 0 && state.vars.rows[previewRow])
     name += '_' + stripExt(sanitizeFile(state.vars.rows[previewRow].name));
+  const handles = exportHandlesFor(PS_activeSlot());
   if (hasNativeFS()) {
     try {
-      if (!exportHandles[fmt] || forcePicker) {
-        exportHandles[fmt] = await window.showSaveFilePicker({
+      if (!handles[fmt] || forcePicker) {
+        handles[fmt] = await window.showSaveFilePicker({
           suggestedName: name + ext, types: [{ description: fmt.toUpperCase(), accept: { [mime]: [ext] } }] });
       }
-      const w = await exportHandles[fmt].createWritable();
+      const w = await handles[fmt].createWritable();
       await w.write(blob); await w.close();
-      toast(t('t.exported') + (exportHandles[fmt].name || name + ext), 6000);
+      toast(t('t.exported') + (handles[fmt].name || name + ext), 6000);
       return;
     } catch (err) {
       if (err && err.name === 'AbortError') return;
@@ -4050,9 +4045,8 @@ document.addEventListener('keyup', e => {
 "use strict";
 
 /**
- * Tabs module - renders and manages the project tab strip, plus the
- * "closed projects" popover (reopen an earlier project, or delete it
- * forever). Pure DOM rendering + event wiring; all state logic lives in
+ * Tabs module - renders and manages the project tab strip.
+ * Pure DOM rendering + event wiring; all state logic lives in
  * js/projects.js (PS_* functions).
  */
 
@@ -4117,18 +4111,6 @@ function Tabs_render() {
 		openTemplatePicker();
 	});
 	bar.appendChild(addBtn);
-
-	// "Open a saved (closed) project" button — this is how you get back a
-	// project you previously closed with ×, or delete it forever.
-	var openBtn = document.createElement('button');
-	openBtn.className = 'ptab-add';
-	openBtn.id = 'ptabOpen';
-	openBtn.textContent = '📂';
-	openBtn.title = t('ptab.openSaved');
-	openBtn.addEventListener('click', Tabs_togglePanel);
-	bar.appendChild(openBtn);
-
-	if (_ptabPanelOpen) Tabs_renderClosedPanel();
 }
 
 /**
@@ -4140,80 +4122,6 @@ function Tabs_new() {
 		openTemplatePicker();
 	}
 }
-
-/* ---------- panel "otwórz zapisany projekt" ---------- */
-let _ptabPanelOpen = false;
-
-function Tabs_togglePanel(e) {
-	if (e) e.stopPropagation();
-	_ptabPanelOpen = !_ptabPanelOpen;
-	if (_ptabPanelOpen) Tabs_renderClosedPanel();
-	else Tabs_closePanel();
-}
-function Tabs_closePanel() {
-	_ptabPanelOpen = false;
-	const panel = document.getElementById('ptabPanel');
-	if (panel) panel.classList.remove('on');
-}
-
-function Tabs_renderClosedPanel() {
-	let panel = document.getElementById('ptabPanel');
-	if (!panel) {
-		panel = document.createElement('div');
-		panel.className = 'ptab-panel';
-		panel.id = 'ptabPanel';
-		panel.addEventListener('click', function (e) { e.stopPropagation(); });
-		document.body.appendChild(panel);
-	}
-	panel.innerHTML = '';
-
-	const closed = PS_closedProjects();
-	if (!closed.length) {
-		const empty = document.createElement('div');
-		empty.className = 'ptab-panel-empty';
-		empty.textContent = t('ptab.noClosed');
-		panel.appendChild(empty);
-	} else {
-		closed.forEach(function (p) {
-			const row = document.createElement('div');
-			row.className = 'ptab-panel-row';
-
-			const name = document.createElement('span');
-			name.className = 'ptab-panel-name';
-			name.textContent = p.name;
-			name.title = p.name;
-			name.addEventListener('click', function () {
-				PS_reopenProject(p.slot);
-				Tabs_closePanel();
-			});
-
-			const del = document.createElement('button');
-			del.className = 'ptab-panel-del';
-			del.textContent = '✕';
-			del.title = t('ptab.delTitle');
-			del.addEventListener('click', function (e) {
-				e.stopPropagation();
-				if (!confirm(t('ptab.delConfirm', { n: p.name }))) return;
-				PS_deleteProject(p.slot);
-				Tabs_renderClosedPanel();
-			});
-
-			row.appendChild(name);
-			row.appendChild(del);
-			panel.appendChild(row);
-		});
-	}
-
-	const btn = document.getElementById('ptabOpen');
-	if (btn) {
-		const r = btn.getBoundingClientRect();
-		panel.style.left = r.left + 'px';
-		panel.style.top = (r.bottom + 4) + 'px';
-	}
-	panel.classList.add('on');
-}
-
-document.addEventListener('click', function () { if (_ptabPanelOpen) Tabs_closePanel(); });
 
 "use strict";
 /* ---------- start ---------- */
@@ -4321,9 +4229,21 @@ function dispatch(cmd) {
       }
       break;
 
+    case 'exportPngAs':
+      if (typeof exportImage === 'function') {
+        exportImage('png', true);
+      }
+      break;
+
     case 'exportJpg':
       if (typeof exportImage === 'function') {
         exportImage('jpg');
+      }
+      break;
+
+    case 'exportJpgAs':
+      if (typeof exportImage === 'function') {
+        exportImage('jpg', true);
       }
       break;
 

@@ -78,8 +78,16 @@ function createWindow() {
           click: send('exportPng')
         },
         {
+          label: 'Export PNG As…',
+          click: send('exportPngAs')
+        },
+        {
           label: 'Export JPG',
           click: send('exportJpg')
+        },
+        {
+          label: 'Export JPG As…',
+          click: send('exportJpgAs')
         },
         { type: 'separator' },
         {

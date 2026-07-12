@@ -56,9 +56,21 @@ function dispatch(cmd) {
       }
       break;
 
+    case 'exportPngAs':
+      if (typeof exportImage === 'function') {
+        exportImage('png', true);
+      }
+      break;
+
     case 'exportJpg':
       if (typeof exportImage === 'function') {
         exportImage('jpg');
+      }
+      break;
+
+    case 'exportJpgAs':
+      if (typeof exportImage === 'function') {
+        exportImage('jpg', true);
       }
       break;
 
