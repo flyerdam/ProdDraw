@@ -391,6 +391,213 @@ function mediaMimeFromName(name) {
   if (ext === 'webp') return 'image/webp';
   return 'image/jpeg';
 }
+/* =====================================================================
+   IMPORT SIATKI ARKUSZA XLSX — "ekosystem Excela" (komórki + style),
+   nakładany na wspólny układ współrzędnych (parseSheetDims), a potem
+   wypiekany na natywne kształty ProdDraw (patrz js/15-xlsx.js).
+   ===================================================================== */
+function unescapeXml(s) {
+  return String(s ?? '')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d))
+    .replace(/&amp;/g, '&');
+}
+/* ARGB ("FF1F4E79") / RGB ("1F4E79") -> "#1f4e79"; theme/indexed/auto -> null */
+function argbToHex(v) {
+  if (!v) return null;
+  const h = v.length === 8 ? v.slice(2) : v;
+  return /^[0-9a-fA-F]{6}$/.test(h) ? '#' + h.toLowerCase() : null;
+}
+/* "B12" -> {c:1, r:11} (0-based); zwraca null gdy brak części kolumnowej */
+function a1ToRC(ref) {
+  const m = /^([A-Z]+)(\d+)$/.exec(ref || '');
+  if (!m) return null;
+  let c = 0;
+  for (const ch of m[1]) c = c * 26 + (ch.charCodeAt(0) - 64);
+  return { c: c - 1, r: +m[2] - 1 };
+}
+function parseSharedStrings(xml) {
+  const out = [];
+  if (!xml) return out;
+  for (const m of xml.matchAll(/<si\b[^>]*>([\s\S]*?)<\/si>/g)) {
+    const parts = [];
+    for (const tm of m[1].matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g)) parts.push(unescapeXml(tm[1]));
+    out.push(parts.join(''));
+  }
+  return out;
+}
+/* mapowanie stylów krawędzi Excela -> {sw, dash} ProdDraw */
+function borderStylePx(style) {
+  switch (style) {
+    case 'hair': return { sw: 0.4, dash: 'solid' };
+    case 'thin': return { sw: 0.75, dash: 'solid' };
+    case 'medium': return { sw: 1.75, dash: 'solid' };
+    case 'thick': return { sw: 2.75, dash: 'solid' };
+    case 'double': return { sw: 2.2, dash: 'solid' };
+    case 'dashed': case 'mediumDashed': return { sw: 1, dash: 'dash' };
+    case 'dotted': return { sw: 1, dash: 'dot' };
+    case 'dashDot': case 'mediumDashDot': return { sw: 1, dash: 'dashdot' };
+    case 'dashDotDot': case 'mediumDashDotDot': return { sw: 1, dash: 'dashdot' };
+    case 'slantDashDot': return { sw: 1, dash: 'dashdot' };
+    default: return { sw: 1, dash: 'solid' };
+  }
+}
+/* jedna strona krawędzi (left/right/top/bottom) -> {style, sw, dash, color} | null */
+function parseBorderSide(borderXml, side) {
+  const m = borderXml.match(new RegExp('<' + side + '\\b([^>]*)(?:\\/>|>([\\s\\S]*?)<\\/' + side + '>)'));
+  if (!m) return null;
+  const styleM = m[1].match(/\bstyle="([^"]+)"/);
+  const style = styleM ? styleM[1] : null;
+  if (!style || style === 'none') return null;
+  const colM = (m[2] || '').match(/<color\b[^>]*\brgb="([0-9a-fA-F]{6,8})"/);
+  const bs = borderStylePx(style);
+  return { style, sw: bs.sw, dash: bs.dash, color: argbToHex(colM ? colM[1] : null) || '#000000' };
+}
+/* styles.xml -> {fonts, fills, borders, numFmts, cellXfs} (indeksy jak w OOXML) */
+function parseStyles(xml) {
+  const res = { fonts: [], fills: [], borders: [], numFmts: {}, cellXfs: [] };
+  if (!xml) return res;
+  for (const m of xml.matchAll(/<numFmt\b[^>]*\bnumFmtId="(\d+)"[^>]*\bformatCode="([^"]*)"/g))
+    res.numFmts[+m[1]] = unescapeXml(m[2]);
+  const fontsSec = xml.match(/<fonts\b[^>]*>([\s\S]*?)<\/fonts>/)?.[1] || '';
+  for (const fm of fontsSec.matchAll(/<font\b[^>]*>([\s\S]*?)<\/font>/g)) {
+    const f = fm[1];
+    const szM = f.match(/<sz\b[^>]*\bval="([\d.]+)"/);
+    const nameM = f.match(/<(?:rFont|name)\b[^>]*\bval="([^"]+)"/);
+    const colM = f.match(/<color\b[^>]*\brgb="([0-9a-fA-F]{6,8})"/);
+    res.fonts.push({
+      sz: szM ? Math.max(6, Math.round(parseFloat(szM[1]) * 96 / 72)) : 15,
+      name: nameM ? nameM[1] : 'Calibri',
+      color: argbToHex(colM ? colM[1] : null) || '#000000',
+      bold: /<b\b[^>]*\/?>/.test(f), italic: /<i\b[^>]*\/?>/.test(f)
+    });
+  }
+  const fillsSec = xml.match(/<fills\b[^>]*>([\s\S]*?)<\/fills>/)?.[1] || '';
+  for (const fm of fillsSec.matchAll(/<fill\b[^>]*>([\s\S]*?)<\/fill>/g)) {
+    const pf = fm[1].match(/<patternFill\b([^>]*)>?([\s\S]*?)(?:<\/patternFill>|\/>)/);
+    let color = null;
+    if (pf && /patternType="solid"/.test(pf[1])) {
+      const fg = fm[1].match(/<fgColor\b[^>]*\brgb="([0-9a-fA-F]{6,8})"/);
+      color = argbToHex(fg ? fg[1] : null);
+    }
+    res.fills.push({ color });
+  }
+  const bordersSec = xml.match(/<borders\b[^>]*>([\s\S]*?)<\/borders>/)?.[1] || '';
+  for (const bm of bordersSec.matchAll(/<border\b[^>]*>([\s\S]*?)<\/border>/g)) {
+    const b = bm[1];
+    res.borders.push({
+      left: parseBorderSide(b, 'left'), right: parseBorderSide(b, 'right'),
+      top: parseBorderSide(b, 'top'), bottom: parseBorderSide(b, 'bottom')
+    });
+  }
+  const xfSec = xml.match(/<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/)?.[1] || '';
+  for (const xm of xfSec.matchAll(/<xf\b([^>]*?)(?:\/>|>([\s\S]*?)<\/xf>)/g)) {
+    const a = xm[1], inner = xm[2] || '';
+    const gi = n => { const m = a.match(new RegExp('\\b' + n + '="(\\d+)"')); return m ? +m[1] : 0; };
+    const ap = n => new RegExp('\\b' + n + '="1"').test(a);
+    const alM = inner.match(/<alignment\b([^>]*)\/?>/);
+    const al = alM ? alM[1] : '';
+    res.cellXfs.push({
+      numFmtId: gi('numFmtId'), fontId: gi('fontId'), fillId: gi('fillId'), borderId: gi('borderId'),
+      applyFont: ap('applyFont'), applyFill: ap('applyFill'), applyBorder: ap('applyBorder'), applyNumFmt: ap('applyNumberFormat'),
+      halign: (al.match(/\bhorizontal="([^"]+)"/) || [])[1] || null,
+      valign: (al.match(/\bvertical="([^"]+)"/) || [])[1] || null,
+      wrap: /\bwrapText="1"/.test(al)
+    });
+  }
+  return res;
+}
+/* sheetN.xml -> {cells:[{c,r,s,v}], merges:[{c1,r1,c2,r2}]} (v = tekst do wyświetlenia) */
+function parseSheetCells(xml, shared, styles) {
+  const cells = [], merges = [];
+  const BUILTIN_DATE = new Set([14, 15, 16, 17, 22, 45, 46, 47]);
+  for (const cm of xml.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+    const attrs = cm[1], inner = cm[2] || '';
+    const rc = a1ToRC((attrs.match(/\br="([A-Z]+\d+)"/) || [])[1]);
+    if (!rc) continue;
+    const sIdx = +((attrs.match(/\bs="(\d+)"/) || [])[1] || -1);
+    const t = (attrs.match(/\bt="([^"]+)"/) || [])[1] || 'n';
+    let val = '', num = false, bool = false;
+    if (t === 'inlineStr') {
+      const parts = [];
+      for (const tm of inner.matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g)) parts.push(unescapeXml(tm[1]));
+      val = parts.join('');
+    } else {
+      const vm = inner.match(/<v\b[^>]*>([\s\S]*?)<\/v>/);
+      const raw = vm ? vm[1] : '';
+      if (t === 's') val = shared[+raw] ?? '';
+      else if (t === 'str') val = unescapeXml(raw);
+      else if (t === 'b') { val = raw === '1' ? 'TRUE' : 'FALSE'; bool = true; }
+      else if (t === 'e') val = unescapeXml(raw);
+      else {
+        const xf = (styles && styles.cellXfs[sIdx]) || null;
+        const code = xf ? (styles.numFmts[xf.numFmtId] || (BUILTIN_DATE.has(xf.numFmtId) ? 'yyyy-mm-dd' : null)) : null;
+        val = raw === '' ? '' : fmtExcel(raw, code);
+        num = raw !== '';
+      }
+    }
+    cells.push({ c: rc.c, r: rc.r, s: sIdx, v: val, num, bool });
+  }
+  const mcSec = xml.match(/<mergeCells\b[^>]*>([\s\S]*?)<\/mergeCells>/)?.[1] || '';
+  for (const mm of mcSec.matchAll(/<mergeCell\b[^>]*\bref="([A-Z]+\d+):([A-Z]+\d+)"/g)) {
+    const a = a1ToRC(mm[1]), b = a1ToRC(mm[2]);
+    if (a && b) merges.push({ c1: Math.min(a.c, b.c), r1: Math.min(a.r, b.r), c2: Math.max(a.c, b.c), r2: Math.max(a.r, b.r) });
+  }
+  return { cells, merges };
+}
+/* układ współrzędnych: sumy prefiksowe px kolumn/wierszy -> szybkie pudełko komórki */
+function gridGeom(dims) {
+  const nc = dims.colWidths.length, nr = dims.rowHeights.length;
+  const colX = new Float64Array(nc + 1), rowY = new Float64Array(nr + 1);
+  for (let c = 0; c < nc; c++) colX[c + 1] = colX[c] + dims.colWidths[c];
+  for (let r = 0; r < nr; r++) rowY[r + 1] = rowY[r] + dims.rowHeights[r];
+  const X = c => colX[Math.max(0, Math.min(nc, c))];
+  const Y = r => rowY[Math.max(0, Math.min(nr, r))];
+  return {
+    box: (c1, r1, c2, r2) => ({ x: X(c1), y: Y(r1), w: X(c2 + 1) - X(c1), h: Y(r2 + 1) - Y(r1) })
+  };
+}
+/* formatowanie liczb/dat Excela — pragmatyczny podzbiór najczęstszych kodów;
+   nieobsłużone kody -> przycięta liczba (bez utraty wartości) */
+function fmtExcel(raw, code) {
+  const num = parseFloat(raw);
+  if (!isFinite(num)) return unescapeXml(raw);
+  const trim = n => {
+    let s = n.toPrecision(12); s = String(parseFloat(s));
+    return s;
+  };
+  if (!code || /^general$/i.test(code)) return trim(num);
+  const section = code.split(';')[0];
+  const bare = section.replace(/"[^"]*"/g, '').replace(/\[[^\]]*\]/g, '').replace(/\\./g, '');
+  const isDate = /[ymdhs]/i.test(bare) && !/[#0]/.test(bare);
+  if (isDate) return fmtExcelDate(num, section);
+  const percent = /%/.test(bare);
+  let v = percent ? num * 100 : num;
+  const decM = bare.match(/\.(0+)/);
+  const dec = decM ? decM[1].length : 0;
+  const thousands = /[#0],[#0]/.test(bare);
+  let s = Math.abs(v).toFixed(dec);
+  if (thousands) {
+    const [ip, dp] = s.split('.');
+    s = ip.replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + (dp ? '.' + dp : '');
+  }
+  if (v < 0) s = '-' + s;
+  if (percent) s += '%';
+  return s;
+}
+function fmtExcelDate(serial, code) {
+  const ms = Date.UTC(1899, 11, 30) + Math.round(serial * 86400000);
+  const d = new Date(ms);
+  const p2 = n => String(n).padStart(2, '0');
+  const Y = d.getUTCFullYear(), Mo = d.getUTCMonth() + 1, Da = d.getUTCDate();
+  const H = d.getUTCHours(), Mi = d.getUTCMinutes(), Se = d.getUTCSeconds();
+  const hasDate = /[ymd]/i.test(code), hasTime = /[hs]/i.test(code);
+  const parts = [];
+  if (hasDate) parts.push(/yyyy/i.test(code) ? `${Y}-${p2(Mo)}-${p2(Da)}` : `${p2(Da)}.${p2(Mo)}.${String(Y).slice(-2)}`);
+  if (hasTime) parts.push(/s/i.test(code) ? `${p2(H)}:${p2(Mi)}:${p2(Se)}` : `${p2(H)}:${p2(Mi)}`);
+  return parts.join(' ') || `${Y}-${p2(Mo)}-${p2(Da)}`;
+}
 function downloadBlob(blob, name) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = name;

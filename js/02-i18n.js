@@ -81,9 +81,10 @@ const I18N = {
     'props.lockGrp':'Blokada','lock.all':'Zablokuj wszystko','lock.move':'Przesuwanie','lock.size':'Rozmiar i obrót','lock.style':'Wygląd (kolory)','lock.text':'Edycja tekstu',
     't.locked':'Kształt zablokowany — odblokuj we Właściwościach','t.added':'Dodano: ',
     'tt.tool.shapes':'Kształty dodatkowe (S)','shapes.title':'Kształty dodatkowe — kliknij, aby dodać',
-    'xl.selectAll':'Zaznacz wszystko','xl.importSel':'Importuj zaznaczone','xl.image':'Obraz','xl.shape':'Kształt',
+    'xl.selectAll':'Zaznacz wszystko','xl.importSel':'Importuj zaznaczone','xl.image':'Obraz','xl.shape':'Kształt','xl.grid':'Tabela',
     'xl.nothing':'Nic nie zaznaczono','xl.fail':'Import nieudany','xl.done':'Zaimportowano: {i} obrazów + {s} kształtów',
-    'xl.count':'Import XLSX — {i} obrazów + {s} kształtów','xl.none':'Brak obsługiwanych obrazów lub kształtów w pliku',
+    'xl.doneG':'Zaimportowano: {i} obrazów + {s} kształtów + {g} tabel',
+    'xl.count':'Import XLSX — {i} obrazów + {s} kształtów','xl.countG':'Import XLSX — {i} obrazów + {s} kształtów + {g} tabel','xl.none':'Brak obsługiwanych obrazów lub kształtów w pliku',
     'xl.emf':' ({n} EMF/WMF pominięto)','xl.fallback':'Zastępczo: {n} nieobsługiwanych kształtów Office jako obrazy.',
   },
   en: {
@@ -164,9 +165,10 @@ const I18N = {
     'props.lockGrp':'Lock','lock.all':'Lock everything','lock.move':'Moving','lock.size':'Size & rotation','lock.style':'Appearance (colors)','lock.text':'Text editing',
     't.locked':'Shape locked — unlock it in Properties','t.added':'Added: ',
     'tt.tool.shapes':'More shapes (S)','shapes.title':'More shapes — click to add',
-    'xl.selectAll':'Select all','xl.importSel':'Import selected','xl.image':'Image','xl.shape':'Shape',
+    'xl.selectAll':'Select all','xl.importSel':'Import selected','xl.image':'Image','xl.shape':'Shape','xl.grid':'Table',
     'xl.nothing':'Nothing selected','xl.fail':'Import failed','xl.done':'Imported: {i} images + {s} shapes',
-    'xl.count':'XLSX Import — {i} images + {s} shapes','xl.none':'No supported images or shapes found in file',
+    'xl.doneG':'Imported: {i} images + {s} shapes + {g} tables',
+    'xl.count':'XLSX Import — {i} images + {s} shapes','xl.countG':'XLSX Import — {i} images + {s} shapes + {g} tables','xl.none':'No supported images or shapes found in file',
     'xl.emf':' ({n} EMF/WMF skipped)','xl.fallback':'Fallback: {n} unsupported Office shapes imported as images.',
   },
   de: {
@@ -247,9 +249,10 @@ const I18N = {
     'props.lockGrp':'Sperre','lock.all':'Alles sperren','lock.move':'Verschieben','lock.size':'Größe & Drehung','lock.style':'Aussehen (Farben)','lock.text':'Textbearbeitung',
     't.locked':'Form gesperrt — in Eigenschaften entsperren','t.added':'Hinzugefügt: ',
     'tt.tool.shapes':'Weitere Formen (S)','shapes.title':'Weitere Formen — zum Hinzufügen klicken',
-    'xl.selectAll':'Alle auswählen','xl.importSel':'Ausgewählte importieren','xl.image':'Bild','xl.shape':'Form',
+    'xl.selectAll':'Alle auswählen','xl.importSel':'Ausgewählte importieren','xl.image':'Bild','xl.shape':'Form','xl.grid':'Tabelle',
     'xl.nothing':'Nichts ausgewählt','xl.fail':'Import fehlgeschlagen','xl.done':'Importiert: {i} Bilder + {s} Formen',
-    'xl.count':'XLSX-Import — {i} Bilder + {s} Formen','xl.none':'Keine unterstützten Bilder oder Formen in der Datei',
+    'xl.doneG':'Importiert: {i} Bilder + {s} Formen + {g} Tabellen',
+    'xl.count':'XLSX-Import — {i} Bilder + {s} Formen','xl.countG':'XLSX-Import — {i} Bilder + {s} Formen + {g} Tabellen','xl.none':'Keine unterstützten Bilder oder Formen in der Datei',
     'xl.emf':' ({n} EMF/WMF übersprungen)','xl.fallback':'Ersatz: {n} nicht unterstützte Office-Formen als Bilder importiert.',
   }
 };

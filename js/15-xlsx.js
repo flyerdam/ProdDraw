@@ -111,6 +111,13 @@ function cloneShapesWithFreshIds(shapes) {
     return n;
   });
 }
+/* miniatura siatki (grupy kształtów) w oknie wyboru importu */
+function gridPreviewSVG(shapes) {
+  const b = unionBBox(shapes);
+  if (!b || b.w < 1 || b.h < 1) return '<svg viewBox="0 0 120 90"></svg>';
+  const inner = shapes.map(s => shapeSVG(s, null, false)).join('');
+  return `<svg viewBox="${b.x} ${b.y} ${b.w} ${b.h}" preserveAspectRatio="xMidYMid meet">${inner}</svg>`;
+}
 function closeXlsxModal() {
   $('#xlModal').classList.remove('on');
   for (const it of xlsxImportItems) if (it.kind === 'image' && it.previewUrl) URL.revokeObjectURL(it.previewUrl);
@@ -144,6 +151,8 @@ function renderXlsxImportPicker(skippedEMF = 0) {
     const checked = it.selected ? 'checked' : '';
     if (it.kind === 'image') {
       d.innerHTML = `<div class="xlSel"><label><input type="checkbox" data-xlpick="${idx}" ${checked}> ${t('xl.image')}</label></div><img src="${it.previewUrl}"><div>${escXml(it.name)}</div>`;
+    } else if (it.kind === 'grid') {
+      d.innerHTML = `<div class="xlSel"><label><input type="checkbox" data-xlpick="${idx}" ${checked}> ${t('xl.grid')}</label></div><div class="xlShapePrev">${gridPreviewSVG(it.shapes)}</div><div>${escXml(it.name)}</div>`;
     } else {
       d.innerHTML = `<div class="xlSel"><label><input type="checkbox" data-xlpick="${idx}" ${checked}> ${t('xl.shape')}</label></div><div class="xlShapePrev"><svg viewBox="0 0 120 90">${shapeSVG(it.shape, null, false)}</svg></div><div>${escXml(it.name)}</div>`;
     }
@@ -166,9 +175,12 @@ async function applySelectedXlsxItems() {
   syncPageUI();
   pushUndo();
   const add = [];
-  let imageN = 0, shapeN = 0;
+  let imageN = 0, shapeN = 0, gridN = 0;
   for (const it of selected) {
-    if (it.kind === 'shape') {
+    if (it.kind === 'grid') {
+      add.push(...cloneShapesWithFreshIds(it.shapes));
+      gridN++;
+    } else if (it.kind === 'shape') {
       add.push(...cloneShapesWithFreshIds([it.shape]));
       shapeN++;
     } else {
@@ -186,7 +198,7 @@ async function applySelectedXlsxItems() {
   setSelection(normalized.map(a => a.id));
   render(); renderProps(); autosave();
   closeXlsxModal();
-  toast(t('xl.done', { i: imageN, s: shapeN }));
+  toast(gridN ? t('xl.doneG', { i: imageN, s: shapeN, g: gridN }) : t('xl.done', { i: imageN, s: shapeN }));
   /* pokaż kreator kadru roboczego nad świeżo zaimportowanymi elementami —
      chyba że wyłączone w Ustawieniach (wtedy zachowaj się jak "Nie przycinaj") */
   if (settings.xlsxAutoCrop !== false) xlsxCropStart(normalized);
@@ -264,6 +276,84 @@ function xlsxCropAbort() {
 $('#xlsxCropConfirm').addEventListener('click', xlsxCropConfirm);
 $('#xlsxCropSkip').addEventListener('click', xlsxCropSkip);
 $('#xlsxCropCancel').addEventListener('click', xlsxCropAbort);
+/* =====================================================================
+   WYPIEKANIE SIATKI ARKUSZA na natywne kształty ProdDraw
+   ("ekosystem Excela" -> rect (tło) + line (krawędzie) + text (treść))
+   ===================================================================== */
+let _measureCtx = null;
+function measureTextW(txt, fs, bold, italic, font) {
+  if (!_measureCtx) _measureCtx = document.createElement('canvas').getContext('2d');
+  _measureCtx.font = `${italic ? 'italic ' : ''}${bold ? 'bold ' : ''}${fs}px "${font || 'Calibri'}",Arial,sans-serif`;
+  return _measureCtx.measureText(txt).width;
+}
+/* zawijanie tekstu do szerokości komórki (Excel wrapText) */
+function wrapCellText(text, maxW, fs, bold, italic, font) {
+  if (maxW <= 0) return text;
+  const out = [];
+  for (const para of String(text).split('\n')) {
+    const words = para.split(/(\s+)/);
+    let line = '';
+    for (const w of words) {
+      const test = line + w;
+      if (line && measureTextW(test, fs, bold, italic, font) > maxW) { out.push(line.replace(/\s+$/, '')); line = w.replace(/^\s+/, ''); }
+      else line = test;
+    }
+    out.push(line.replace(/\s+$/, ''));
+  }
+  return out.join('\n');
+}
+/* model arkusza -> kształty; krawędzie współdzielone deduplikowane po geometrii;
+   z-order: tła (spód) -> krawędzie -> tekst (wierzch) */
+function bakeSheetGrid(model, styles, geom, offY, groupId) {
+  const { cells, merges } = model;
+  const fillsArr = [], textArr = [], borderMap = new Map();
+  const covered = new Set(), mergeAt = new Map();
+  for (const m of merges) {
+    for (let r = m.r1; r <= m.r2; r++) for (let c = m.c1; c <= m.c2; c++)
+      if (!(r === m.r1 && c === m.c1)) covered.add(c + ',' + r);
+    mergeAt.set(m.c1 + ',' + m.r1, m);
+  }
+  const addBorder = (x1, y1, x2, y2, b) => {
+    if (!b) return;
+    const key = Math.round(x1) + ',' + Math.round(y1) + ',' + Math.round(x2) + ',' + Math.round(y2);
+    borderMap.set(key, { id: uid(), type: 'line', x1, y1, x2, y2, stroke: b.color, sw: b.sw, dash: b.dash, as: false, ae: false, locked: false, g: groupId });
+  };
+  for (const cell of cells) {
+    if (covered.has(cell.c + ',' + cell.r)) continue;
+    const mg = mergeAt.get(cell.c + ',' + cell.r);
+    const bx = mg ? geom.box(mg.c1, mg.r1, mg.c2, mg.r2) : geom.box(cell.c, cell.r, cell.c, cell.r);
+    const x = Math.round(bx.x), y = Math.round(bx.y + offY), w = Math.round(bx.w), h = Math.round(bx.h);
+    if (w < 1 || h < 1) continue;
+    const xf = styles.cellXfs[cell.s] || {};
+    const fillC = xf.fillId != null && styles.fills[xf.fillId] ? styles.fills[xf.fillId].color : null;
+    if (fillC) fillsArr.push({ id: uid(), type: 'rect', x, y, w, h, fill: fillC, noFill: false, stroke: '#000000', noStroke: true, sw: 1, dash: 'solid', text: '', fs: 14, tc: '#000000', bold: false, font: 'Calibri', locked: false, g: groupId });
+    const bd = styles.borders[xf.borderId] || {};
+    addBorder(x, y, x + w, y, bd.top);
+    addBorder(x, y + h, x + w, y + h, bd.bottom);
+    addBorder(x, y, x, y + h, bd.left);
+    addBorder(x + w, y, x + w, y + h, bd.right);
+    if (cell.v !== '' && cell.v != null) {
+      const fnt = styles.fonts[xf.fontId] || {};
+      const fs = fnt.sz || 15, bold = !!fnt.bold, italic = !!fnt.italic, font = fnt.name || 'Calibri';
+      const ha = xf.halign;
+      const align = (ha === 'center' || ha === 'centerContinuous') ? 'c'
+        : (ha === 'right' || ha === 'end') ? 'r'
+        : (ha === 'left' || ha === 'general' || !ha) ? (cell.bool ? 'c' : cell.num && !ha ? 'r' : 'l') : 'l';
+      const va = xf.valign === 'center' ? 'm' : xf.valign === 'top' ? 't' : 'b';   // Excel domyślnie dół
+      let txt = String(cell.v);
+      if (xf.wrap) txt = wrapCellText(txt, w - 4, fs, bold, italic, font);
+      textArr.push({ id: uid(), type: 'text', x, y, boxW: w, boxH: h, align, valign: va, pad: 2, text: txt, fs, tc: fnt.color || '#000000', bold, italic, font, locked: false, g: groupId });
+    }
+  }
+  return [...fillsArr, ...borderMap.values(), ...textArr];
+}
+function shapeBottom(s) {
+  return s.type === 'line' ? Math.max(s.y1, s.y2) : (s.y || 0) + (s.h || 0);
+}
+function shiftShapeY(s, dy) {
+  if (!dy) return;
+  if (s.type === 'line') { s.y1 += dy; s.y2 += dy; } else s.y += dy;
+}
 /* import XLSX/XLSM — obrazy + kształty wektorowe (z pozycjami z arkusza) */
 async function importXlsx(file) {
   try {
@@ -279,27 +369,46 @@ async function importXlsx(file) {
        żeby użyć WŁAŚCIWYCH wymiarów kolumn/wierszy TEGO arkusza — wcześniej zawsze
        brano pierwszy napotkany arkusz w archiwum, co psuło skalowanie/pozycję
        rysunków należących do arkusza 2, 3 itd. w skoroszytach wielo-arkuszowych */
-    const sheetFiles = allFiles.filter(f => /^xl\/worksheets\/sheet\d+\.xml$/i.test(f.name));
-    const drawingDims = {};   // 'xl/drawings/drawingN.xml' -> {colWidths, rowHeights} arkusza-właściciela
+    /* ---- ekosystem Excela: wspólne zasoby ---- */
+    const ssFile = allFiles.find(f => /^xl\/sharedStrings\.xml$/i.test(f.name));
+    const sharedStr = parseSharedStrings(ssFile ? td.decode(ssFile.data) : '');
+    const stFile = allFiles.find(f => /^xl\/styles\.xml$/i.test(f.name));
+    const styles = parseStyles(stFile ? td.decode(stFile.data) : '');
+
+    /* arkusze w kolejności numerycznej — dla każdego: wymiary, układ współrzędnych,
+       model komórek + spód treści; jednocześnie mapuj arkusz->rysunek */
+    const sheetFiles = allFiles.filter(f => /^xl\/worksheets\/sheet\d+\.xml$/i.test(f.name))
+      .sort((a, b) => (+a.name.match(/(\d+)\.xml$/i)[1]) - (+b.name.match(/(\d+)\.xml$/i)[1]));
+    const drawingDims = {};    // drawingN.xml -> dims arkusza-właściciela
+    const drawingSheet = {};   // drawingN.xml -> nazwa pliku arkusza
+    const sheetInfo = [];      // {name, dims, geom, model, gridBottom}
     for (const sf of sheetFiles) {
+      const sxml = td.decode(sf.data);
+      const dims = parseSheetDims(sxml);
+      const geom = gridGeom(dims);
+      const model = parseSheetCells(sxml, sharedStr, styles);
+      let maxC = 0, maxR = 0;
+      for (const c of model.cells) { if (c.c > maxC) maxC = c.c; if (c.r > maxR) maxR = c.r; }
+      for (const m of model.merges) { if (m.c2 > maxC) maxC = m.c2; if (m.r2 > maxR) maxR = m.r2; }
+      const bb = model.cells.length ? geom.box(0, 0, maxC, maxR) : { x: 0, y: 0, w: 0, h: 0 };
+      sheetInfo.push({ name: sf.name, dims, geom, model, gridBottom: bb.y + bb.h });
       const relPath = sf.name.replace(/^xl\/worksheets\//i, 'xl/worksheets/_rels/') + '.rels';
       const relFile = allFiles.find(f => f.name === relPath);
       if (!relFile) continue;
-      const relXml = td.decode(relFile.data);
-      for (const rm of relXml.matchAll(/<Relationship\b[^>]*\/?>/g)) {
+      for (const rm of td.decode(relFile.data).matchAll(/<Relationship\b[^>]*\/?>/g)) {
         const tag = rm[0];
         const typeM = tag.match(/\bType="([^"]+)"/), targetM = tag.match(/\bTarget="([^"]+)"/);
         if (!typeM || !targetM || !/\/drawing$/i.test(typeM[1])) continue;
         const drawingPath = resolveRelTarget(sf.name, targetM[1]);
-        if (drawingPath) drawingDims[drawingPath] = parseSheetDims(td.decode(sf.data));
+        if (drawingPath) { drawingDims[drawingPath] = dims; drawingSheet[drawingPath] = sf.name; }
       }
     }
     /* awaryjnie (brak .rels albo relacji arkusz->rysunek) — wymiary pierwszego arkusza */
-    const fallbackDims = sheetFiles.length ? parseSheetDims(td.decode(sheetFiles[0].data)) : parseSheetDims('');
+    const fallbackDims = sheetInfo.length ? sheetInfo[0].dims : parseSheetDims('');
 
+    /* rysunki (obrazy/kształty wektorowe) — parsowane per plik, z zapamiętaniem arkusza */
     const drawingFiles = allFiles.filter(f => /^xl\/drawings\/drawing\d+\.xml$/i.test(f.name));
-    const importedShapes = [];
-    const anchoredPictures = [];
+    const drawingResults = [];
     let unsupportedFallbacks = 0;
     for (const df of drawingFiles) {
       const relPath = df.name.replace(/^xl\/drawings\//i, 'xl/drawings/_rels/') + '.rels';
@@ -307,15 +416,49 @@ async function importXlsx(file) {
       const relMap = relFile ? parseDrawingRels(td.decode(relFile.data), df.name) : {};
       const dims = drawingDims[df.name] || fallbackDims;
       const parsed = parseDrawingShapes(td.decode(df.data), dims, relMap, mediaMap);
-      importedShapes.push(...parsed.shapes);
-      anchoredPictures.push(...parsed.pictures.map(p => ({ ...p, anchored: true })));
+      drawingResults.push({ sheet: drawingSheet[df.name] || null, shapes: parsed.shapes, pictures: parsed.pictures });
       unsupportedFallbacks += parsed.unsupportedFallbacks || 0;
     }
+
+    /* przesunięcia pionowe arkuszy — układamy je jeden pod drugim (siatka + rysunki
+       tego samego arkusza dostają TEN SAM offset, więc zostają zsynchronizowane) */
+    const drawBottom = {};
+    for (const dr of drawingResults) {
+      if (!dr.sheet) continue;
+      let b = 0;
+      for (const s of dr.shapes) b = Math.max(b, shapeBottom(s));
+      for (const p of dr.pictures) b = Math.max(b, (p.y || 0) + (p.h || 0));
+      drawBottom[dr.sheet] = Math.max(drawBottom[dr.sheet] || 0, b);
+    }
+    const GAP = 40, offOf = {};
+    let cursor = 0;
+    for (const si of sheetInfo) {
+      offOf[si.name] = cursor;
+      cursor += Math.max(si.gridBottom, drawBottom[si.name] || 0) + GAP;
+    }
+
+    /* wypiecz siatkę każdego arkusza (jedna grupa = jedna tabela) */
+    const gridItems = [];
+    for (const si of sheetInfo) {
+      const gshapes = bakeSheetGrid(si.model, styles, si.geom, offOf[si.name] || 0, 'G' + uid());
+      if (gshapes.length) gridItems.push({ kind: 'grid', name: si.name.replace(/^xl\/worksheets\//i, ''), shapes: gshapes, selected: true });
+    }
+
+    /* przesuń rysunki o offset ich arkusza i zbierz globalnie */
+    const importedShapes = [], anchoredPictures = [];
+    for (const dr of drawingResults) {
+      const off = dr.sheet ? (offOf[dr.sheet] || 0) : 0;
+      for (const s of dr.shapes) { shiftShapeY(s, off); importedShapes.push(s); }
+      for (const p of dr.pictures) anchoredPictures.push({ ...p, y: (p.y || 0) + off, anchored: true });
+    }
+
     const skippedEMF = allFiles.filter(f => /^xl\/media\//i.test(f.name) && /\.(emf|wmf)$/i.test(f.name)).length;
-    if (!mediaFiles.length && !importedShapes.length && !anchoredPictures.length)
+    if (!mediaFiles.length && !importedShapes.length && !anchoredPictures.length && !gridItems.length)
       return toast(t('xl.none') + (skippedEMF ? t('xl.emf', { n: skippedEMF }) : ''));
     closeXlsxModal();
     xlsxImportItems = [];
+    /* siatki (tabele) na początku listy -> dodawane pierwsze -> spód z-order (pod rysunkami) */
+    for (const g of gridItems) xlsxImportItems.push(g);
     const usedAnchored = new Set(anchoredPictures.map(p => 'xl/media/' + p.name.replace(/^xl\/media\//i, '')));
 
     /* uszereguj zakotwiczone elementy wg powierzchni MALEJĄCO, żeby duże tła trafiały
@@ -345,8 +488,11 @@ async function importXlsx(file) {
         previewUrl: URL.createObjectURL(new Blob([m.data], { type: mime })), selected: true });
     }
     const imgN = xlsxImportItems.filter(i => i.kind === 'image').length;
-    const shapeN = xlsxImportItems.length - imgN;
-    $('#xlModal').querySelector('h3').textContent = t('xl.count', { i: imgN, s: shapeN });
+    const gridN = xlsxImportItems.filter(i => i.kind === 'grid').length;
+    const shapeN = xlsxImportItems.length - imgN - gridN;
+    $('#xlModal').querySelector('h3').textContent = gridN
+      ? t('xl.countG', { i: imgN, s: shapeN, g: gridN })
+      : t('xl.count', { i: imgN, s: shapeN });
     renderXlsxImportPicker(skippedEMF);
     if (unsupportedFallbacks) {
       const w = document.createElement('div');

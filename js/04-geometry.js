@@ -31,6 +31,7 @@ function bboxOf(s) {
     return { x, y, w: Math.abs(s.x2 - s.x1), h: Math.abs(s.y2 - s.y1) };
   }
   if (s.type === 'text') {
+    if (s.boxW !== undefined) return { x: s.x, y: s.y, w: s.boxW, h: s.boxH != null ? s.boxH : String(s.text || '').split('\n').length * s.fs * 1.25 };
     const lines = String(s.text || '').split('\n');
     const w = Math.max(...lines.map(l => l.length), 1) * s.fs * 0.6;
     return { x: s.x, y: s.y, w, h: lines.length * s.fs * 1.25 };

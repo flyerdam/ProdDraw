@@ -142,9 +142,23 @@ function shapeSVG(s, vals, live) {
   if (s.type === 'text') {
     const lines = subst(s.text, vals).split('\n');
     const lh = s.fs * 1.25;
+    const font = `font-family="${escXml(s.font || 'Calibri')},Arial,sans-serif" font-size="${s.fs}" ${s.bold ? 'font-weight="bold"' : ''} ${s.italic ? 'font-style="italic"' : ''} fill="${s.tc}"`;
+    /* komórki zaimportowane z Excela: dokładne wyrównanie (poziom/pion) w pudełku boxW×boxH */
+    if (s.boxW !== undefined) {
+      const pad = s.pad != null ? s.pad : 2;
+      const anchor = s.align === 'c' ? 'middle' : s.align === 'r' ? 'end' : 'start';
+      const ax = s.align === 'c' ? s.x + s.boxW / 2 : s.align === 'r' ? s.x + s.boxW - pad : s.x + pad;
+      const th = lines.length * lh;
+      const bh = s.boxH != null ? s.boxH : th;
+      const topY = s.valign === 'm' ? s.y + (bh - th) / 2 : s.valign === 'b' ? s.y + bh - pad - th : s.y + pad;
+      const ts = lines.map((l, i) => `<tspan x="${ax}" y="${topY + s.fs + i * lh}">${escXml(l)}</tspan>`).join('');
+      let out = `<g${did}><text text-anchor="${anchor}" ${font}>${ts}</text>`;
+      if (live) out += `<rect x="${s.x}" y="${s.y}" width="${s.boxW}" height="${bh}" fill="transparent"/>`;
+      return out + '</g>';
+    }
     const ts = lines.map((l, i) =>
       `<tspan x="${s.x}" y="${s.y + s.fs + i * lh}">${escXml(l)}</tspan>`).join('');
-    let out = `<g${did}><text font-family="${escXml(s.font || 'Calibri')},Arial,sans-serif" font-size="${s.fs}" ${s.bold ? 'font-weight="bold"' : ''} ${s.italic ? 'font-style="italic"' : ''} fill="${s.tc}">${ts}</text>`;
+    let out = `<g${did}><text ${font}>${ts}</text>`;
     if (live) { const b = bboxOf(s);
       out += `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="transparent"/>`; }
     return out + '</g>';
