@@ -305,15 +305,23 @@ async function emfToPngDataURL(bytes) {
     const ctx = cnv.getContext('2d'); ctx.scale(SS, SS); ctx.lineJoin = 'round';
     const rcl = off => ({ l: dv.getInt32(off + 8, true), t: dv.getInt32(off + 12, true), r: dv.getInt32(off + 16, true), b: dv.getInt32(off + 20, true) });
     const objs = {}; let curBrush = null, curPen = { color: '#000000', w: 1 }, hadDraw = false;
-    /* punkty POLYGON16/POLYLINE16: przelicz z układu logicznego na canvas przez rclBounds rekordu */
+    /* punkty POLYGON16/POLYLINE16 -> canvas przez rclBounds rekordu. Cache po
+       zestawie punktów: wypełnienie i obrys tej samej figury mają IDENTYCZNE
+       punkty, ale różne rclBounds (obrys rozdmuchany o grubość pióra) — bez
+       cache obrys rozjeżdżał się z wypełnieniem („ramka" przy strzałce). */
+    const polyCache = {};
     const mapPoly = (off, n) => {
       const pts = [];
       for (let k = 0; k < n; k++) pts.push([dv.getInt16(off + 28 + k * 4, true), dv.getInt16(off + 30 + k * 4, true)]);
+      const key = pts.join(';');
+      if (polyCache[key]) return polyCache[key];
       let mnx = Infinity, mny = Infinity, mxx = -Infinity, mxy = -Infinity;
       for (const p of pts) { if (p[0] < mnx) mnx = p[0]; if (p[0] > mxx) mxx = p[0]; if (p[1] < mny) mny = p[1]; if (p[1] > mxy) mxy = p[1]; }
       const R = rcl(off), sx = (mxx - mnx) || 1, sy = (mxy - mny) || 1;
       const rw = (R.r - R.l), rh = (R.b - R.t);
-      return pts.map(p => [(R.l - bl) + (p[0] - mnx) / sx * rw, (R.t - bt) + (p[1] - mny) / sy * rh]);
+      const out = pts.map(p => [(R.l - bl) + (p[0] - mnx) / sx * rw, (R.t - bt) + (p[1] - mny) / sy * rh]);
+      polyCache[key] = out;
+      return out;
     };
     const drawPoly = (canvasPts, closed) => {
       if (!canvasPts.length) return;
@@ -471,10 +479,15 @@ function assembleSheetShapes(sheet) {
    pudełka — ExcelJS/rysunek dają tekst jednoliniowy, a w Excelu się zawija */
 function wrapShapeText(shapes) {
   for (const s of shapes) {
-    if (s.text && s.w > 6 && ['rect', 'roundRect', 'ellipse', 'poly'].includes(s.type)) {
-      const fs = s.fs || 14;
-      s.text = wrapCellText(s.text, s.w - 8, fs, !!s.bold, !!s.italic, s.font || 'Calibri');
-    }
+    if (!(s.text && s.w > 6 && ['rect', 'roundRect', 'ellipse', 'poly'].includes(s.type))) continue;
+    const fs = s.fs || 14, maxW = s.w - 6;
+    /* zawijaj TYLKO gdy tekst wyraźnie wystaje (tolerancja ~8%) — inaczej krótkie
+       etykiety jak „PRAWA WEWNĄTRZ" łamałyby się przez różnice metryk fontów */
+    let longest = 0;
+    for (const para of String(s.text).split('\n'))
+      longest = Math.max(longest, measureTextW(para, fs, !!s.bold, !!s.italic, s.font || 'Calibri'));
+    if (longest > maxW * 1.08)
+      s.text = wrapCellText(s.text, maxW, fs, !!s.bold, !!s.italic, s.font || 'Calibri');
   }
   return shapes;
 }

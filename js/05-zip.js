@@ -183,7 +183,7 @@ function parseShapeNode(nodeXml, box) {
     const rPrM = txM[1].match(/<a:rPr\s([^>]+)/);
     if (rPrM) {
       const szM = rPrM[1].match(/\bsz="(\d+)"/);
-      if (szM) fs = Math.max(6, Math.round(+szM[1] / 100));
+      if (szM) fs = Math.max(6, Math.round(+szM[1] / 100 * 96 / 72));   /* pkt -> px */
       bold = /\bb="1"/.test(rPrM[1]);
       const tcM = txM[1].match(/<a:rPr[^>]*>([\s\S]*?)<\/a:rPr>/);
       let tcc = tcM ? xlColor(tcM[1]) : null;
@@ -284,7 +284,7 @@ function parseDrawingShapes(xml, dims, relMap = {}, mediaMap = {}) {
   const pictures = [];
   let unsupportedFallbacks = 0;
   const EPX = 9525;
-  const anchorRe = /<xdr:(absoluteAnchor|twoCellAnchor|oneCellAnchor)>([\s\S]*?)<\/xdr:\1>/g;
+  const anchorRe = /<xdr:(absoluteAnchor|twoCellAnchor|oneCellAnchor)\b[^>]*>([\s\S]*?)<\/xdr:\1>/g;
   let am;
   while ((am = anchorRe.exec(xml)) !== null) {
     const aType = am[1], aXml = am[2];
@@ -360,7 +360,7 @@ function parseDrawingShapes(xml, dims, relMap = {}, mediaMap = {}) {
    Klucz = komórka „from" (col,row), do dopasowania z ExcelJS getImages(). */
 function parseDrawingPicFlips(xml) {
   const out = [];
-  const anchorRe = /<xdr:(absoluteAnchor|twoCellAnchor|oneCellAnchor)>([\s\S]*?)<\/xdr:\1>/g;
+  const anchorRe = /<xdr:(absoluteAnchor|twoCellAnchor|oneCellAnchor)\b[^>]*>([\s\S]*?)<\/xdr:\1>/g;
   let m;
   while ((m = anchorRe.exec(xml)) !== null) {
     const a = m[2];
