@@ -3581,6 +3581,65 @@ function ejsBakeGrid(ws, geom, groupId) {
   return [...fillsArr, ...borderMap.values(), ...textArr];
 }
 
+/* ---- EMF (Enhanced Metafile) -> PNG w przeglądarce ----
+   Przeglądarki nie renderują EMF w <img>. Logo MAN, mini-ciężarówka itp. w
+   plikach Excela to najczęściej EMF „opakowujące" bitmapę (rekordy
+   EMR_STRETCHDIBITS z osadzonym DIB). Wyciągamy każdy DIB, składamy z niego
+   plik BMP, rysujemy na kanwie wg pozycji rekordu i eksportujemy do PNG.
+   Czysto wektorowe EMF (bez bitmap) zwracają null -> pomijane. */
+function dibToBmp(bmi, bits) {
+  const out = new Uint8Array(14 + bmi.length + bits.length);
+  const dv = new DataView(out.buffer);
+  out[0] = 0x42; out[1] = 0x4D;                 // 'BM'
+  dv.setUint32(2, out.length, true);            // bfSize
+  dv.setUint32(10, 14 + bmi.length, true);      // bfOffBits (po BITMAPINFO)
+  out.set(bmi, 14); out.set(bits, 14 + bmi.length);
+  return out;
+}
+async function emfToPngDataURL(bytes) {
+  try {
+    const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    if (u8.length < 88) return null;
+    const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+    if (dv.getUint32(0, true) !== 1) return null;               // EMR_HEADER
+    let bl = dv.getInt32(8, true), bt = dv.getInt32(12, true), br = dv.getInt32(16, true), bb = dv.getInt32(20, true);
+    let W = br - bl + 1, H = bb - bt + 1;
+    const dibs = [];
+    let off = 0;
+    while (off + 8 <= u8.length) {
+      const t = dv.getUint32(off, true), sz = dv.getUint32(off + 4, true);
+      if (sz < 8 || off + sz > u8.length) break;
+      if (t === 81) {                                           // EMR_STRETCHDIBITS
+        const gi = k => dv.getInt32(off + k, true), gu = k => dv.getUint32(off + k, true);
+        const xDest = gi(24), yDest = gi(28);
+        const offBmi = gu(48), cbBmi = gu(52), offBits = gu(56), cbBits = gu(60);
+        const cxDest = gi(72), cyDest = gi(76);
+        if (cbBmi && cbBits && off + offBmi + cbBmi <= u8.length && off + offBits + cbBits <= u8.length)
+          dibs.push({ xDest, yDest, cxDest, cyDest,
+            bmi: u8.subarray(off + offBmi, off + offBmi + cbBmi),
+            bits: u8.subarray(off + offBits, off + offBits + cbBits) });
+      }
+      if (t === 14) break;                                      // EMR_EOF
+      off += sz;
+    }
+    if (!dibs.length) return null;
+    if (!(W > 1 && H > 1 && W < 20000 && H < 20000)) {
+      const b0 = dibs[0].bmi, bdv = new DataView(b0.buffer, b0.byteOffset, b0.byteLength);
+      W = Math.abs(bdv.getInt32(4, true)) || 100; H = Math.abs(bdv.getInt32(8, true)) || 100; bl = 0; bt = 0;
+    }
+    const cnv = document.createElement('canvas'); cnv.width = W; cnv.height = H;
+    const ctx = cnv.getContext('2d');
+    for (const d of dibs) {
+      const url = URL.createObjectURL(new Blob([dibToBmp(d.bmi, d.bits)], { type: 'image/bmp' }));
+      try {
+        const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; });
+        ctx.drawImage(img, d.xDest - bl, d.yDest - bt, d.cxDest || img.naturalWidth, d.cyDest || img.naturalHeight);
+      } catch (e) {} finally { URL.revokeObjectURL(url); }
+    }
+    return cnv.toDataURL('image/png');
+  } catch (e) { return null; }
+}
+
 /* obrazy arkusza z ExcelJS -> kształty image (href=dataURL, pozycja z kotwicy) */
 async function ejsSheetImages(ws, wb, gi) {
   const out = [];
@@ -3589,9 +3648,6 @@ async function ejsSheetImages(ws, wb, gi) {
     try { media = wb.getImage(im.imageId); } catch (e) {}
     if (!media || !media.buffer) continue;
     const ext = (media.extension || 'png').toLowerCase();
-    if (ext === 'emf' || ext === 'wmf') continue;   // wektorowe — przeglądarka nie renderuje w <img>, pomiń
-    const mime = (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : ext === 'gif' ? 'image/gif'
-      : ext === 'bmp' ? 'image/bmp' : ext === 'webp' ? 'image/webp' : 'image/png';
     const tl = im.range.tl, br = im.range.br;
     const x1 = gi.pxCol(tl.nativeCol || 0, tl.nativeColOff), y1 = gi.pxRow(tl.nativeRow || 0, tl.nativeRowOff);
     let x2, y2;
@@ -3600,7 +3656,16 @@ async function ejsSheetImages(ws, wb, gi) {
     else { x2 = x1 + 100; y2 = y1 + 100; }
     const w = Math.max(4, Math.round(x2 - x1)), h = Math.max(4, Math.round(y2 - y1));
     let href;
-    try { href = await fileToDataURL(new Blob([media.buffer], { type: mime })); } catch (e) { continue; }
+    if (ext === 'emf') {
+      href = await emfToPngDataURL(media.buffer);   // bitmapa opakowana w EMF -> PNG
+      if (!href) continue;                          // czysto wektorowe EMF/WMF -> pomiń
+    } else if (ext === 'wmf') {
+      continue;                                     // starszy metafile — brak konwersji
+    } else {
+      const mime = (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : ext === 'gif' ? 'image/gif'
+        : ext === 'bmp' ? 'image/bmp' : ext === 'webp' ? 'image/webp' : 'image/png';
+      try { href = await fileToDataURL(new Blob([media.buffer], { type: mime })); } catch (e) { continue; }
+    }
     out.push({ id: uid(), type: 'image', href, x: Math.round(x1), y: Math.round(y1), w, h, locked: false });
   }
   return out;
