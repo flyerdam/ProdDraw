@@ -284,52 +284,140 @@ function dibToBmp(bmi, bits) {
   out.set(bmi, 14); out.set(bits, 14 + bmi.length);
   return out;
 }
+/* Kompaktowy renderer EMF (podzbiór GDI wystarczający dla ikon Office):
+   pędzle/pióra (CREATEBRUSHINDIRECT/EXTCREATEPEN/SELECTOBJECT), wielokąty
+   (POLYGON16/POLYLINE16), prostokąty/elipsy oraz bitmapy (STRETCHDIBITS).
+   Każdy rekord rysujący ma własne rclBounds (device px) — używamy go do
+   transformacji punktów (bez parsowania window/viewport). Rysowanie w
+   kolejności rekordów zachowuje z-order (tło -> bitmapa -> strzałka). */
+function emfBgr(c) { return '#' + [(c & 0xFF), (c >> 8) & 0xFF, (c >> 16) & 0xFF].map(x => x.toString(16).padStart(2, '0')).join(''); }
 async function emfToPngDataURL(bytes) {
   try {
     const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
     if (u8.length < 88) return null;
     const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
     if (dv.getUint32(0, true) !== 1) return null;               // EMR_HEADER
-    let bl = dv.getInt32(8, true), bt = dv.getInt32(12, true), br = dv.getInt32(16, true), bb = dv.getInt32(20, true);
-    let W = br - bl + 1, H = bb - bt + 1;
-    const dibs = [];
-    let off = 0;
-    while (off + 8 <= u8.length) {
-      const t = dv.getUint32(off, true), sz = dv.getUint32(off + 4, true);
-      if (sz < 8 || off + sz > u8.length) break;
-      if (t === 81) {                                           // EMR_STRETCHDIBITS
-        const gi = k => dv.getInt32(off + k, true), gu = k => dv.getUint32(off + k, true);
-        const xDest = gi(24), yDest = gi(28);
-        const offBmi = gu(48), cbBmi = gu(52), offBits = gu(56), cbBits = gu(60);
-        const cxDest = gi(72), cyDest = gi(76);
-        if (cbBmi && cbBits && off + offBmi + cbBmi <= u8.length && off + offBits + cbBits <= u8.length)
-          dibs.push({ xDest, yDest, cxDest, cyDest,
-            bmi: u8.subarray(off + offBmi, off + offBmi + cbBmi),
-            bits: u8.subarray(off + offBits, off + offBits + cbBits) });
-      }
-      if (t === 14) break;                                      // EMR_EOF
-      off += sz;
-    }
-    if (!dibs.length) return null;
-    if (!(W > 1 && H > 1 && W < 20000 && H < 20000)) {
-      const b0 = dibs[0].bmi, bdv = new DataView(b0.buffer, b0.byteOffset, b0.byteLength);
-      W = Math.abs(bdv.getInt32(4, true)) || 100; H = Math.abs(bdv.getInt32(8, true)) || 100; bl = 0; bt = 0;
-    }
-    const cnv = document.createElement('canvas'); cnv.width = W; cnv.height = H;
-    const ctx = cnv.getContext('2d');
-    for (const d of dibs) {
-      const url = URL.createObjectURL(new Blob([dibToBmp(d.bmi, d.bits)], { type: 'image/bmp' }));
+    const bl = dv.getInt32(8, true), bt = dv.getInt32(12, true), brr = dv.getInt32(16, true), bb = dv.getInt32(20, true);
+    let W = brr - bl + 1, H = bb - bt + 1;
+    if (!(W > 1 && H > 1 && W < 20000 && H < 20000)) { W = 400; H = 300; }
+    const SS = W < 700 ? 2 : 1;                                  // nadpróbkowanie małych ikon
+    const cnv = document.createElement('canvas'); cnv.width = W * SS; cnv.height = H * SS;
+    const ctx = cnv.getContext('2d'); ctx.scale(SS, SS); ctx.lineJoin = 'round';
+    const rcl = off => ({ l: dv.getInt32(off + 8, true), t: dv.getInt32(off + 12, true), r: dv.getInt32(off + 16, true), b: dv.getInt32(off + 20, true) });
+    const objs = {}; let curBrush = null, curPen = { color: '#000000', w: 1 }, hadDraw = false;
+    /* punkty POLYGON16/POLYLINE16: przelicz z układu logicznego na canvas przez rclBounds rekordu */
+    const mapPoly = (off, n) => {
+      const pts = [];
+      for (let k = 0; k < n; k++) pts.push([dv.getInt16(off + 28 + k * 4, true), dv.getInt16(off + 30 + k * 4, true)]);
+      let mnx = Infinity, mny = Infinity, mxx = -Infinity, mxy = -Infinity;
+      for (const p of pts) { if (p[0] < mnx) mnx = p[0]; if (p[0] > mxx) mxx = p[0]; if (p[1] < mny) mny = p[1]; if (p[1] > mxy) mxy = p[1]; }
+      const R = rcl(off), sx = (mxx - mnx) || 1, sy = (mxy - mny) || 1;
+      const rw = (R.r - R.l), rh = (R.b - R.t);
+      return pts.map(p => [(R.l - bl) + (p[0] - mnx) / sx * rw, (R.t - bt) + (p[1] - mny) / sy * rh]);
+    };
+    const drawPoly = (canvasPts, closed) => {
+      if (!canvasPts.length) return;
+      ctx.beginPath(); ctx.moveTo(canvasPts[0][0], canvasPts[0][1]);
+      for (let k = 1; k < canvasPts.length; k++) ctx.lineTo(canvasPts[k][0], canvasPts[k][1]);
+      if (closed) ctx.closePath();
+      if (closed && curBrush && curBrush.color) { ctx.fillStyle = curBrush.color; ctx.fill(); hadDraw = true; }
+      if (curPen && curPen.color) { ctx.strokeStyle = curPen.color; ctx.lineWidth = curPen.w || 1; ctx.stroke(); hadDraw = true; }
+    };
+    const loadImgData = async (bmp) => {
+      const url = URL.createObjectURL(new Blob([bmp], { type: 'image/bmp' }));
       try {
         const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; });
-        ctx.drawImage(img, d.xDest - bl, d.yDest - bt, d.cxDest || img.naturalWidth, d.cyDest || img.naturalHeight);
-      } catch (e) {} finally { URL.revokeObjectURL(url); }
+        const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+        const cx = c.getContext('2d'); cx.drawImage(img, 0, 0);
+        return cx.getImageData(0, 0, c.width, c.height);
+      } catch (e) { return null; } finally { URL.revokeObjectURL(url); }
+    };
+    /* narysuj DIB w prostokącie docelowym; maska 1bpp -> kanał alfa (biel=przezroczyste),
+       a pojedynczy DIB -> kluczowanie bieli, żeby ikona nie miała białego pudełka na tle */
+    const drawDibs = async (colorBmp, maskBmp, x, y, w, h) => {
+      const colorID = await loadImgData(colorBmp); if (!colorID) return;
+      const d = colorID.data;
+      const maskID = maskBmp ? await loadImgData(maskBmp) : null;
+      if (maskID && maskID.width === colorID.width && maskID.height === colorID.height) {
+        const m = maskID.data;
+        for (let i = 0; i < d.length; i += 4) d[i + 3] = m[i] > 128 ? 255 : 0;
+      } else {
+        for (let i = 0; i < d.length; i += 4) if (d[i] > 244 && d[i + 1] > 244 && d[i + 2] > 244) d[i + 3] = 0;
+      }
+      const tmp = document.createElement('canvas'); tmp.width = colorID.width; tmp.height = colorID.height;
+      tmp.getContext('2d').putImageData(colorID, 0, 0);
+      ctx.drawImage(tmp, x, y, w || colorID.width, h || colorID.height); hadDraw = true;
+    };
+    const dibAt = off => {
+      const gu = k => dv.getUint32(off + k, true);
+      const offBmi = gu(48), cbBmi = gu(52), offBits = gu(56), cbBits = gu(60);
+      if (!(cbBmi && cbBits && off + offBmi + cbBmi <= u8.length && off + offBits + cbBits <= u8.length)) return null;
+      return dibToBmp(u8.subarray(off + offBmi, off + offBmi + cbBmi), u8.subarray(off + offBits, off + offBits + cbBits));
+    };
+    let off = 0;
+    while (off + 8 <= u8.length) {
+      const t = dv.getUint32(off, true); let sz = dv.getUint32(off + 4, true);
+      if (sz < 8 || off + sz > u8.length) break;
+      if (t === 39) {                                           // CREATEBRUSHINDIRECT
+        const ih = dv.getUint32(off + 8, true), style = dv.getUint32(off + 12, true), col = dv.getUint32(off + 16, true);
+        objs[ih] = { kind: 'brush', color: style === 0 ? emfBgr(col) : null };
+      } else if (t === 58) {                                    // EXTCREATEPEN
+        const ih = dv.getUint32(off + 8, true), col = dv.getUint32(off + 40, true);
+        objs[ih] = { kind: 'pen', color: emfBgr(col), w: 1 };
+      } else if (t === 38) {                                    // CREATEPEN
+        const ih = dv.getUint32(off + 8, true), col = dv.getUint32(off + 20, true);
+        objs[ih] = { kind: 'pen', color: emfBgr(col), w: 1 };
+      } else if (t === 37) {                                    // SELECTOBJECT
+        const ih = dv.getUint32(off + 8, true);
+        if (ih & 0x80000000) {                                  // obiekt systemowy
+          const s = ih & 0x7fffffff;
+          if (s === 5) curBrush = null;                         // NULL_BRUSH
+          else if (s === 0 || s === 1) curBrush = { color: null }; // WHITE/LTGRAY -> pomiń tło
+          else if (s === 8) curPen = null;                      // NULL_PEN
+          else if (s === 7) curPen = { color: '#000000', w: 1 };// BLACK_PEN
+        } else if (objs[ih]) {
+          if (objs[ih].kind === 'brush') curBrush = objs[ih];
+          else curPen = objs[ih];
+        }
+      } else if (t === 40) {                                    // DELETEOBJECT
+        delete objs[dv.getUint32(off + 8, true)];
+      } else if (t === 86) {                                    // POLYGON16
+        drawPoly(mapPoly(off, dv.getInt32(off + 24, true)), true);
+      } else if (t === 87) {                                    // POLYLINE16
+        const savedBrush = curBrush; curBrush = null; drawPoly(mapPoly(off, dv.getInt32(off + 24, true)), false); curBrush = savedBrush;
+      } else if (t === 43 || t === 42) {                        // RECTANGLE / ELLIPSE
+        const R = rcl(off), x = R.l - bl, y = R.t - bt, w = R.r - R.l, h = R.b - R.t;
+        ctx.beginPath();
+        if (t === 42) ctx.ellipse(x + w / 2, y + h / 2, Math.abs(w / 2), Math.abs(h / 2), 0, 0, 2 * Math.PI);
+        else ctx.rect(x, y, w, h);
+        if (curBrush && curBrush.color) { ctx.fillStyle = curBrush.color; ctx.fill(); hadDraw = true; }
+        if (curPen && curPen.color) { ctx.strokeStyle = curPen.color; ctx.lineWidth = curPen.w || 1; ctx.stroke(); hadDraw = true; }
+      } else if (t === 81) {                                    // STRETCHDIBITS
+        const R = rcl(off);
+        let color = dibAt(off), mask = null;
+        /* para w tym samym prostokącie = (maska, kolor) dla przezroczystości ikony */
+        const nOff = off + sz;
+        if (nOff + 8 <= u8.length && dv.getUint32(nOff, true) === 81) {
+          const nR = rcl(nOff);
+          if (nR.l === R.l && nR.t === R.t && nR.r === R.r && nR.b === R.b) {
+            const next = dibAt(nOff);
+            if (next) { mask = color; color = next; sz += dv.getUint32(nOff + 4, true); }
+          }
+        }
+        if (mask && color && mask.length > color.length) { const tmp = mask; mask = color; color = tmp; }
+        if (color) await drawDibs(color, mask, Math.min(R.l, R.r) - bl, Math.min(R.t, R.b) - bt, Math.abs(R.r - R.l), Math.abs(R.b - R.t));
+      }
+      if (t === 14) break;                                      // EOF
+      off += sz;
     }
+    if (!hadDraw) return null;                                  // nic nie narysowano (czysty wektor bez obsługi) -> pomiń
     return cnv.toDataURL('image/png');
   } catch (e) { return null; }
 }
 
-/* obrazy arkusza z ExcelJS -> kształty image (href=dataURL, pozycja z kotwicy) */
-async function ejsSheetImages(ws, wb, gi) {
+/* obrazy arkusza z ExcelJS -> kształty image (href=dataURL, pozycja z kotwicy).
+   flips = [{col,row,flipH,flipV}] z rysunku (ExcelJS nie zwraca odbić). */
+async function ejsSheetImages(ws, wb, gi, flips = []) {
   const out = [];
   for (const im of ws.getImages()) {
     let media = null;
@@ -343,6 +431,7 @@ async function ejsSheetImages(ws, wb, gi) {
     else if (im.range.ext) { x2 = x1 + (im.range.ext.width || 100); y2 = y1 + (im.range.ext.height || 100); }
     else { x2 = x1 + 100; y2 = y1 + 100; }
     const w = Math.max(4, Math.round(x2 - x1)), h = Math.max(4, Math.round(y2 - y1));
+    const flip = flips.find(fl => fl.col === (tl.nativeCol || 0) && fl.row === (tl.nativeRow || 0));
     let href;
     if (ext === 'emf') {
       href = await emfToPngDataURL(media.buffer);   // bitmapa opakowana w EMF -> PNG
@@ -354,7 +443,10 @@ async function ejsSheetImages(ws, wb, gi) {
         : ext === 'bmp' ? 'image/bmp' : ext === 'webp' ? 'image/webp' : 'image/png';
       try { href = await fileToDataURL(new Blob([media.buffer], { type: mime })); } catch (e) { continue; }
     }
-    out.push({ id: uid(), type: 'image', href, x: Math.round(x1), y: Math.round(y1), w, h, locked: false });
+    const sh = { id: uid(), type: 'image', href, x: Math.round(x1), y: Math.round(y1), w, h, locked: false };
+    if (flip && flip.flipH) sh.flipH = true;
+    if (flip && flip.flipV) sh.flipV = true;
+    out.push(sh);
   }
   return out;
 }
@@ -492,17 +584,20 @@ async function importXlsx(file) {
     let allZip = [], sheetMap = [];
     try { allZip = await readZipAll(buf); sheetMap = parseWorkbookSheetMap(allZip); } catch (e) {}
     const td = new TextDecoder();
-    const drawingShapesFor = (drawingFile, dims) => {
-      if (!drawingFile) return [];
+    /* pobierz XML rysunku raz -> kształty wektorowe (ExcelJS ich nie czyta) + odbicia obrazów */
+    const drawingDataFor = (drawingFile, dims) => {
+      const empty = { vectors: [], flips: [] };
+      if (!drawingFile) return empty;
       const df = allZip.find(f => f.name === drawingFile);
-      if (!df) return [];
+      if (!df) return empty;
+      const xml = td.decode(df.data);
       const relPath = drawingFile.replace(/^xl\/drawings\//i, 'xl/drawings/_rels/') + '.rels';
       const relFile = allZip.find(f => f.name === relPath);
       const relMap = relFile ? parseDrawingRels(td.decode(relFile.data), drawingFile) : {};
-      try {
-        /* mediaMap pusty -> obrazów NIE dublujemy (te robi ExcelJS); zwracamy tylko wektory */
-        return parseDrawingShapes(td.decode(df.data), dims, relMap, {}).shapes || [];
-      } catch (e) { return []; }
+      let vectors = [], flips = [];
+      try { vectors = parseDrawingShapes(xml, dims, relMap, {}).shapes || []; } catch (e) {}
+      try { flips = parseDrawingPicFlips(xml); } catch (e) {}
+      return { vectors, flips };
     };
 
     const sheets = [];
@@ -511,9 +606,10 @@ async function importXlsx(file) {
       const gi = ejsSheetGeom(ws);
       const groupId = 'G' + uid();
       const grid = ejsBakeGrid(ws, gi.geom, groupId);
-      const images = await ejsSheetImages(ws, wb, gi);
       const map = sheetMap.find(m => m.name === ws.name) || sheetMap[i] || {};
-      const vectors = wrapShapeText(drawingShapesFor(map.drawingFile, gi.dims));
+      const dr = drawingDataFor(map.drawingFile, gi.dims);
+      const images = await ejsSheetImages(ws, wb, gi, dr.flips);
+      const vectors = wrapShapeText(dr.vectors);
       sheets.push({ name: ws.name || ('Arkusz ' + (i + 1)), grid, images, vectors, selected: false, primary: false });
     }
     if (!sheets.length) return toast(t('xl.none'));

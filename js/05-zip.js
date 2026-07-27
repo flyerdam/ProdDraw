@@ -76,9 +76,36 @@ function cellPx(col, colOff, row, rowOff, dims) {
   for (let r = 0; r < row && r < dims.rowHeights.length; r++) y += dims.rowHeights[r];
   return { x, y };
 }
+/* kolory motywu Office (schemeClr) — nazwa -> hex domyślnej palety */
+const SCHEME_HEX = {
+  bg1: '#ffffff', lt1: '#ffffff', tx1: '#000000', dk1: '#000000',
+  bg2: '#e7e6e6', lt2: '#e7e6e6', tx2: '#44546a', dk2: '#44546a',
+  accent1: '#4472c4', accent2: '#ed7d31', accent3: '#a5a5a5', accent4: '#ffc000',
+  accent5: '#5b9bd5', accent6: '#70ad47', hlink: '#0563c1', folHlink: '#954f72'
+};
+/* jasność: lumMod skaluje, lumOff dodaje (0..100000 -> 0..1); shade przyciemnia */
+function applyLum(hex, mod, off) {
+  const ap = v => Math.max(0, Math.min(255, Math.round(v * mod + 255 * off)));
+  const h2 = n => n.toString(16).padStart(2, '0');
+  return '#' + h2(ap(parseInt(hex.slice(1, 3), 16))) + h2(ap(parseInt(hex.slice(3, 5), 16))) + h2(ap(parseInt(hex.slice(5, 7), 16)));
+}
+/* kolor z fragmentu rysunku: srgbClr (jawny) ALBO schemeClr (motyw + lumMod/lumOff/shade) */
 function xlColor(xml) {
+  if (!xml) return null;
   const m = xml.match(/<a:srgbClr\s+val="([0-9a-fA-F]{6})"/);
-  return m ? '#' + m[1] : null;
+  if (m) return '#' + m[1].toLowerCase();
+  const sc = xml.match(/<a:schemeClr\s+val="([A-Za-z0-9]+)"\s*(?:\/>|>([\s\S]*?)<\/a:schemeClr>)/);
+  if (sc) {
+    let hex = SCHEME_HEX[sc[1]];
+    if (!hex) return null;
+    const inner = sc[2] || '';
+    const lm = inner.match(/<a:lumMod val="(\d+)"/), lo = inner.match(/<a:lumOff val="(\d+)"/);
+    const sh = inner.match(/<a:shade val="(\d+)"/);
+    if (lm || lo) hex = applyLum(hex, lm ? +lm[1] / 100000 : 1, lo ? +lo[1] / 100000 : 0);
+    else if (sh) hex = applyLum(hex, +sh[1] / 100000, 0);
+    return hex;
+  }
+  return null;
 }
 /* wyciągnij liczbowe atrybuty z tagu XML niezależnie od kolejności ich zapisu
    (niektóre generatory/kopie zapisują np. cy przed cx) */
@@ -111,22 +138,33 @@ function parseNodeXfrm(xml) {
 function parseShapeNode(nodeXml, box) {
   const prstM = nodeXml.match(/<a:prstGeom\s+prst="([^"]+)"/);
   const prst = prstM ? prstM[1] : 'rect';
+  /* WAŻNE: szukaj wypełnienia TYLKO w spPr i BEZ zawartości <a:ln> — inaczej
+     kolor obramowania albo koloru tekstu (osobne <a:solidFill>) wyciekłby jako
+     wypełnienie kształtu. Brak jawnego wypełnienia -> referencja stylu (fillRef). */
+  const spPr = nodeXml.match(/<xdr:spPr\b[^>]*>([\s\S]*?)<\/xdr:spPr>/)?.[1] || '';
+  const lnM = spPr.match(/<a:ln\b(?:\s[^>]*)?>[\s\S]*?<\/a:ln>/) || spPr.match(/<a:ln\b[^>]*\/>/);
+  const lnStr = lnM ? lnM[0] : '';
+  const spFillScope = spPr.replace(/<a:ln\b[\s\S]*?<\/a:ln>/g, '').replace(/<a:ln\b[^>]*\/>/g, '');
+  const style = nodeXml.match(/<xdr:style>([\s\S]*?)<\/xdr:style>/)?.[1] || '';
+  const fillRef = style.match(/<a:fillRef\b[^>]*>([\s\S]*?)<\/a:fillRef>/)?.[1] || '';
+  const lnRef = style.match(/<a:lnRef\b[^>]*>([\s\S]*?)<\/a:lnRef>/)?.[1] || '';
+  const fontRef = style.match(/<a:fontRef\b[^>]*>([\s\S]*?)<\/a:fontRef>/)?.[1] || '';
   let fill = '#ffffff', noFill = false;
-  const spFillM = nodeXml.match(/<a:solidFill>([\s\S]*?)<\/a:solidFill>/);
-  if (/<a:noFill/.test(nodeXml.match(/<a:spPr[^>]*>([\s\S]*?)<\/a:spPr>/)?.[1] || '')) {
-    noFill = true; fill = 'none';
-  } else if (spFillM) {
-    const c = xlColor(spFillM[1]); if (c) fill = c;
+  if (/<a:noFill/.test(spFillScope)) { noFill = true; fill = 'none'; }
+  else {
+    const fm = spFillScope.match(/<a:solidFill>([\s\S]*?)<\/a:solidFill>/);
+    let c = fm ? xlColor(fm[1]) : null;
+    if (!c && fillRef) c = xlColor(fillRef);
+    if (c) fill = c;
   }
   let stroke = '#111827', noStroke = false, sw = 1.5;
-  const lnM = nodeXml.match(/<a:ln(?:\s[^>]*)?>[\s\S]*?<\/a:ln>/);
-  if (lnM) {
-    const lnStr = lnM[0];
+  if (lnStr) {
     if (/<a:noFill/.test(lnStr)) noStroke = true;
     const wm = lnStr.match(/\bw="(\d+)"/);
     if (wm) sw = Math.max(0.5, Math.round(+wm[1] / 12700 * 10) / 10);
-    const lc = xlColor(lnStr); if (lc) stroke = lc;
-  } else noStroke = true;
+    let lc = xlColor(lnStr); if (!lc && lnRef) lc = xlColor(lnRef); if (lc) stroke = lc;
+  } else if (lnRef) { const lc = xlColor(lnRef); if (lc) stroke = lc; else noStroke = true; }
+  else noStroke = true;
   let text = '', fs = 14, tc = '#111827', bold = false, font = 'Calibri';
   const txM = nodeXml.match(/<xdr:txBody>([\s\S]*?)<\/xdr:txBody>/);
   if (txM) {
@@ -148,7 +186,9 @@ function parseShapeNode(nodeXml, box) {
       if (szM) fs = Math.max(6, Math.round(+szM[1] / 100));
       bold = /\bb="1"/.test(rPrM[1]);
       const tcM = txM[1].match(/<a:rPr[^>]*>([\s\S]*?)<\/a:rPr>/);
-      if (tcM) { const tcc = xlColor(tcM[1]); if (tcc) tc = tcc; }
+      let tcc = tcM ? xlColor(tcM[1]) : null;
+      if (!tcc && fontRef) tcc = xlColor(fontRef);   /* kolor tekstu z referencji stylu */
+      if (tcc) tc = tcc;
     }
   }
   const polyPrests = {
@@ -314,6 +354,24 @@ function parseDrawingShapes(xml, dims, relMap = {}, mediaMap = {}) {
     }
   }
   return { shapes, pictures, unsupportedFallbacks };
+}
+/* odbicia obrazów (flipH/flipV) per kotwica — ExcelJS ich nie zwraca, a bez
+   nich dwa różnie odbite wstawienia tego samego obrazu wyglądają identycznie.
+   Klucz = komórka „from" (col,row), do dopasowania z ExcelJS getImages(). */
+function parseDrawingPicFlips(xml) {
+  const out = [];
+  const anchorRe = /<xdr:(absoluteAnchor|twoCellAnchor|oneCellAnchor)>([\s\S]*?)<\/xdr:\1>/g;
+  let m;
+  while ((m = anchorRe.exec(xml)) !== null) {
+    const a = m[2];
+    if (!/<xdr:pic[\s>]/.test(a)) continue;
+    const fm = a.match(/<xdr:from>([\s\S]*?)<\/xdr:from>/);
+    const col = fm ? +(fm[1].match(/<xdr:col>(\d+)/)?.[1] ?? -1) : -1;
+    const row = fm ? +(fm[1].match(/<xdr:row>(\d+)/)?.[1] ?? -1) : -1;
+    const xf = a.match(/<a:xfrm\b([^>]*)>/);
+    out.push({ col, row, flipH: xf ? /\bflipH="1"/.test(xf[1]) : false, flipV: xf ? /\bflipV="1"/.test(xf[1]) : false });
+  }
+  return out;
 }
 function resolveRelTarget(basePath, target) {
   if (!target) return null;
