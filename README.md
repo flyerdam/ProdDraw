@@ -51,6 +51,22 @@ Aplikacja wyświetla **pasek kart na górze** — każda karta to oddzielny proj
 
 ---
 
+## Import / eksport XLSX (ExcelJS)
+
+Import i eksport arkuszy Excela opiera się na bibliotece **ExcelJS** (`js/vendor/exceljs.min.js`, wbudowana w bundle).
+
+**Import (`Plik → Import XLSX/XLSM`)**
+
+- ExcelJS rozpakowuje plik i udostępnia czysty model: komórki i style (czcionka, wypełnienie, obramowania, wyrównanie, format liczb), szerokości kolumn i wysokości wierszy (także **ukryte** → 0 px) oraz **obrazy z dokładnymi kotwicami** (`twoCellAnchor` from/to).
+- Kształty **wektorowe** (strzałki, wielokąty, łączniki) ExcelJS pomija — te dalej czytamy z `drawingN.xml` (patrz `parseDrawingShapes` w `js/05-zip.js`), mapując rysunek na arkusz po nazwie.
+- **Wiele arkuszy**: pojawia się okno wyboru — zaznacz, które arkusze otworzyć, i wskaż arkusz **główny** (aktywny po imporcie). **Każdy zaznaczony arkusz otwiera się jako osobny projekt (karta)**, a jego strona jest automatycznie dopasowywana do zawartości.
+
+**Eksport (`Eksport → Eksportuj XLSX`)**
+
+- Aktywny projekt zapisywany jest jako jeden arkusz `.xlsx`. Rysunek jest renderowany do PNG i osadzany jako obraz zakotwiczony w A1 (grafika wektorowa nie daje się wiarygodnie odtworzyć jako komórki).
+
+---
+
 ## Przenoszenie danych między przeglądarkami
 
 Dane są oddzielne w każdej przeglądarce. Rozwiązanie „jaskiniowca":

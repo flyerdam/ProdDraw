@@ -9,6 +9,7 @@ const OUTPUT_FILE = path.join(PROJECT_ROOT, 'ProdDraw.html');
 
 // Explicit, ordered list of JS files (order is critical — shared global scope)
 const JS_FILES = [
+  'js/vendor/exceljs.min.js',
   'js/01-state.js',
   'js/projects.js',
   'js/02-i18n.js',

@@ -148,6 +148,24 @@ function PS_openNewTabFromTemplate(tmpl) {
   if (typeof Tabs_render === 'function') Tabs_render();
 }
 
+/* utwórz nowy projekt z gotową zawartością (import XLSX: 1 arkusz = 1 projekt).
+   Rejestruje gniazdo, zapisuje treść i DODAJE kartę do sesji, ale NIE przełącza
+   aktywnej karty — wywołujący aktywuje wybrane gniazdo (PS_switchTo) po pętli.
+   Zwraca numer gniazda. */
+function PS_createProjectWithContent(name, shapes, page) {
+  const slot = PS_nextSlot();
+  name = name || ('Instrukcja_' + String(PS_nextDisplayNumber()).padStart(2, '0'));
+  const reg = PS_registry(); reg.push({ slot: slot, name: name }); PS_saveRegistry(reg);
+  const json = JSON.stringify({ app: 'prodrys', version: 2, name: name,
+    shapes: Array.isArray(shapes) ? shapes : [], vars: { cols: [], rows: [] },
+    page: (page && page.mode) ? page : { mode: 'off' },
+    lib: (typeof lib !== 'undefined' ? lib : []) }, null, 1);
+  PS_writeData(slot, json);
+  const open = PS_openSlots(); if (!open.includes(slot)) open.push(slot); PS_setOpen(open);
+  PS_setDirty(slot, false);
+  return slot;
+}
+
 /* ---------- flaga "niezapisane zmiany" (do pliku), per projekt ----------
    Trzymana w rejestrze (przetrwa przeładowanie apki, jak reszta rejestru).
    Ustawiana na true przy KAŻDEJ edycji (patrz autosave() w 14-project.js),

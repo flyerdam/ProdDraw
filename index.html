@@ -35,6 +35,8 @@
       <div class="menuSep"></div>
       <button class="menuItem" id="bJpg"><span data-i18n="export.jpg">Eksportuj JPG</span></button>
       <button class="menuItem" id="bJpgAs"><span data-i18n="export.jpgAs">Eksportuj JPG jako…</span></button>
+      <div class="menuSep"></div>
+      <button class="menuItem" id="bXlsxExport"><span data-i18n="export.xlsx">Eksportuj XLSX</span></button>
     </div>
   </div>
 
@@ -162,6 +164,7 @@
 <input type="file" id="fSettings" accept=".json" hidden>
 
 <!-- ======= SCRIPTS (classic, shared global scope — order matters) ======= -->
+<script src="js/vendor/exceljs.min.js"></script>
 <script src="js/01-state.js"></script>
 <script src="js/projects.js"></script>
 <script src="js/02-i18n.js"></script>

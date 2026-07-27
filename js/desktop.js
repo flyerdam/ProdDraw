@@ -74,6 +74,12 @@ function dispatch(cmd) {
       }
       break;
 
+    case 'exportXlsx':
+      if (typeof exportXlsx === 'function') {
+        exportXlsx();
+      }
+      break;
+
     case 'undo':
       if (typeof undo === 'function') {
         undo();

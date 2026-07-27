@@ -83,25 +83,6 @@ function pasteClip() {
   state.shapes.push(...copies);
   setSelection(copies.map(c => c.id)); autosave();
 }
-/* import XLSX/XLSM — tylko osadzone obrazy (bez „śmieciowych" kształtów) */
-/* buforowana lista elementów importu XLSX (obrazy + kształty do wyboru) */
-let xlsxImportItems = [];
-function buildImageShapeFromURL(url, offset = 0) {
-  return new Promise((res, rej) => {
-    const img = new Image();
-    img.onload = () => {
-      const maxW = 480;
-      const k = img.naturalWidth > maxW ? maxW / img.naturalWidth : 1;
-      const r = cv.getBoundingClientRect();
-      const c = { x: (r.width / 2 - view.x) / view.z, y: (r.height / 2 - view.y) / view.z };
-      res({ id: uid(), type: 'image', href: url,
-        x: c.x - img.naturalWidth * k / 2 + offset, y: c.y - img.naturalHeight * k / 2 + offset,
-        w: img.naturalWidth * k, h: img.naturalHeight * k });
-    };
-    img.onerror = () => rej(new Error('Image load failed'));
-    img.src = url;
-  });
-}
 function cloneShapesWithFreshIds(shapes) {
   const gMap = {};
   return shapes.map(s => {
@@ -118,175 +99,62 @@ function gridPreviewSVG(shapes) {
   const inner = shapes.map(s => shapeSVG(s, null, false)).join('');
   return `<svg viewBox="${b.x} ${b.y} ${b.w} ${b.h}" preserveAspectRatio="xMidYMid meet">${inner}</svg>`;
 }
-function closeXlsxModal() {
-  $('#xlModal').classList.remove('on');
-  for (const it of xlsxImportItems) if (it.kind === 'image' && it.previewUrl) URL.revokeObjectURL(it.previewUrl);
-  xlsxImportItems = [];
-}
-function renderXlsxImportPicker(skippedEMF = 0) {
-  const body = $('#xlBody'); body.innerHTML = '';
-  const ctl = document.createElement('div');
-  ctl.style.cssText = 'grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;';
-  const allCb = document.createElement('input');
-  allCb.type = 'checkbox';
-  allCb.checked = xlsxImportItems.every(i => i.selected);
-  const allLbl = document.createElement('label');
-  allLbl.className = 'hint';
-  allLbl.style.cssText = 'display:flex;align-items:center;gap:6px;cursor:pointer;';
-  allLbl.appendChild(allCb);
-  allLbl.appendChild(document.createTextNode(t('xl.selectAll')));
-  const importBtn = document.createElement('button');
-  importBtn.className = 'btn primary';
-  importBtn.textContent = t('xl.importSel');
-  importBtn.addEventListener('click', applySelectedXlsxItems);
-  ctl.appendChild(allLbl); ctl.appendChild(importBtn);
-  body.appendChild(ctl);
-  allCb.addEventListener('change', () => {
-    xlsxImportItems.forEach(i => i.selected = allCb.checked);
-    renderXlsxImportPicker(skippedEMF);
-  });
-  xlsxImportItems.forEach((it, idx) => {
-    const d = document.createElement('div');
-    d.className = 'xlImg';
-    const checked = it.selected ? 'checked' : '';
-    if (it.kind === 'image') {
-      d.innerHTML = `<div class="xlSel"><label><input type="checkbox" data-xlpick="${idx}" ${checked}> ${t('xl.image')}</label></div><img src="${it.previewUrl}"><div>${escXml(it.name)}</div>`;
-    } else if (it.kind === 'grid') {
-      d.innerHTML = `<div class="xlSel"><label><input type="checkbox" data-xlpick="${idx}" ${checked}> ${t('xl.grid')}</label></div><div class="xlShapePrev">${gridPreviewSVG(it.shapes)}</div><div>${escXml(it.name)}</div>`;
-    } else {
-      d.innerHTML = `<div class="xlSel"><label><input type="checkbox" data-xlpick="${idx}" ${checked}> ${t('xl.shape')}</label></div><div class="xlShapePrev"><svg viewBox="0 0 120 90">${shapeSVG(it.shape, null, false)}</svg></div><div>${escXml(it.name)}</div>`;
-    }
-    body.appendChild(d);
-  });
-  $$('#xlBody [data-xlpick]').forEach(cb => cb.addEventListener('change', e => {
-    xlsxImportItems[+e.target.dataset.xlpick].selected = e.target.checked;
-  }));
-  if (skippedEMF) {
-    const w = document.createElement('div');
-    w.className = 'hint'; w.style.gridColumn = '1/-1';
-    w.textContent = t('t.emfHint', { n: skippedEMF });
-    body.appendChild(w);
-  }
-}
-async function applySelectedXlsxItems() {
-  const selected = xlsxImportItems.filter(i => i.selected);
-  if (!selected.length) return toast(t('xl.nothing'));
-  state.page = { mode: 'off' };
-  syncPageUI();
-  pushUndo();
-  const add = [];
-  let imageN = 0, shapeN = 0, gridN = 0;
-  for (const it of selected) {
-    if (it.kind === 'grid') {
-      add.push(...cloneShapesWithFreshIds(it.shapes));
-      gridN++;
-    } else if (it.kind === 'shape') {
-      add.push(...cloneShapesWithFreshIds([it.shape]));
-      shapeN++;
-    } else {
-      try {
-        const dataUrl = await fileToDataURL(new Blob([it.data], { type: it.mime }));
-        if (it.anchored) add.push({ id: uid(), type: 'image', href: dataUrl, x: it.x, y: it.y, w: it.w, h: it.h });
-        else add.push(await buildImageShapeFromURL(dataUrl, imageN * 18));
-        imageN++;
-      } catch (e) {}
-    }
-  }
-  if (!add.length) return toast(t('xl.fail'));
-  const normalized = add.map(normalizeShape);
-  state.shapes.push(...normalized);
-  setSelection(normalized.map(a => a.id));
-  render(); renderProps(); autosave();
-  closeXlsxModal();
-  toast(gridN ? t('xl.doneG', { i: imageN, s: shapeN, g: gridN }) : t('xl.done', { i: imageN, s: shapeN }));
-  /* pokaż kreator kadru roboczego nad świeżo zaimportowanymi elementami —
-     chyba że wyłączone w Ustawieniach (wtedy zachowaj się jak "Nie przycinaj") */
-  if (settings.xlsxAutoCrop !== false) xlsxCropStart(normalized);
-}
 
 /* =====================================================================
-   KREATOR KADRU po imporcie XLSX — pozwala zaznaczyć obszar roboczy
-   (przeciągnięciem na kanwie) i dopasować do niego format strony,
-   opcjonalnie usuwając kształty leżące całkowicie poza nim.
+   IMPORT XLSX/XLSM przez ExcelJS — wielo-arkuszowy.
+   ExcelJS rozpakowuje plik, parsuje XML i daje czysty model: komórki +
+   style, szerokości kolumn / wysokości wierszy (także ukryte!) oraz obrazy
+   z dokładnymi kotwicami (twoCellAnchor from/to). Kształty WEKTOROWE
+   (strzałki, wielokąty, łączniki) ExcelJS pomija — te czytamy sami z
+   drawingN.xml (patrz parseDrawingShapes w js/05-zip.js).
+   Każdy wybrany arkusz otwiera się jako OSOBNY projekt (karta).
    ===================================================================== */
-function xlsxCropDefaultBox(shapes) {
-  const b = unionBBox(shapes);
-  if (!b) return { x: 0, y: 0, w: 400, h: 300 };
-  const pad = 20;
-  return { x: Math.round(b.x - pad), y: Math.round(b.y - pad), w: Math.round(b.w + pad * 2), h: Math.round(b.h + pad * 2) };
-}
-let xlsxCropImportedIds = null;   // id-y kształtów pochodzących z TEGO importu (do filtra "usuń poza obszarem")
-function xlsxCropStart(justImportedShapes) {
-  xlsxCropBox = xlsxCropDefaultBox(justImportedShapes);
-  xlsxCropImportedIds = new Set(justImportedShapes.map(s => s.id));
-  xlsxCropActive = true;
-  const bar = $('#xlsxCropBar'); if (bar) bar.classList.add('on');
-  const cb = $('#xlsxCropRemoveOutside'); if (cb) cb.checked = false;
-  render();
-}
-function xlsxCropEnd() {
-  xlsxCropActive = false; xlsxCropBox = null; xlsxCropImportedIds = null;
-  const bar = $('#xlsxCropBar'); if (bar) bar.classList.remove('on');
-  render();
-}
-function xlsxCropConfirm() {
-  const box = xlsxCropBox;
-  if (!box || box.w < 2 || box.h < 2) { toast(t('xlsxcrop.badBox')); return; }
-  const removeOutside = !!($('#xlsxCropRemoveOutside') && $('#xlsxCropRemoveOutside').checked);
-  const importedIds = xlsxCropImportedIds || new Set();
-  pushUndo();
-  if (removeOutside) {
-    state.shapes = state.shapes.filter(s => {
-      if (!importedIds.has(s.id)) return true;   /* nie ruszaj kształtów spoza tego importu */
-      const b = aabbOf(s);
-      /* usuń tylko te CAŁKOWICIE poza kadrem — zostaw wszystko, co choć trochę zachodzi */
-      return b.x < box.x + box.w && b.x + b.w > box.x && b.y < box.y + box.h && b.y + b.h > box.y;
-    });
+let xlsxSheets = [];   // bufor arkuszy z ostatniego wczytania (do okna wyboru)
+
+/* geometria arkusza z modelu ExcelJS: szerokości kolumn / wysokości wierszy
+   w px (ukryte -> 0), sumy prefiksowe (gridGeom) -> pudełka komórek oraz
+   przeliczanie natywnych kotwic obrazów (col/off w EMU) na piksele. */
+function ejsSheetGeom(ws) {
+  const dim = ws.dimensions;                 // {top,left,bottom,right} 1-based lub null
+  const imgs = ws.getImages();
+  let maxC = dim ? dim.right : 1, maxR = dim ? dim.bottom : 1;
+  for (const im of imgs) {
+    if (im.range && im.range.br) {
+      maxC = Math.max(maxC, Math.ceil(im.range.br.col) + 1);
+      maxR = Math.max(maxR, Math.ceil(im.range.br.row) + 1);
+    }
   }
-  const dx = -box.x, dy = -box.y;
-  for (const s of state.shapes) {
-    if (s.type === 'line') { s.x1 += dx; s.y1 += dy; s.x2 += dx; s.y2 += dy; }
-    else { s.x += dx; s.y += dy; }
+  maxC = Math.min(Math.max(maxC, 1) + 2, 16384);
+  maxR = Math.min(Math.max(maxR, 1) + 2, 1048576);
+  const defColCh = (ws.properties && ws.properties.defaultColWidth) || 8.43;
+  const defRowPt = (ws.properties && ws.properties.defaultRowHeight) || 15;
+  const colWidths = new Array(maxC).fill(0), rowHeights = new Array(maxR).fill(0);
+  for (let c = 0; c < maxC; c++) {
+    const col = ws.getColumn(c + 1);
+    if (col && col.hidden) continue;                       // ukryta -> 0 px
+    const wCh = (col && col.width != null) ? col.width : defColCh;
+    colWidths[c] = Math.max(4, Math.round(wCh * 7 + 5));
   }
-  state.page = { mode: 'custom', w: Math.max(10, Math.round(box.w)), h: Math.max(10, Math.round(box.h)) };
-  syncPageUI();
-  xlsxCropEnd();
-  sel.clear();
-  fitPage(); render(); renderProps(); renderVars(); autosave();
-  toast(t('xlsxcrop.done'));
-}
-/* "Nie przycinaj" — zachowaj import dokładnie tak, jak został wczytany
-   (bez kadrowania/przesunięcia), tylko zamknij kreator */
-function xlsxCropSkip() {
-  xlsxCropEnd();
-  toast(t('xlsxcrop.skipped'));
-}
-/* "Anuluj" — odrzuć import: usuń kształty pochodzące z TEGO importu (patrz
-   xlsxCropImportedIds), jakby import się nie odbył */
-function xlsxCropAbort() {
-  if (xlsxCropImportedIds && xlsxCropImportedIds.size) {
-    pushUndo();
-    state.shapes = state.shapes.filter(s => !xlsxCropImportedIds.has(s.id));
-    sel.clear();
-    render(); renderProps(); renderVars(); autosave();
+  for (let r = 0; r < maxR; r++) {
+    const row = ws.getRow(r + 1);
+    if (row && row.hidden) continue;                       // ukryty -> 0 px
+    const hPt = (row && row.height != null) ? row.height : defRowPt;
+    rowHeights[r] = Math.max(4, Math.round(hPt * 96 / 72));
   }
-  xlsxCropEnd();
-  toast(t('xlsxcrop.aborted'));
+  const geom = gridGeom({ colWidths, rowHeights });
+  const EPX = 9525;
+  const pxCol = (nCol, off) => geom.box(nCol, 0, nCol, 0).x + (off || 0) / EPX;
+  const pxRow = (nRow, off) => geom.box(0, nRow, 0, nRow).y + (off || 0) / EPX;
+  return { dims: { colWidths, rowHeights }, geom, pxCol, pxRow };
 }
-$('#xlsxCropConfirm').addEventListener('click', xlsxCropConfirm);
-$('#xlsxCropSkip').addEventListener('click', xlsxCropSkip);
-$('#xlsxCropCancel').addEventListener('click', xlsxCropAbort);
-/* =====================================================================
-   WYPIEKANIE SIATKI ARKUSZA na natywne kształty ProdDraw
-   ("ekosystem Excela" -> rect (tło) + line (krawędzie) + text (treść))
-   ===================================================================== */
+
+/* pomiar tekstu + zawijanie do szerokości komórki (Excel wrapText) */
 let _measureCtx = null;
 function measureTextW(txt, fs, bold, italic, font) {
   if (!_measureCtx) _measureCtx = document.createElement('canvas').getContext('2d');
   _measureCtx.font = `${italic ? 'italic ' : ''}${bold ? 'bold ' : ''}${fs}px "${font || 'Calibri'}",Arial,sans-serif`;
   return _measureCtx.measureText(txt).width;
 }
-/* zawijanie tekstu do szerokości komórki (Excel wrapText) */
 function wrapCellText(text, maxW, fs, bold, italic, font) {
   if (maxW <= 0) return text;
   const out = [];
@@ -302,206 +170,283 @@ function wrapCellText(text, maxW, fs, bold, italic, font) {
   }
   return out.join('\n');
 }
-/* model arkusza -> kształty; krawędzie współdzielone deduplikowane po geometrii;
-   z-order: tła (spód) -> krawędzie -> tekst (wierzch) */
-function bakeSheetGrid(model, styles, geom, offY, groupId) {
-  const { cells, merges } = model;
+
+/* model komórek arkusza ExcelJS -> natywne kształty ProdDraw
+   (tła rect na spodzie, krawędzie line, tekst na wierzchu; krawędzie
+   współdzielone deduplikowane po geometrii). */
+function ejsBakeGrid(ws, geom, groupId) {
+  const dim = ws.dimensions;
+  if (!dim) return [];
   const fillsArr = [], textArr = [], borderMap = new Map();
+  /* scalenia z modelu ExcelJS (ref "A3:C4") */
+  const merges = [];
+  for (const ref of (ws.model.merges || [])) {
+    const [a, b] = ref.split(':');
+    const A = a1ToRC(a), B = a1ToRC(b || a);
+    if (A && B) merges.push({ c1: Math.min(A.c, B.c), r1: Math.min(A.r, B.r), c2: Math.max(A.c, B.c), r2: Math.max(A.r, B.r) });
+  }
   const covered = new Set(), mergeAt = new Map();
   for (const m of merges) {
     for (let r = m.r1; r <= m.r2; r++) for (let c = m.c1; c <= m.c2; c++)
       if (!(r === m.r1 && c === m.c1)) covered.add(c + ',' + r);
     mergeAt.set(m.c1 + ',' + m.r1, m);
   }
-  const addBorder = (x1, y1, x2, y2, b) => {
-    if (!b) return;
+  const addBorder = (x1, y1, x2, y2, style, colorArgb) => {
+    if (!style || style === 'none') return;
+    const bs = borderStylePx(style);
     const key = Math.round(x1) + ',' + Math.round(y1) + ',' + Math.round(x2) + ',' + Math.round(y2);
-    borderMap.set(key, { id: uid(), type: 'line', x1, y1, x2, y2, stroke: b.color, sw: b.sw, dash: b.dash, as: false, ae: false, locked: false, g: groupId });
+    borderMap.set(key, { id: uid(), type: 'line', x1, y1, x2, y2,
+      stroke: argbToHex(colorArgb) || '#000000', sw: bs.sw, dash: bs.dash, as: false, ae: false, locked: false, g: groupId });
   };
-  for (const cell of cells) {
-    if (covered.has(cell.c + ',' + cell.r)) continue;
-    const mg = mergeAt.get(cell.c + ',' + cell.r);
-    const bx = mg ? geom.box(mg.c1, mg.r1, mg.c2, mg.r2) : geom.box(cell.c, cell.r, cell.c, cell.r);
-    const x = Math.round(bx.x), y = Math.round(bx.y + offY), w = Math.round(bx.w), h = Math.round(bx.h);
-    if (w < 1 || h < 1) continue;
-    const xf = styles.cellXfs[cell.s] || {};
-    const fillC = xf.fillId != null && styles.fills[xf.fillId] ? styles.fills[xf.fillId].color : null;
-    if (fillC) fillsArr.push({ id: uid(), type: 'rect', x, y, w, h, fill: fillC, noFill: false, stroke: '#000000', noStroke: true, sw: 1, dash: 'solid', text: '', fs: 14, tc: '#000000', bold: false, font: 'Calibri', locked: false, g: groupId });
-    const bd = styles.borders[xf.borderId] || {};
-    addBorder(x, y, x + w, y, bd.top);
-    addBorder(x, y + h, x + w, y + h, bd.bottom);
-    addBorder(x, y, x, y + h, bd.left);
-    addBorder(x + w, y, x + w, y + h, bd.right);
-    if (cell.v !== '' && cell.v != null) {
-      const fnt = styles.fonts[xf.fontId] || {};
-      const fs = fnt.sz || 15, bold = !!fnt.bold, italic = !!fnt.italic, font = fnt.name || 'Calibri';
-      const ha = xf.halign;
-      const align = (ha === 'center' || ha === 'centerContinuous') ? 'c'
-        : (ha === 'right' || ha === 'end') ? 'r'
-        : (ha === 'left' || ha === 'general' || !ha) ? (cell.bool ? 'c' : cell.num && !ha ? 'r' : 'l') : 'l';
-      const va = xf.valign === 'center' ? 'm' : xf.valign === 'top' ? 't' : 'b';   // Excel domyślnie dół
-      let txt = String(cell.v);
-      if (xf.wrap) txt = wrapCellText(txt, w - 4, fs, bold, italic, font);
-      textArr.push({ id: uid(), type: 'text', x, y, boxW: w, boxH: h, align, valign: va, pad: 2, text: txt, fs, tc: fnt.color || '#000000', bold, italic, font, locked: false, g: groupId });
+  /* zakres roboczy z ograniczeniem, żeby ogromny arkusz nie wybuchł */
+  const top = dim.top, left = dim.left, bottom = Math.min(dim.bottom, dim.top + 4000), right = Math.min(dim.right, dim.left + 256);
+  for (let r1 = top; r1 <= bottom; r1++) {
+    for (let c1 = left; c1 <= right; c1++) {
+      const c0 = c1 - 1, r0 = r1 - 1;
+      if (covered.has(c0 + ',' + r0)) continue;
+      const cell = ws.getCell(r1, c1);
+      const val = cell.text;
+      const fill = cell.fill;
+      const border = cell.border;
+      const hasFill = fill && fill.type === 'pattern' && fill.pattern === 'solid';
+      const hasBorder = border && (border.top || border.bottom || border.left || border.right);
+      const hasText = val != null && String(val) !== '';
+      if (!hasFill && !hasBorder && !hasText) continue;
+      const mg = mergeAt.get(c0 + ',' + r0);
+      const bx = mg ? geom.box(mg.c1, mg.r1, mg.c2, mg.r2) : geom.box(c0, r0, c0, r0);
+      const x = Math.round(bx.x), y = Math.round(bx.y), w = Math.round(bx.w), h = Math.round(bx.h);
+      if (w < 1 || h < 1) continue;
+      if (hasFill) {
+        const fillC = argbToHex(fill.fgColor && fill.fgColor.argb);
+        if (fillC) fillsArr.push({ id: uid(), type: 'rect', x, y, w, h, fill: fillC, noFill: false,
+          stroke: '#000000', noStroke: true, sw: 1, dash: 'solid', text: '', fs: 14, tc: '#000000', bold: false, font: 'Calibri', locked: false, g: groupId });
+      }
+      if (hasBorder) {
+        if (border.top) addBorder(x, y, x + w, y, border.top.style, border.top.color && border.top.color.argb);
+        if (border.bottom) addBorder(x, y + h, x + w, y + h, border.bottom.style, border.bottom.color && border.bottom.color.argb);
+        if (border.left) addBorder(x, y, x, y + h, border.left.style, border.left.color && border.left.color.argb);
+        if (border.right) addBorder(x + w, y, x + w, y + h, border.right.style, border.right.color && border.right.color.argb);
+      }
+      if (hasText) {
+        const fnt = cell.font || {};
+        const fs = Math.max(6, Math.round((fnt.size || 11) * 96 / 72));
+        const bold = !!fnt.bold, italic = !!fnt.italic, font = fnt.name || 'Calibri';
+        const tc = argbToHex(fnt.color && fnt.color.argb) || '#000000';
+        const al = cell.alignment || {};
+        const isNum = typeof cell.value === 'number';
+        const isBool = typeof cell.value === 'boolean';
+        const ha = al.horizontal;
+        const align = (ha === 'center' || ha === 'centerContinuous') ? 'c'
+          : (ha === 'right' || ha === 'end') ? 'r'
+          : (ha === 'left' || ha === 'general' || !ha) ? (isBool ? 'c' : (isNum && !ha ? 'r' : 'l')) : 'l';
+        const va = al.vertical === 'middle' ? 'm' : al.vertical === 'top' ? 't' : 'b';
+        let txt = String(val);
+        if (al.wrapText) txt = wrapCellText(txt, w - 4, fs, bold, italic, font);
+        textArr.push({ id: uid(), type: 'text', x, y, boxW: w, boxH: h, align, valign: va, pad: 2,
+          text: txt, fs, tc, bold, italic, font, locked: false, g: groupId });
+      }
     }
   }
   return [...fillsArr, ...borderMap.values(), ...textArr];
 }
-function shapeBottom(s) {
-  return s.type === 'line' ? Math.max(s.y1, s.y2) : (s.y || 0) + (s.h || 0);
+
+/* obrazy arkusza z ExcelJS -> kształty image (href=dataURL, pozycja z kotwicy) */
+async function ejsSheetImages(ws, wb, gi) {
+  const out = [];
+  for (const im of ws.getImages()) {
+    let media = null;
+    try { media = wb.getImage(im.imageId); } catch (e) {}
+    if (!media || !media.buffer) continue;
+    const ext = (media.extension || 'png').toLowerCase();
+    const mime = (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : ext === 'gif' ? 'image/gif'
+      : ext === 'bmp' ? 'image/bmp' : ext === 'webp' ? 'image/webp' : 'image/png';
+    const tl = im.range.tl, br = im.range.br;
+    const x1 = gi.pxCol(tl.nativeCol || 0, tl.nativeColOff), y1 = gi.pxRow(tl.nativeRow || 0, tl.nativeRowOff);
+    let x2, y2;
+    if (br && br.nativeCol != null) { x2 = gi.pxCol(br.nativeCol, br.nativeColOff); y2 = gi.pxRow(br.nativeRow, br.nativeRowOff); }
+    else if (im.range.ext) { x2 = x1 + (im.range.ext.width || 100); y2 = y1 + (im.range.ext.height || 100); }
+    else { x2 = x1 + 100; y2 = y1 + 100; }
+    const w = Math.max(4, Math.round(x2 - x1)), h = Math.max(4, Math.round(y2 - y1));
+    let href;
+    try { href = await fileToDataURL(new Blob([media.buffer], { type: mime })); } catch (e) { continue; }
+    out.push({ id: uid(), type: 'image', href, x: Math.round(x1), y: Math.round(y1), w, h, locked: false });
+  }
+  return out;
 }
-function shiftShapeY(s, dy) {
-  if (!dy) return;
-  if (s.type === 'line') { s.y1 += dy; s.y2 += dy; } else s.y += dy;
+
+/* pole powierzchni kształtu (do sortowania z-order: duże na spód) */
+function shapeArea(s) { return s.type === 'line' ? 0 : (s.w || 0) * (s.h || 0); }
+function shiftShapeXY(s, dx, dy) {
+  if (s.type === 'line') { s.x1 += dx; s.y1 += dy; s.x2 += dx; s.y2 += dy; }
+  else { s.x += dx; s.y += dy; }
 }
-/* import XLSX/XLSM — obrazy + kształty wektorowe (z pozycjami z arkusza) */
+
+/* złóż wszystkie kształty arkusza w kolejności z-order:
+   siatka (spód) -> wektory+obrazy wg powierzchni malejąco (duże tła niżej) */
+function assembleSheetShapes(sheet) {
+  const combined = [
+    ...sheet.vectors.map(sh => ({ sh, area: shapeArea(sh) })),
+    ...sheet.images.map(sh => ({ sh, area: shapeArea(sh) }))
+  ].sort((a, b) => b.area - a.area).map(o => o.sh);
+  return [...sheet.grid, ...combined];
+}
+/* dopasuj stronę projektu do zawartości arkusza: przesuń do początku (0,0)
+   z marginesem i ustaw format custom = rozmiar zawartości */
+function fitSheetToPage(shapes) {
+  if (!shapes.length) return { shapes: [], page: { mode: 'a4l', w: PAGES.a4l.w, h: PAGES.a4l.h } };
+  const b = unionBBox(shapes);
+  const pad = 20;
+  const dx = -(b.x - pad), dy = -(b.y - pad);
+  for (const s of shapes) shiftShapeXY(s, dx, dy);
+  return { shapes, page: { mode: 'custom', w: Math.max(10, Math.round(b.w + pad * 2)), h: Math.max(10, Math.round(b.h + pad * 2)) } };
+}
+
+function closeXlsxModal() {
+  $('#xlModal').classList.remove('on');
+  xlsxSheets = [];
+}
+
+/* okno wyboru arkuszy: zaznacz które otworzyć + wskaż główny (aktywny po imporcie) */
+function renderSheetPicker() {
+  const body = $('#xlBody'); body.innerHTML = '';
+  const modal = $('#xlModal'); const h3 = modal.querySelector('h3'); if (h3) h3.textContent = t('xl.sheetTitle');
+  const ctl = document.createElement('div');
+  ctl.style.cssText = 'grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;';
+  const importBtn = document.createElement('button');
+  importBtn.className = 'btn primary';
+  importBtn.textContent = t('xl.openSel');
+  importBtn.addEventListener('click', applySelectedSheets);
+  ctl.appendChild(importBtn);
+  body.appendChild(ctl);
+  xlsxSheets.forEach((s, idx) => {
+    const all = assembleSheetShapes(s);
+    const empty = all.length === 0;
+    const d = document.createElement('div');
+    d.className = 'xlImg';
+    const openChk = s.selected ? 'checked' : '';
+    const primChk = s.primary ? 'checked' : '';
+    const counts = `${s.grid.length ? '▦' : ''}${s.vectors.length ? ' ◇' + s.vectors.length : ''}${s.images.length ? ' ▣' + s.images.length : ''}`;
+    d.innerHTML =
+      `<div class="xlSel" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">` +
+        `<label><input type="checkbox" data-xlopen="${idx}" ${openChk}> ${t('xl.open')}</label>` +
+        `<label><input type="radio" name="xlPrimary" data-xlprim="${idx}" ${primChk}> ${t('xl.primary')}</label>` +
+      `</div>` +
+      `<div class="xlShapePrev">${empty ? '' : gridPreviewSVG(all)}</div>` +
+      `<div>${escXml(s.name)}${empty ? ' <span class="hint">' + t('xl.empty') + '</span>' : ' <span class="hint">' + counts + '</span>'}</div>`;
+    body.appendChild(d);
+  });
+  $$('#xlBody [data-xlopen]').forEach(cb => cb.addEventListener('change', e => {
+    xlsxSheets[+e.target.dataset.xlopen].selected = e.target.checked;
+  }));
+  $$('#xlBody [data-xlprim]').forEach(rb => rb.addEventListener('change', e => {
+    const i = +e.target.dataset.xlprim;
+    xlsxSheets.forEach((s, k) => s.primary = (k === i));
+    if (e.target.checked) { xlsxSheets[i].selected = true; renderSheetPicker(); }
+  }));
+}
+
+/* otwórz zaznaczone arkusze — każdy jako OSOBNY projekt (karta) */
+function applySelectedSheets() {
+  const chosen = xlsxSheets.filter(s => s.selected);
+  if (!chosen.length) return toast(t('xl.noSheets'));
+  if (typeof PS_commitActive === 'function') PS_commitActive();
+  let primarySlot = null;
+  for (const s of chosen) {
+    const assembled = cloneShapesWithFreshIds(assembleSheetShapes(s));   // świeże ID (osobny projekt)
+    const fit = fitSheetToPage(assembled);
+    const name = (s.name || 'Arkusz').trim() || 'Arkusz';
+    const slot = PS_createProjectWithContent(name, fit.shapes, fit.page);
+    if (s.primary && primarySlot === null) primarySlot = slot;
+    if (primarySlot === null) primarySlot = slot;   // fallback: pierwszy
+  }
+  closeXlsxModal();
+  if (primarySlot != null && typeof PS_switchTo === 'function') PS_switchTo(primarySlot);
+  else if (typeof Tabs_render === 'function') Tabs_render();
+  toast(t('xl.sheetDone', { n: chosen.length }));
+}
+
 async function importXlsx(file) {
   try {
-    if (typeof DecompressionStream === 'undefined') return toast(t('t.noDecomp'));
+    if (typeof ExcelJS === 'undefined') return toast(t('t.importErr') + 'ExcelJS');
     toast(t('t.reading'));
     const buf = await file.arrayBuffer();
-    const allFiles = await readZipAll(buf);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf);
+    /* kształty wektorowe (strzałki/wielokąty/łączniki) — ExcelJS ich nie czyta;
+       bierzemy z drawingN.xml, mapując rysunek na arkusz po nazwie */
+    let allZip = [], sheetMap = [];
+    try { allZip = await readZipAll(buf); sheetMap = parseWorkbookSheetMap(allZip); } catch (e) {}
     const td = new TextDecoder();
-    const mediaFiles = allFiles.filter(f => /^xl\/media\//i.test(f.name) && /\.(png|jpe?g|gif|bmp|webp)$/i.test(f.name));
-    const mediaMap = {};
-    mediaFiles.forEach(m => mediaMap[m.name] = { data: m.data, mime: mediaMimeFromName(m.name) });
-    /* zmapuj każdy arkusz (sheetK.xml) na jego drawingN.xml (przez sheetK.xml.rels),
-       żeby użyć WŁAŚCIWYCH wymiarów kolumn/wierszy TEGO arkusza — wcześniej zawsze
-       brano pierwszy napotkany arkusz w archiwum, co psuło skalowanie/pozycję
-       rysunków należących do arkusza 2, 3 itd. w skoroszytach wielo-arkuszowych */
-    /* ---- ekosystem Excela: wspólne zasoby ---- */
-    const ssFile = allFiles.find(f => /^xl\/sharedStrings\.xml$/i.test(f.name));
-    const sharedStr = parseSharedStrings(ssFile ? td.decode(ssFile.data) : '');
-    const stFile = allFiles.find(f => /^xl\/styles\.xml$/i.test(f.name));
-    const styles = parseStyles(stFile ? td.decode(stFile.data) : '');
+    const drawingShapesFor = (drawingFile, dims) => {
+      if (!drawingFile) return [];
+      const df = allZip.find(f => f.name === drawingFile);
+      if (!df) return [];
+      const relPath = drawingFile.replace(/^xl\/drawings\//i, 'xl/drawings/_rels/') + '.rels';
+      const relFile = allZip.find(f => f.name === relPath);
+      const relMap = relFile ? parseDrawingRels(td.decode(relFile.data), drawingFile) : {};
+      try {
+        /* mediaMap pusty -> obrazów NIE dublujemy (te robi ExcelJS); zwracamy tylko wektory */
+        return parseDrawingShapes(td.decode(df.data), dims, relMap, {}).shapes || [];
+      } catch (e) { return []; }
+    };
 
-    /* arkusze w kolejności numerycznej — dla każdego: wymiary, układ współrzędnych,
-       model komórek + spód treści; jednocześnie mapuj arkusz->rysunek */
-    const sheetFiles = allFiles.filter(f => /^xl\/worksheets\/sheet\d+\.xml$/i.test(f.name))
-      .sort((a, b) => (+a.name.match(/(\d+)\.xml$/i)[1]) - (+b.name.match(/(\d+)\.xml$/i)[1]));
-    const drawingDims = {};    // drawingN.xml -> dims arkusza-właściciela
-    const drawingSheet = {};   // drawingN.xml -> nazwa pliku arkusza
-    const sheetInfo = [];      // {name, dims, geom, model, gridBottom}
-    for (const sf of sheetFiles) {
-      const sxml = td.decode(sf.data);
-      const dims = parseSheetDims(sxml);
-      const geom = gridGeom(dims);
-      const model = parseSheetCells(sxml, sharedStr, styles);
-      let maxC = 0, maxR = 0;
-      for (const c of model.cells) { if (c.c > maxC) maxC = c.c; if (c.r > maxR) maxR = c.r; }
-      for (const m of model.merges) { if (m.c2 > maxC) maxC = m.c2; if (m.r2 > maxR) maxR = m.r2; }
-      const bb = model.cells.length ? geom.box(0, 0, maxC, maxR) : { x: 0, y: 0, w: 0, h: 0 };
-      sheetInfo.push({ name: sf.name, dims, geom, model, gridBottom: bb.y + bb.h });
-      const relPath = sf.name.replace(/^xl\/worksheets\//i, 'xl/worksheets/_rels/') + '.rels';
-      const relFile = allFiles.find(f => f.name === relPath);
-      if (!relFile) continue;
-      for (const rm of td.decode(relFile.data).matchAll(/<Relationship\b[^>]*\/?>/g)) {
-        const tag = rm[0];
-        const typeM = tag.match(/\bType="([^"]+)"/), targetM = tag.match(/\bTarget="([^"]+)"/);
-        if (!typeM || !targetM || !/\/drawing$/i.test(typeM[1])) continue;
-        const drawingPath = resolveRelTarget(sf.name, targetM[1]);
-        if (drawingPath) { drawingDims[drawingPath] = dims; drawingSheet[drawingPath] = sf.name; }
-      }
+    const sheets = [];
+    for (let i = 0; i < wb.worksheets.length; i++) {
+      const ws = wb.worksheets[i];
+      const gi = ejsSheetGeom(ws);
+      const groupId = 'G' + uid();
+      const grid = ejsBakeGrid(ws, gi.geom, groupId);
+      const images = await ejsSheetImages(ws, wb, gi);
+      const map = sheetMap.find(m => m.name === ws.name) || sheetMap[i] || {};
+      const vectors = drawingShapesFor(map.drawingFile, gi.dims);
+      sheets.push({ name: ws.name || ('Arkusz ' + (i + 1)), grid, images, vectors, selected: false, primary: false });
     }
-    /* awaryjnie (brak .rels albo relacji arkusz->rysunek) — wymiary pierwszego arkusza */
-    const fallbackDims = sheetInfo.length ? sheetInfo[0].dims : parseSheetDims('');
-
-    /* rysunki (obrazy/kształty wektorowe) — parsowane per plik, z zapamiętaniem arkusza */
-    const drawingFiles = allFiles.filter(f => /^xl\/drawings\/drawing\d+\.xml$/i.test(f.name));
-    const drawingResults = [];
-    let unsupportedFallbacks = 0;
-    for (const df of drawingFiles) {
-      const relPath = df.name.replace(/^xl\/drawings\//i, 'xl/drawings/_rels/') + '.rels';
-      const relFile = allFiles.find(f => f.name === relPath);
-      const relMap = relFile ? parseDrawingRels(td.decode(relFile.data), df.name) : {};
-      const dims = drawingDims[df.name] || fallbackDims;
-      const parsed = parseDrawingShapes(td.decode(df.data), dims, relMap, mediaMap);
-      drawingResults.push({ sheet: drawingSheet[df.name] || null, shapes: parsed.shapes, pictures: parsed.pictures });
-      unsupportedFallbacks += parsed.unsupportedFallbacks || 0;
-    }
-
-    /* przesunięcia pionowe arkuszy — układamy je jeden pod drugim (siatka + rysunki
-       tego samego arkusza dostają TEN SAM offset, więc zostają zsynchronizowane) */
-    const drawBottom = {};
-    for (const dr of drawingResults) {
-      if (!dr.sheet) continue;
-      let b = 0;
-      for (const s of dr.shapes) b = Math.max(b, shapeBottom(s));
-      for (const p of dr.pictures) b = Math.max(b, (p.y || 0) + (p.h || 0));
-      drawBottom[dr.sheet] = Math.max(drawBottom[dr.sheet] || 0, b);
-    }
-    const GAP = 40, offOf = {};
-    let cursor = 0;
-    for (const si of sheetInfo) {
-      offOf[si.name] = cursor;
-      cursor += Math.max(si.gridBottom, drawBottom[si.name] || 0) + GAP;
-    }
-
-    /* wypiecz siatkę każdego arkusza (jedna grupa = jedna tabela) */
-    const gridItems = [];
-    for (const si of sheetInfo) {
-      const gshapes = bakeSheetGrid(si.model, styles, si.geom, offOf[si.name] || 0, 'G' + uid());
-      if (gshapes.length) gridItems.push({ kind: 'grid', name: si.name.replace(/^xl\/worksheets\//i, ''), shapes: gshapes, selected: true });
-    }
-
-    /* przesuń rysunki o offset ich arkusza i zbierz globalnie */
-    const importedShapes = [], anchoredPictures = [];
-    for (const dr of drawingResults) {
-      const off = dr.sheet ? (offOf[dr.sheet] || 0) : 0;
-      for (const s of dr.shapes) { shiftShapeY(s, off); importedShapes.push(s); }
-      for (const p of dr.pictures) anchoredPictures.push({ ...p, y: (p.y || 0) + off, anchored: true });
-    }
-
-    const skippedEMF = allFiles.filter(f => /^xl\/media\//i.test(f.name) && /\.(emf|wmf)$/i.test(f.name)).length;
-    if (!mediaFiles.length && !importedShapes.length && !anchoredPictures.length && !gridItems.length)
-      return toast(t('xl.none') + (skippedEMF ? t('xl.emf', { n: skippedEMF }) : ''));
-    closeXlsxModal();
-    xlsxImportItems = [];
-    /* siatki (tabele) na początku listy -> dodawane pierwsze -> spód z-order (pod rysunkami) */
-    for (const g of gridItems) xlsxImportItems.push(g);
-    const usedAnchored = new Set(anchoredPictures.map(p => 'xl/media/' + p.name.replace(/^xl\/media\//i, '')));
-
-    /* uszereguj zakotwiczone elementy wg powierzchni MALEJĄCO, żeby duże tła trafiały
-       na spód stosu (dodawane pierwsze = niższy z-order), a drobne detale i podpisy
-       zostały na wierzchu, zamiast być przysłonięte przez większe kontenery */
-    const anchoredCombined = [
-      ...anchoredPictures.map(p => ({ kind: 'image', p, area: (p.w || 0) * (p.h || 0) })),
-      ...importedShapes.map(s => ({ kind: 'shape', s, area: (s.w || 0) * (s.h || 0) }))
-    ];
-    anchoredCombined.sort((a, b) => b.area - a.area);
-
-    let shapeIdx = 0;
-    for (const it of anchoredCombined) {
-      if (it.kind === 'image') {
-        const p = it.p;
-        xlsxImportItems.push({ kind: 'image', name: p.name, data: p.data, mime: p.mime, anchored: true,
-          x: p.x, y: p.y, w: p.w, h: p.h,
-          previewUrl: URL.createObjectURL(new Blob([p.data], { type: p.mime })), selected: true });
-      } else {
-        xlsxImportItems.push({ kind: 'shape', name: `${it.s.type}_${++shapeIdx}`, shape: it.s, selected: true });
-      }
-    }
-    for (const m of mediaFiles) {
-      if (usedAnchored.has(m.name)) continue;
-      const mime = mediaMimeFromName(m.name);
-      xlsxImportItems.push({ kind: 'image', name: m.name.replace('xl/media/', ''), data: m.data, mime, anchored: false,
-        previewUrl: URL.createObjectURL(new Blob([m.data], { type: mime })), selected: true });
-    }
-    const imgN = xlsxImportItems.filter(i => i.kind === 'image').length;
-    const gridN = xlsxImportItems.filter(i => i.kind === 'grid').length;
-    const shapeN = xlsxImportItems.length - imgN - gridN;
-    $('#xlModal').querySelector('h3').textContent = gridN
-      ? t('xl.countG', { i: imgN, s: shapeN, g: gridN })
-      : t('xl.count', { i: imgN, s: shapeN });
-    renderXlsxImportPicker(skippedEMF);
-    if (unsupportedFallbacks) {
-      const w = document.createElement('div');
-      w.className = 'hint'; w.style.gridColumn = '1/-1';
-      w.textContent = t('xl.fallback', { n: unsupportedFallbacks });
-      $('#xlBody').appendChild(w);
-    }
+    if (!sheets.length) return toast(t('xl.none'));
+    /* domyślnie zaznacz niepuste; pierwszy niepusty = główny */
+    let firstNonEmpty = -1;
+    sheets.forEach((s, i) => {
+      const has = s.grid.length + s.images.length + s.vectors.length > 0;
+      s.selected = has;
+      if (has && firstNonEmpty < 0) firstNonEmpty = i;
+    });
+    if (firstNonEmpty < 0) { sheets[0].selected = true; firstNonEmpty = 0; }
+    sheets[firstNonEmpty].primary = true;
+    xlsxSheets = sheets;
+    renderSheetPicker();
     $('#xlModal').classList.add('on');
-  } catch (err) { toast(t('t.importErr') + err.message); }
+  } catch (err) { toast(t('t.importErr') + (err && err.message ? err.message : err)); }
+}
+
+/* =====================================================================
+   EKSPORT do .xlsx (ExcelJS) — aktywny projekt jako jeden arkusz.
+   Rysunek renderujemy do PNG i osadzamy jako obraz zakotwiczony w A1
+   (grafika wektorowa nie daje się wiarygodnie odtworzyć jako komórki).
+   ===================================================================== */
+function sanitizeSheetName(name) {
+  let n = String(name || 'Arkusz').replace(/[\[\]\*\?\/\\:]/g, ' ').trim();
+  if (!n) n = 'Arkusz';
+  return n.slice(0, 31);
+}
+async function exportXlsx() {
+  try {
+    if (typeof ExcelJS === 'undefined') return toast(t('t.importErr') + 'ExcelJS');
+    const region = pageRegion();
+    if (!state.shapes.length && !region) return toast(t('t.emptyCanvas'));
+    toast(t('t.reading'));
+    const pad = (settings.infiniteCanvasMargin != null) ? settings.infiniteCanvasMargin : 16;
+    const b = buildSVG(state.shapes, currentVals(), pad, region);
+    const blob = await svgToPngBlob(b.svg, b.w, b.h, 2, 'image/png');
+    const arr = new Uint8Array(await blob.arrayBuffer());
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'ProdDraw';
+    const ws = wb.addWorksheet(sanitizeSheetName($('#projName').value || state.name));
+    const id = wb.addImage({ buffer: arr, extension: 'png' });
+    ws.addImage(id, { tl: { col: 0, row: 0 }, ext: { width: b.w, height: b.h } });
+    const out = await wb.xlsx.writeBuffer();
+    const name = (stripExt(sanitizeFile($('#projName').value)) || 'ProdDraw') + '.xlsx';
+    downloadBlob(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), name);
+    toast(t('t.xlsxExported') + name, 6000);
+  } catch (err) { toast(t('t.saveErr')); }
 }
 
 /* =====================================================================

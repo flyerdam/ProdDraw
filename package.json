@@ -13,7 +13,8 @@
   },
   "devDependencies": {
     "electron": "^33.0.0",
-    "electron-builder": "^25.0.0"
+    "electron-builder": "^25.0.0",
+    "exceljs": "^4.4.0"
   },
   "build": {
     "appId": "com.proddraw.app",
@@ -25,7 +26,10 @@
       "electron/**/*"
     ],
     "win": {
-      "target": ["nsis", "portable"]
+      "target": [
+        "nsis",
+        "portable"
+      ]
     },
     "portable": {
       "artifactName": "ProdDraw-portable-${version}.exe"

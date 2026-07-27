@@ -48,6 +48,7 @@ $('#bPngAs').addEventListener('click', () => exportImage('png', true));
 $('#bJpg').addEventListener('click', () => exportImage('jpg'));
 $('#bJpgAs').addEventListener('click', () => exportImage('jpg', true));
 $('#bJpgQuick').addEventListener('click', () => exportImage('jpg'));
+$('#bXlsxExport').addEventListener('click', () => exportXlsx());
 $('#bUndo').addEventListener('click', undo);
 $('#bRedo').addEventListener('click', redo);
 $('#projName').addEventListener('change', () => { state.name = $('#projName').value; if (typeof PS_renameActive === 'function') PS_renameActive(state.name); autosave(); });

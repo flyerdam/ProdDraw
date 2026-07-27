@@ -89,6 +89,10 @@ function createWindow() {
           label: 'Export JPG As…',
           click: send('exportJpgAs')
         },
+        {
+          label: 'Export XLSX',
+          click: send('exportXlsx')
+        },
         { type: 'separator' },
         {
           label: 'Quit',

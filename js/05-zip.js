@@ -39,34 +39,9 @@ async function inflateRaw(u8) {
   const stream = new Blob([u8]).stream().pipeThrough(ds);
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
-async function readZipMedia(buf) { // wyciąga xl/media/* z xlsx
-  const u8 = new Uint8Array(buf), dv = new DataView(buf);
-  let eocd = -1;
-  for (let i = u8.length - 22; i >= Math.max(0, u8.length - 70000); i--)
-    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
-  if (eocd < 0) throw new Error('Nieprawidłowy plik ZIP/XLSX');
-  const count = dv.getUint16(eocd + 10, true), cdOff = dv.getUint32(eocd + 16, true);
-  const td = new TextDecoder(); const out = []; let p = cdOff;
-  for (let n = 0; n < count; n++) {
-    if (dv.getUint32(p, true) !== 0x02014b50) break;
-    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
-    const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true);
-    const lo = dv.getUint32(p + 42, true);
-    const name = td.decode(u8.subarray(p + 46, p + 46 + nl));
-    if (/^xl\/media\//i.test(name)) {
-      const lnl = dv.getUint16(lo + 26, true), lel = dv.getUint16(lo + 28, true);
-      const start = lo + 30 + lnl + lel;
-      const comp = u8.slice(start, start + csize);
-      let data = null;
-      if (method === 0) data = comp;
-      else if (method === 8) data = await inflateRaw(comp);
-      if (data) out.push({ name, data });
-    }
-    p += 46 + nl + el + cl;
-  }
-  return out;
-}
-/* czytanie wszystkich wpisów ZIP (do importu kształtów z XLSM) */
+/* czytanie wszystkich wpisów ZIP — używane TYLKO do wyciągnięcia rysunków
+   (drawingN.xml) dla kształtów wektorowych, których ExcelJS nie parsuje.
+   Resztę pliku (komórki, style, wymiary, obrazy) czyta ExcelJS. */
 async function readZipAll(buf) {
   const u8 = new Uint8Array(buf), dv = new DataView(buf);
   let eocd = -1;
@@ -93,31 +68,6 @@ async function readZipAll(buf) {
     p += 46 + nl + el + cl;
   }
   return out;
-}
-function parseSheetDims(xml) {
-  const DEFAULT_COL = 64, DEFAULT_ROW = 20;
-  const colWidths = new Array(1024).fill(DEFAULT_COL);
-  const rowHeights = new Array(65536).fill(DEFAULT_ROW);
-  for (const m of xml.matchAll(/<col\s[^>]+>/g)) {
-    const s = m[0];
-    const minM = s.match(/\bmin="(\d+)"/), maxM = s.match(/\bmax="(\d+)"/);
-    if (!minM || !maxM) continue;
-    /* kolumna ukryta (hidden="1") -> szerokość 0, żeby nie wstrzykiwać "widma" odstępu */
-    const hidden = /\bhidden="1"/.test(s);
-    const wM = s.match(/\bwidth="([\d.]+)"/);
-    const px = hidden ? 0 : (wM ? Math.max(4, Math.round(parseFloat(wM[1]) * 7 + 5)) : null);
-    if (px !== null) for (let c = +minM[1] - 1; c <= +maxM[1] - 1 && c < 1024; c++) colWidths[c] = px;
-  }
-  for (const m of xml.matchAll(/<row\s[^>]+>/g)) {
-    const s = m[0];
-    const rM = s.match(/\br="(\d+)"/);
-    if (!rM) continue;
-    /* wiersz ukryty (hidden="1") -> wysokość 0 */
-    if (/\bhidden="1"/.test(s)) { rowHeights[+rM[1] - 1] = 0; continue; }
-    const htM = s.match(/\bht="([\d.]+)"/);
-    if (htM) rowHeights[+rM[1] - 1] = Math.max(4, Math.round(parseFloat(htM[1]) * 96 / 72));
-  }
-  return { colWidths, rowHeights };
 }
 function cellPx(col, colOff, row, rowOff, dims) {
   const EPX = 9525;
@@ -391,6 +341,48 @@ function mediaMimeFromName(name) {
   if (ext === 'webp') return 'image/webp';
   return 'image/jpeg';
 }
+/* mapuj arkusze skoroszytu na ich pliki drawingN.xml (kolejność = zakładki).
+   ExcelJS parsuje obrazy, ale NIE kształty wektorowe (xdr:sp/cxnSp) — te
+   czytamy sami z drawingN.xml, więc trzeba wiedzieć, który rysunek należy
+   do którego arkusza (po nazwie, zgodnej z worksheet.name w ExcelJS).
+   Zwraca [{name, sheetFile, drawingFile}] w kolejności z workbook.xml. */
+function parseWorkbookSheetMap(allFiles) {
+  const td = new TextDecoder();
+  const get = re => allFiles.find(f => re.test(f.name));
+  const wbFile = get(/^xl\/workbook\.xml$/i);
+  const wbRelsFile = get(/^xl\/_rels\/workbook\.xml\.rels$/i);
+  if (!wbFile) return [];
+  const wbXml = td.decode(wbFile.data);
+  /* rId -> docelowy plik arkusza (xl/worksheets/sheetN.xml) */
+  const relTarget = {};
+  if (wbRelsFile) {
+    for (const m of td.decode(wbRelsFile.data).matchAll(/<Relationship\b[^>]*\/?>/g)) {
+      const id = m[0].match(/\bId="([^"]+)"/), tgt = m[0].match(/\bTarget="([^"]+)"/);
+      if (id && tgt) relTarget[id[1]] = resolveRelTarget('xl/workbook.xml', tgt[1]);
+    }
+  }
+  const out = [];
+  for (const sm of wbXml.matchAll(/<sheet\b[^>]*\/?>/g)) {
+    const tag = sm[0];
+    const nameM = tag.match(/\bname="([^"]*)"/);
+    const ridM = tag.match(/\br:id="([^"]+)"/);
+    const name = nameM ? unescapeXml(nameM[1]) : '';
+    const sheetFile = ridM ? (relTarget[ridM[1]] || null) : null;
+    let drawingFile = null;
+    if (sheetFile) {
+      const relPath = sheetFile.replace(/^xl\/worksheets\//i, 'xl/worksheets/_rels/') + '.rels';
+      const relFile = allFiles.find(f => f.name === relPath);
+      if (relFile) {
+        for (const rm of td.decode(relFile.data).matchAll(/<Relationship\b[^>]*\/?>/g)) {
+          const typeM = rm[0].match(/\bType="([^"]+)"/), targetM = rm[0].match(/\bTarget="([^"]+)"/);
+          if (typeM && targetM && /\/drawing$/i.test(typeM[1])) { drawingFile = resolveRelTarget(sheetFile, targetM[1]); break; }
+        }
+      }
+    }
+    out.push({ name, sheetFile, drawingFile });
+  }
+  return out;
+}
 /* =====================================================================
    IMPORT SIATKI ARKUSZA XLSX — "ekosystem Excela" (komórki + style),
    nakładany na wspólny układ współrzędnych (parseSheetDims), a potem
@@ -417,16 +409,6 @@ function a1ToRC(ref) {
   for (const ch of m[1]) c = c * 26 + (ch.charCodeAt(0) - 64);
   return { c: c - 1, r: +m[2] - 1 };
 }
-function parseSharedStrings(xml) {
-  const out = [];
-  if (!xml) return out;
-  for (const m of xml.matchAll(/<si\b[^>]*>([\s\S]*?)<\/si>/g)) {
-    const parts = [];
-    for (const tm of m[1].matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g)) parts.push(unescapeXml(tm[1]));
-    out.push(parts.join(''));
-  }
-  return out;
-}
 /* mapowanie stylów krawędzi Excela -> {sw, dash} ProdDraw */
 function borderStylePx(style) {
   switch (style) {
@@ -443,109 +425,6 @@ function borderStylePx(style) {
     default: return { sw: 1, dash: 'solid' };
   }
 }
-/* jedna strona krawędzi (left/right/top/bottom) -> {style, sw, dash, color} | null */
-function parseBorderSide(borderXml, side) {
-  const m = borderXml.match(new RegExp('<' + side + '\\b([^>]*)(?:\\/>|>([\\s\\S]*?)<\\/' + side + '>)'));
-  if (!m) return null;
-  const styleM = m[1].match(/\bstyle="([^"]+)"/);
-  const style = styleM ? styleM[1] : null;
-  if (!style || style === 'none') return null;
-  const colM = (m[2] || '').match(/<color\b[^>]*\brgb="([0-9a-fA-F]{6,8})"/);
-  const bs = borderStylePx(style);
-  return { style, sw: bs.sw, dash: bs.dash, color: argbToHex(colM ? colM[1] : null) || '#000000' };
-}
-/* styles.xml -> {fonts, fills, borders, numFmts, cellXfs} (indeksy jak w OOXML) */
-function parseStyles(xml) {
-  const res = { fonts: [], fills: [], borders: [], numFmts: {}, cellXfs: [] };
-  if (!xml) return res;
-  for (const m of xml.matchAll(/<numFmt\b[^>]*\bnumFmtId="(\d+)"[^>]*\bformatCode="([^"]*)"/g))
-    res.numFmts[+m[1]] = unescapeXml(m[2]);
-  const fontsSec = xml.match(/<fonts\b[^>]*>([\s\S]*?)<\/fonts>/)?.[1] || '';
-  for (const fm of fontsSec.matchAll(/<font\b[^>]*>([\s\S]*?)<\/font>/g)) {
-    const f = fm[1];
-    const szM = f.match(/<sz\b[^>]*\bval="([\d.]+)"/);
-    const nameM = f.match(/<(?:rFont|name)\b[^>]*\bval="([^"]+)"/);
-    const colM = f.match(/<color\b[^>]*\brgb="([0-9a-fA-F]{6,8})"/);
-    res.fonts.push({
-      sz: szM ? Math.max(6, Math.round(parseFloat(szM[1]) * 96 / 72)) : 15,
-      name: nameM ? nameM[1] : 'Calibri',
-      color: argbToHex(colM ? colM[1] : null) || '#000000',
-      bold: /<b\b[^>]*\/?>/.test(f), italic: /<i\b[^>]*\/?>/.test(f)
-    });
-  }
-  const fillsSec = xml.match(/<fills\b[^>]*>([\s\S]*?)<\/fills>/)?.[1] || '';
-  for (const fm of fillsSec.matchAll(/<fill\b[^>]*>([\s\S]*?)<\/fill>/g)) {
-    const pf = fm[1].match(/<patternFill\b([^>]*)>?([\s\S]*?)(?:<\/patternFill>|\/>)/);
-    let color = null;
-    if (pf && /patternType="solid"/.test(pf[1])) {
-      const fg = fm[1].match(/<fgColor\b[^>]*\brgb="([0-9a-fA-F]{6,8})"/);
-      color = argbToHex(fg ? fg[1] : null);
-    }
-    res.fills.push({ color });
-  }
-  const bordersSec = xml.match(/<borders\b[^>]*>([\s\S]*?)<\/borders>/)?.[1] || '';
-  for (const bm of bordersSec.matchAll(/<border\b[^>]*>([\s\S]*?)<\/border>/g)) {
-    const b = bm[1];
-    res.borders.push({
-      left: parseBorderSide(b, 'left'), right: parseBorderSide(b, 'right'),
-      top: parseBorderSide(b, 'top'), bottom: parseBorderSide(b, 'bottom')
-    });
-  }
-  const xfSec = xml.match(/<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/)?.[1] || '';
-  for (const xm of xfSec.matchAll(/<xf\b([^>]*?)(?:\/>|>([\s\S]*?)<\/xf>)/g)) {
-    const a = xm[1], inner = xm[2] || '';
-    const gi = n => { const m = a.match(new RegExp('\\b' + n + '="(\\d+)"')); return m ? +m[1] : 0; };
-    const ap = n => new RegExp('\\b' + n + '="1"').test(a);
-    const alM = inner.match(/<alignment\b([^>]*)\/?>/);
-    const al = alM ? alM[1] : '';
-    res.cellXfs.push({
-      numFmtId: gi('numFmtId'), fontId: gi('fontId'), fillId: gi('fillId'), borderId: gi('borderId'),
-      applyFont: ap('applyFont'), applyFill: ap('applyFill'), applyBorder: ap('applyBorder'), applyNumFmt: ap('applyNumberFormat'),
-      halign: (al.match(/\bhorizontal="([^"]+)"/) || [])[1] || null,
-      valign: (al.match(/\bvertical="([^"]+)"/) || [])[1] || null,
-      wrap: /\bwrapText="1"/.test(al)
-    });
-  }
-  return res;
-}
-/* sheetN.xml -> {cells:[{c,r,s,v}], merges:[{c1,r1,c2,r2}]} (v = tekst do wyświetlenia) */
-function parseSheetCells(xml, shared, styles) {
-  const cells = [], merges = [];
-  const BUILTIN_DATE = new Set([14, 15, 16, 17, 22, 45, 46, 47]);
-  for (const cm of xml.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
-    const attrs = cm[1], inner = cm[2] || '';
-    const rc = a1ToRC((attrs.match(/\br="([A-Z]+\d+)"/) || [])[1]);
-    if (!rc) continue;
-    const sIdx = +((attrs.match(/\bs="(\d+)"/) || [])[1] || -1);
-    const t = (attrs.match(/\bt="([^"]+)"/) || [])[1] || 'n';
-    let val = '', num = false, bool = false;
-    if (t === 'inlineStr') {
-      const parts = [];
-      for (const tm of inner.matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g)) parts.push(unescapeXml(tm[1]));
-      val = parts.join('');
-    } else {
-      const vm = inner.match(/<v\b[^>]*>([\s\S]*?)<\/v>/);
-      const raw = vm ? vm[1] : '';
-      if (t === 's') val = shared[+raw] ?? '';
-      else if (t === 'str') val = unescapeXml(raw);
-      else if (t === 'b') { val = raw === '1' ? 'TRUE' : 'FALSE'; bool = true; }
-      else if (t === 'e') val = unescapeXml(raw);
-      else {
-        const xf = (styles && styles.cellXfs[sIdx]) || null;
-        const code = xf ? (styles.numFmts[xf.numFmtId] || (BUILTIN_DATE.has(xf.numFmtId) ? 'yyyy-mm-dd' : null)) : null;
-        val = raw === '' ? '' : fmtExcel(raw, code);
-        num = raw !== '';
-      }
-    }
-    cells.push({ c: rc.c, r: rc.r, s: sIdx, v: val, num, bool });
-  }
-  const mcSec = xml.match(/<mergeCells\b[^>]*>([\s\S]*?)<\/mergeCells>/)?.[1] || '';
-  for (const mm of mcSec.matchAll(/<mergeCell\b[^>]*\bref="([A-Z]+\d+):([A-Z]+\d+)"/g)) {
-    const a = a1ToRC(mm[1]), b = a1ToRC(mm[2]);
-    if (a && b) merges.push({ c1: Math.min(a.c, b.c), r1: Math.min(a.r, b.r), c2: Math.max(a.c, b.c), r2: Math.max(a.r, b.r) });
-  }
-  return { cells, merges };
-}
 /* układ współrzędnych: sumy prefiksowe px kolumn/wierszy -> szybkie pudełko komórki */
 function gridGeom(dims) {
   const nc = dims.colWidths.length, nr = dims.rowHeights.length;
@@ -557,46 +436,6 @@ function gridGeom(dims) {
   return {
     box: (c1, r1, c2, r2) => ({ x: X(c1), y: Y(r1), w: X(c2 + 1) - X(c1), h: Y(r2 + 1) - Y(r1) })
   };
-}
-/* formatowanie liczb/dat Excela — pragmatyczny podzbiór najczęstszych kodów;
-   nieobsłużone kody -> przycięta liczba (bez utraty wartości) */
-function fmtExcel(raw, code) {
-  const num = parseFloat(raw);
-  if (!isFinite(num)) return unescapeXml(raw);
-  const trim = n => {
-    let s = n.toPrecision(12); s = String(parseFloat(s));
-    return s;
-  };
-  if (!code || /^general$/i.test(code)) return trim(num);
-  const section = code.split(';')[0];
-  const bare = section.replace(/"[^"]*"/g, '').replace(/\[[^\]]*\]/g, '').replace(/\\./g, '');
-  const isDate = /[ymdhs]/i.test(bare) && !/[#0]/.test(bare);
-  if (isDate) return fmtExcelDate(num, section);
-  const percent = /%/.test(bare);
-  let v = percent ? num * 100 : num;
-  const decM = bare.match(/\.(0+)/);
-  const dec = decM ? decM[1].length : 0;
-  const thousands = /[#0],[#0]/.test(bare);
-  let s = Math.abs(v).toFixed(dec);
-  if (thousands) {
-    const [ip, dp] = s.split('.');
-    s = ip.replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + (dp ? '.' + dp : '');
-  }
-  if (v < 0) s = '-' + s;
-  if (percent) s += '%';
-  return s;
-}
-function fmtExcelDate(serial, code) {
-  const ms = Date.UTC(1899, 11, 30) + Math.round(serial * 86400000);
-  const d = new Date(ms);
-  const p2 = n => String(n).padStart(2, '0');
-  const Y = d.getUTCFullYear(), Mo = d.getUTCMonth() + 1, Da = d.getUTCDate();
-  const H = d.getUTCHours(), Mi = d.getUTCMinutes(), Se = d.getUTCSeconds();
-  const hasDate = /[ymd]/i.test(code), hasTime = /[hs]/i.test(code);
-  const parts = [];
-  if (hasDate) parts.push(/yyyy/i.test(code) ? `${Y}-${p2(Mo)}-${p2(Da)}` : `${p2(Da)}.${p2(Mo)}.${String(Y).slice(-2)}`);
-  if (hasTime) parts.push(/s/i.test(code) ? `${p2(H)}:${p2(Mi)}:${p2(Se)}` : `${p2(H)}:${p2(Mi)}`);
-  return parts.join(' ') || `${Y}-${p2(Mo)}-${p2(Da)}`;
 }
 function downloadBlob(blob, name) {
   const a = document.createElement('a');
