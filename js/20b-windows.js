@@ -40,25 +40,33 @@ function winClampPos(x, y) {
 }
 /* ---------- przyciąganie okien (do krawędzi ekranu i do siebie nawzajem) ----------
    Dwa niezależne mechanizmy, jak w zwykłych menedżerach okien:
-   1) strefy brzegu ekranu (jak Aero Snap w Windows) — dociągnięcie okna do
-      lewej/prawej krawędzi obszaru roboczego daje połowę szerokości, do
-      górnej — cały obszar, do rogu — ćwiartkę. Podgląd (przezroczysty
-      prostokąt) pokazuje co się stanie PRZED puszczeniem, samo okno w
-      trakcie przeciągania nadal jedzie za kursorem.
-   2) magnetyczne przyciąganie do innych okien — gdy krawędź przeciąganego
-      okna zbliży się do krawędzi innego widocznego okna, delikatnie się
-      do niej dopasowuje (bez zmiany rozmiaru), więc łatwo ułożyć panele
-      krawędź w krawędź bez szczeliny. */
-const SNAP_ZONE = 26, SNAP_MAG = 10;
+   1) strefy brzegu ekranu (jak Aero Snap w Windows) — dotknięcie KURSOREM
+      lewej/prawej krawędzi obszaru roboczego daje połowę szerokości, góry —
+      cały obszar, rogu — ćwiartkę. Podgląd (przezroczysty prostokąt)
+      pokazuje co się stanie PRZED puszczeniem.
+      WAŻNE: próg liczony od pozycji KURSORA, nie krawędzi okna — okno
+      przesuwane w środek ekranu, którego szerokość PRZYPADKIEM sięga
+      brzegu (np. drugie okno dokowane pod pierwszym w tej samej kolumnie),
+      nie ma być siłą rozciągane na pół ekranu tylko dlatego, że jego WŁASNA
+      krawędź tam akurat leży — to źle rozumiane jako "okna nie chcą się do
+      siebie przyciągać".
+   2) magnetyczne przyciąganie do innych okien I do krawędzi obszaru
+      roboczego — gdy krawędź przeciąganego/skalowanego okna zbliży się do
+      krawędzi innego widocznego okna (albo do brzegu obszaru), dopasowuje
+      się do niej dokładnie (bez wymuszania połowy/ćwiartki), więc łatwo
+      ułożyć panele krawędź w krawędź bez szczeliny — nawet gdy nie chodzi
+      o brzeg ekranu (np. drugie okno pod pierwszym, oba węższe niż pół
+      ekranu). Działa też przy zmianie rozmiaru (przeciąganej krawędzi). */
+const SNAP_ZONE = 22, SNAP_MAG = 18;
 function workspaceRect() {
   const cw = document.getElementById('cwrap');
   const r = cw ? cw.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
   return { x: r.left, y: r.top, w: r.width, h: r.height };
 }
-function screenSnapZone(x, y, w, h) {
+function screenSnapZone(cursorX, cursorY) {
   const ws = workspaceRect();
-  const nearL = x <= ws.x + SNAP_ZONE, nearR = (x + w) >= ws.x + ws.w - SNAP_ZONE;
-  const nearT = y <= ws.y + SNAP_ZONE, nearB = (y + h) >= ws.y + ws.h - SNAP_ZONE;
+  const nearL = cursorX <= ws.x + SNAP_ZONE, nearR = cursorX >= ws.x + ws.w - SNAP_ZONE;
+  const nearT = cursorY <= ws.y + SNAP_ZONE, nearB = cursorY >= ws.y + ws.h - SNAP_ZONE;
   if (nearL && nearT) return { x: ws.x, y: ws.y, w: ws.w / 2, h: ws.h / 2 };
   if (nearR && nearT) return { x: ws.x + ws.w / 2, y: ws.y, w: ws.w / 2, h: ws.h / 2 };
   if (nearL && nearB) return { x: ws.x, y: ws.y + ws.h / 2, w: ws.w / 2, h: ws.h / 2 };
@@ -68,23 +76,43 @@ function screenSnapZone(x, y, w, h) {
   if (nearR) return { x: ws.x + ws.w / 2, y: ws.y, w: ws.w / 2, h: ws.h };
   return null;
 }
-function magneticSnap(x, y, w, h, selfId) {
-  let dx = null, dy = null;
+/* krawędzie X/Y wszystkich widocznych okien (poza selfId) + brzegów obszaru
+   roboczego — wspólna pula celów magnetycznych dla przesuwania i skalowania */
+function snapTargets(selfId) {
+  const ws = workspaceRect();
+  const xs = [ws.x, ws.x + ws.w], ys = [ws.y, ws.y + ws.h];
   for (const id of WIN_IDS) {
     if (id === selfId) continue;
     const st = winGet(id);
     if (!st.visible) continue;
-    if (dx === null) {
-      const cx = [[x, st.x + st.w], [x + w, st.x], [x, st.x], [x + w, st.x + st.w]];
-      for (const [my, target] of cx) if (Math.abs(my - target) <= SNAP_MAG) { dx = target - my; break; }
-    }
-    if (dy === null) {
-      const cy = [[y, st.y + st.h], [y + h, st.y], [y, st.y], [y + h, st.y + st.h]];
-      for (const [my, target] of cy) if (Math.abs(my - target) <= SNAP_MAG) { dy = target - my; break; }
-    }
-    if (dx !== null && dy !== null) break;
+    xs.push(st.x, st.x + st.w); ys.push(st.y, st.y + st.h);
+  }
+  return { xs, ys };
+}
+function nearestTarget(value, targets) {
+  let best = null, bestD = SNAP_MAG + 1;
+  for (const t of targets) { const d = Math.abs(value - t); if (d < bestD) { bestD = d; best = t; } }
+  return best;
+}
+function magneticSnap(x, y, w, h, selfId) {
+  const { xs, ys } = snapTargets(selfId);
+  let dx = null, dy = null;
+  for (const my of [x, x + w]) {
+    const tgt = nearestTarget(my, xs);
+    if (tgt !== null) { dx = tgt - my; break; }
+  }
+  for (const my of [y, y + h]) {
+    const tgt = nearestTarget(my, ys);
+    if (tgt !== null) { dy = tgt - my; break; }
   }
   return { dx: dx || 0, dy: dy || 0 };
+}
+/* przyciągnij POJEDYNCZĄ współrzędną krawędzi (używane przy skalowaniu —
+   rusza się tylko jedna krawędź na raz, więc nie ma co próbować obu naraz
+   jak w magneticSnap dla przesuwania) */
+function snapEdgeValue(value, targets) {
+  const tgt = nearestTarget(value, targets);
+  return tgt === null ? value : tgt;
 }
 function winSnapPreviewEl() {
   let el = document.getElementById('winSnapPreview');
@@ -116,13 +144,44 @@ function winFront(id) { const st = winGet(id); st.z = ++winZTop; winApply(id); w
 function winShow(id) { const st = winGet(id); st.visible = true; st.z = ++winZTop; winApply(id); winSave(); }
 function winHide(id) { const st = winGet(id); st.visible = false; winApply(id); winSave(); }
 function winToggle(id) { winGet(id).visible ? winHide(id) : winShow(id); }
+const RESIZE_DIRS = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+const WIN_MIN_W = 220, WIN_MIN_H = 160;
+/* przeciągnięcie krawędzi/rogu — kierunek decyduje którą kombinację x/y/w/h
+   rusza; przeciwległa krawędź zawsze zostaje na miejscu. Krawędź, którą się
+   właśnie ciągnie, przyciąga się magnetycznie do brzegu obszaru roboczego i
+   do krawędzi innych okien (patrz snapEdgeValue). */
+function startResize(id, el, dir, e) {
+  e.preventDefault(); e.stopPropagation();
+  const st = winGet(id);
+  const sx = e.clientX, sy = e.clientY;
+  const ox = st.x, oy = st.y, ow = st.w, oh = st.h;
+  const onMove = me => {
+    const dxMouse = me.clientX - sx, dyMouse = me.clientY - sy;
+    let nx = ox, ny = oy, nw = ow, nh = oh;
+    const { xs, ys } = snapTargets(id);
+    if (dir.includes('e')) nw = Math.max(WIN_MIN_W, snapEdgeValue(ox + ow + dxMouse, xs) - ox);
+    if (dir.includes('w')) { nw = Math.max(WIN_MIN_W, (ox + ow) - snapEdgeValue(ox + dxMouse, xs)); nx = (ox + ow) - nw; }
+    if (dir.includes('s')) nh = Math.max(WIN_MIN_H, snapEdgeValue(oy + oh + dyMouse, ys) - oy);
+    if (dir.includes('n')) { nh = Math.max(WIN_MIN_H, (oy + oh) - snapEdgeValue(oy + dyMouse, ys)); ny = (oy + oh) - nh; }
+    st.x = nx; st.y = ny; st.w = nw; st.h = nh;
+    el.style.left = nx + 'px'; el.style.top = ny + 'px'; el.style.width = nw + 'px'; el.style.height = nh + 'px';
+  };
+  const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); winSave(); };
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+}
 function initWindows() {
   WIN_IDS.forEach((id, idx) => {
     const el = document.getElementById('win-' + id);
     if (!el) return;
     winApply(id);
     const head = el.querySelector('.winHead');
-    const resizeHandle = el.querySelector('.winResize');
+    RESIZE_DIRS.forEach(dir => {
+      const h = document.createElement('div');
+      h.className = 'winResizeH dir-' + dir;
+      h.addEventListener('pointerdown', e => startResize(id, el, dir, e));
+      el.appendChild(h);
+    });
     el.addEventListener('pointerdown', () => winFront(id), { capture: true });
     head.addEventListener('pointerdown', e => {
       if (e.target.closest('[data-close]')) return;
@@ -132,7 +191,7 @@ function initWindows() {
       let pendingZone = null;
       const onMove = me => {
         let c = winClampPos(ox + (me.clientX - sx), oy + (me.clientY - sy));
-        const zone = screenSnapZone(c.x, c.y, st.w, st.h);
+        const zone = screenSnapZone(me.clientX, me.clientY);
         if (zone) { pendingZone = zone; showSnapPreview(zone); }
         else {
           pendingZone = null; hideSnapPreview();
@@ -148,19 +207,6 @@ function initWindows() {
         if (pendingZone) { st.x = pendingZone.x; st.y = pendingZone.y; st.w = pendingZone.w; st.h = pendingZone.h; winApply(id); }
         winSave();
       };
-      window.addEventListener('pointermove', onMove);
-      window.addEventListener('pointerup', onUp);
-    });
-    resizeHandle.addEventListener('pointerdown', e => {
-      e.preventDefault(); e.stopPropagation();
-      const st = winGet(id);
-      const sx = e.clientX, sy = e.clientY, ow = st.w, oh = st.h;
-      const onMove = me => {
-        st.w = Math.max(220, ow + (me.clientX - sx));
-        st.h = Math.max(160, oh + (me.clientY - sy));
-        el.style.width = st.w + 'px'; el.style.height = st.h + 'px';
-      };
-      const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); winSave(); };
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
     });
