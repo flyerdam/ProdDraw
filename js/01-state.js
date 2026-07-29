@@ -74,7 +74,8 @@ let currentProjectHandle = null;  // uchwyt pliku (zapis w miejscu, File System 
 /* ---------- ustawienia aplikacji + szablony ---------- */
 let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, autosave: true, infiniteCanvasMargin: 16, xlsxAutoCrop: true,
   defaults: { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' },
-  theme: { preset: 'dark', custom: {} } };   // preset = jedno z THEME_PRESETS (js/19-settings.js); custom = nadpisania per-zmienna CSS
+  theme: { preset: 'dark', custom: {} },   // preset = jedno z THEME_PRESETS (js/19-settings.js); custom = nadpisania per-zmienna CSS
+  exportImg: { limit: true, w: 1920, h: 1080 } };   // limit maks. rozdzielczości PNG/JPG (patrz exportImage() w js/14-project.js)
 let templates = [];         // [{name, shapes, vars, page}]
 let imgCascade = 0;         // przesunięcie kolejnych wstawianych obrazów
 

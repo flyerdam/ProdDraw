@@ -81,7 +81,7 @@ async function generateVariants() {
   for (const row of state.vars.rows) {
     const b = buildSVG(state.shapes, row.vals, pad, region);
     if (!b) continue;
-    const jpg = await svgToPngBlob(b.svg, b.w, b.h, 2, 'image/jpeg');   /* JPG zamiast PNG — mniejsze pliki przy masowym eksporcie */
+    const jpg = await svgToPngBlob(b.svg, b.w, b.h, exportScaleFor(b.w, b.h), 'image/jpeg');   /* JPG zamiast PNG — mniejsze pliki przy masowym eksporcie */
     let nm = variantName(row);
     if (used[nm]) nm += '_' + (++used[nm]); else used[nm] = 1;   /* unikaj kolizji nazw */
     files.push({ name: proj + '_' + nm + '.jpg', data: new Uint8Array(await jpg.arrayBuffer()) });

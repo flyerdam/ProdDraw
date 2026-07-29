@@ -132,6 +132,17 @@ function exportHandlesFor(slot) {
   if (!h) { h = { png: null, jpg: null }; exportHandlesBySlot.set(slot, h); }
   return h;
 }
+/* domyślnie 2x dla ostrości; jeśli w Ustawieniach włączony limit rozdzielczości
+   (np. 1920x1080), NIE eksportuj coraz większego obrazu w miarę jak rośnie
+   projekt — przytnij skalę tak, by zmieścić się w limicie (bez powiększania
+   małych projektów ponad 2x). Współdzielone przez export pojedynczego obrazu
+   i masowy eksport wariantów (js/13-variants.js). */
+function exportScaleFor(w, h) {
+  let scale = 2;
+  const EI = settings.exportImg;
+  if (EI && EI.limit) scale = Math.min(scale, EI.w / w, EI.h / h);
+  return Math.max(scale, 0.05);
+}
 async function exportImage(fmt, forcePicker = false) {
   const region = pageRegion();
   if (!state.shapes.length && !region) return toast(t('t.emptyCanvas'));
@@ -141,7 +152,7 @@ async function exportImage(fmt, forcePicker = false) {
   const b = buildSVG(state.shapes, currentVals(), pad, region);
   const mime = fmt === 'jpg' ? 'image/jpeg' : 'image/png';
   const ext = fmt === 'jpg' ? '.jpg' : '.png';
-  const blob = await svgToPngBlob(b.svg, b.w, b.h, 2, mime);
+  const blob = await svgToPngBlob(b.svg, b.w, b.h, exportScaleFor(b.w, b.h), mime);
   let name = stripExt(sanitizeFile($('#projName').value));
   if (previewRow >= 0 && state.vars.rows[previewRow])
     name += '_' + stripExt(sanitizeFile(state.vars.rows[previewRow].name));

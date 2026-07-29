@@ -69,17 +69,26 @@ body{
 #floatLayer{position:fixed;inset:0;pointer-events:none;z-index:400;}
 .floatWin{position:absolute;display:flex;flex-direction:column;pointer-events:auto;
   background:var(--panel);border:1px solid var(--line);border-radius:6px;
-  box-shadow:0 8px 28px rgba(0,0,0,.35);min-width:220px;min-height:160px;overflow:hidden;}
+  box-shadow:0 8px 28px rgba(0,0,0,.35);min-width:220px;min-height:160px;}
 .floatWin.hidden{display:none;}
 .winHead{display:flex;align-items:center;gap:6px;padding:7px 6px 7px 10px;background:var(--panel2);
-  border-bottom:1px solid var(--line);cursor:move;flex-shrink:0;}
+  border-bottom:1px solid var(--line);border-radius:6px 6px 0 0;cursor:move;flex-shrink:0;}
 .winTitle{flex:1;font-size:12.5px;font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .winClose{width:20px;height:20px;border:none;border-radius:3px;background:none;color:var(--txt2);
   cursor:pointer;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;}
 .winClose:hover{background:#c0392b;color:#fff;}
-.winBody{flex:1;overflow-y:auto;padding:10px;min-height:0;}
-.winResize{position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize;}
-.winResize::after{content:'';position:absolute;right:3px;bottom:3px;width:8px;height:8px;
+.winBody{flex:1;overflow-y:auto;overflow-x:hidden;padding:10px;min-height:0;border-radius:0 0 6px 6px;}
+/* uchwyty do zmiany rozmiaru — 4 krawędzie + 4 rogi, dodawane w JS (js/20b-windows.js) */
+.winResizeH{position:absolute;z-index:6;}
+.winResizeH.dir-n{top:-4px;left:10px;right:10px;height:7px;cursor:ns-resize;}
+.winResizeH.dir-s{bottom:-4px;left:10px;right:10px;height:7px;cursor:ns-resize;}
+.winResizeH.dir-e{right:-4px;top:10px;bottom:10px;width:7px;cursor:ew-resize;}
+.winResizeH.dir-w{left:-4px;top:10px;bottom:10px;width:7px;cursor:ew-resize;}
+.winResizeH.dir-ne{top:-4px;right:-4px;width:12px;height:12px;cursor:nesw-resize;}
+.winResizeH.dir-nw{top:-4px;left:-4px;width:12px;height:12px;cursor:nwse-resize;}
+.winResizeH.dir-se{bottom:-4px;right:-4px;width:12px;height:12px;cursor:nwse-resize;}
+.winResizeH.dir-sw{bottom:-4px;left:-4px;width:12px;height:12px;cursor:nesw-resize;}
+.winResizeH.dir-se::after{content:'';position:absolute;right:4px;bottom:4px;width:8px;height:8px;
   border-right:2px solid var(--line);border-bottom:2px solid var(--line);}
 .floatWin.front{box-shadow:0 12px 34px rgba(0,0,0,.5);}
 #winSnapPreview{position:absolute;display:none;background:rgba(29,127,212,.22);
@@ -347,32 +356,26 @@ body.desktop-mode #mExport { display: none; }
   <div class="floatWin" id="win-props" data-win="props">
     <div class="winHead"><span class="winTitle" data-i18n="tab.props">Właściwości</span><button class="winClose" data-close>&times;</button></div>
     <div class="winBody" id="tab-props"></div>
-    <div class="winResize"></div>
   </div>
   <div class="floatWin hidden" id="win-lib" data-win="lib">
     <div class="winHead"><span class="winTitle" data-i18n="tab.lib">Biblioteka</span><button class="winClose" data-close>&times;</button></div>
     <div class="winBody" id="tab-lib"></div>
-    <div class="winResize"></div>
   </div>
   <div class="floatWin hidden" id="win-vars" data-win="vars">
     <div class="winHead"><span class="winTitle" data-i18n="tab.vars">Warianty</span><button class="winClose" data-close>&times;</button></div>
     <div class="winBody" id="tab-vars"></div>
-    <div class="winResize"></div>
   </div>
   <div class="floatWin" id="win-layers" data-win="layers">
     <div class="winHead"><span class="winTitle" data-i18n="tab.layers">Warstwy</span><button class="winClose" data-close>&times;</button></div>
     <div class="winBody" id="tab-objects"></div>
-    <div class="winResize"></div>
   </div>
   <div class="floatWin hidden" id="win-settings" data-win="settings">
     <div class="winHead"><span class="winTitle" data-i18n="tab.settings">Ustawienia</span><button class="winClose" data-close>&times;</button></div>
     <div class="winBody" id="tab-settings"></div>
-    <div class="winResize"></div>
   </div>
   <div class="floatWin hidden" id="win-help" data-win="help">
     <div class="winHead"><span class="winTitle" data-i18n="tab.help">Pomoc</span><button class="winClose" data-close>&times;</button></div>
     <div class="winBody" id="tab-help"></div>
-    <div class="winResize"></div>
   </div>
 </div>
 
@@ -570,7 +573,8 @@ let currentProjectHandle = null;  // uchwyt pliku (zapis w miejscu, File System 
 /* ---------- ustawienia aplikacji + szablony ---------- */
 let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, autosave: true, infiniteCanvasMargin: 16, xlsxAutoCrop: true,
   defaults: { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' },
-  theme: { preset: 'dark', custom: {} } };   // preset = jedno z THEME_PRESETS (js/19-settings.js); custom = nadpisania per-zmienna CSS
+  theme: { preset: 'dark', custom: {} },   // preset = jedno z THEME_PRESETS (js/19-settings.js); custom = nadpisania per-zmienna CSS
+  exportImg: { limit: true, w: 1920, h: 1080 } };   // limit maks. rozdzielczości PNG/JPG (patrz exportImage() w js/14-project.js)
 let templates = [];         // [{name, shapes, vars, page}]
 let imgCascade = 0;         // przesunięcie kolejnych wstawianych obrazów
 
@@ -933,7 +937,9 @@ const I18N = {
     'xlsxcrop.aborted':'Import odrzucony.',
     'set.xlsxImport':'Import XLSX','set.xlsxAutoCrop':'Automatycznie otwórz kreator kadru po imporcie',
     'set.defaults':'Domyślne nowych kształtów','set.config':'Konfiguracja',
-    'set.general':'Ogólne','set.theme':'Motyw','set.themePreset':'Zestaw kolorów','set.themeCustom':'Dostosuj kolory','set.themeReset':'Przywróć domyślne',
+    'set.general':'Ogólne','set.exportImport':'Eksport / Import','set.theme':'Motyw','set.themePreset':'Zestaw kolorów','set.themeCustom':'Dostosuj kolory','set.themeReset':'Przywróć domyślne',
+    'set.exportImgMax':'Maksymalna rozdzielczość PNG/JPG','set.exportImgLimit':'Ogranicz rozmiar eksportowanego obrazu',
+    'set.exportImgSize':'Maks. rozmiar',
     'theme.preset_dark':'Ciemny (domyślny)','theme.preset_light':'Jasny','theme.preset_midnight':'Nocny błękit','theme.preset_forest':'Leśna zieleń',
     'theme.preset_custom':'Własny','theme.customHint':'Co najmniej jeden kolor zmieniono ręcznie — motyw nie odpowiada już żadnemu gotowemu zestawowi.',
     'theme.bg':'Tło aplikacji','theme.panel':'Panel boczny','theme.panel2':'Panel boczny (jaśniejszy)','theme.line':'Linie i obramowania',
@@ -1018,7 +1024,9 @@ const I18N = {
     'tmpl.title':'Choose a template for the new project','tmpl.blank':'Blank project','tmpl.default':'Default template',
     'set.language':'Language','set.zoom':'Zoom control','set.mxMaster':'Slower zoom',
     'set.defaults':'Defaults for new shapes','set.config':'Configuration',
-    'set.general':'General','set.theme':'Theme','set.themePreset':'Color preset','set.themeCustom':'Customize colors','set.themeReset':'Reset to default',
+    'set.general':'General','set.exportImport':'Export / Import','set.theme':'Theme','set.themePreset':'Color preset','set.themeCustom':'Customize colors','set.themeReset':'Reset to default',
+    'set.exportImgMax':'Maximum PNG/JPG resolution','set.exportImgLimit':'Limit exported image size',
+    'set.exportImgSize':'Max size',
     'theme.preset_dark':'Dark (default)','theme.preset_light':'Light','theme.preset_midnight':'Midnight blue','theme.preset_forest':'Forest green',
     'theme.preset_custom':'Custom','theme.customHint':'At least one color was changed by hand — the theme no longer matches any stock preset.',
     'theme.bg':'App background','theme.panel':'Side panel','theme.panel2':'Side panel (lighter)','theme.line':'Lines and borders',
@@ -1111,7 +1119,9 @@ const I18N = {
     'tmpl.title':'Vorlage für das neue Projekt wählen','tmpl.blank':'Leeres Projekt','tmpl.default':'Standardvorlage',
     'set.language':'Sprache','set.zoom':'Zoom-Steuerung','set.mxMaster':'Langsamerer Zoom',
     'set.defaults':'Vorgaben für neue Formen','set.config':'Konfiguration',
-    'set.general':'Allgemein','set.theme':'Design','set.themePreset':'Farbschema','set.themeCustom':'Farben anpassen','set.themeReset':'Auf Standard zurücksetzen',
+    'set.general':'Allgemein','set.exportImport':'Export / Import','set.theme':'Design','set.themePreset':'Farbschema','set.themeCustom':'Farben anpassen','set.themeReset':'Auf Standard zurücksetzen',
+    'set.exportImgMax':'Maximale PNG/JPG-Auflösung','set.exportImgLimit':'Exportierte Bildgröße begrenzen',
+    'set.exportImgSize':'Max. Größe',
     'theme.preset_dark':'Dunkel (Standard)','theme.preset_light':'Hell','theme.preset_midnight':'Mitternachtsblau','theme.preset_forest':'Waldgrün',
     'theme.preset_custom':'Benutzerdefiniert','theme.customHint':'Mindestens eine Farbe wurde manuell geändert — das Design entspricht keinem Standardschema mehr.',
     'theme.bg':'App-Hintergrund','theme.panel':'Seitenpanel','theme.panel2':'Seitenpanel (heller)','theme.line':'Linien und Rahmen',
@@ -3686,7 +3696,7 @@ async function generateVariants() {
   for (const row of state.vars.rows) {
     const b = buildSVG(state.shapes, row.vals, pad, region);
     if (!b) continue;
-    const jpg = await svgToPngBlob(b.svg, b.w, b.h, 2, 'image/jpeg');   /* JPG zamiast PNG — mniejsze pliki przy masowym eksporcie */
+    const jpg = await svgToPngBlob(b.svg, b.w, b.h, exportScaleFor(b.w, b.h), 'image/jpeg');   /* JPG zamiast PNG — mniejsze pliki przy masowym eksporcie */
     let nm = variantName(row);
     if (used[nm]) nm += '_' + (++used[nm]); else used[nm] = 1;   /* unikaj kolizji nazw */
     files.push({ name: proj + '_' + nm + '.jpg', data: new Uint8Array(await jpg.arrayBuffer()) });
@@ -3834,6 +3844,17 @@ function exportHandlesFor(slot) {
   if (!h) { h = { png: null, jpg: null }; exportHandlesBySlot.set(slot, h); }
   return h;
 }
+/* domyślnie 2x dla ostrości; jeśli w Ustawieniach włączony limit rozdzielczości
+   (np. 1920x1080), NIE eksportuj coraz większego obrazu w miarę jak rośnie
+   projekt — przytnij skalę tak, by zmieścić się w limicie (bez powiększania
+   małych projektów ponad 2x). Współdzielone przez export pojedynczego obrazu
+   i masowy eksport wariantów (js/13-variants.js). */
+function exportScaleFor(w, h) {
+  let scale = 2;
+  const EI = settings.exportImg;
+  if (EI && EI.limit) scale = Math.min(scale, EI.w / w, EI.h / h);
+  return Math.max(scale, 0.05);
+}
 async function exportImage(fmt, forcePicker = false) {
   const region = pageRegion();
   if (!state.shapes.length && !region) return toast(t('t.emptyCanvas'));
@@ -3843,7 +3864,7 @@ async function exportImage(fmt, forcePicker = false) {
   const b = buildSVG(state.shapes, currentVals(), pad, region);
   const mime = fmt === 'jpg' ? 'image/jpeg' : 'image/png';
   const ext = fmt === 'jpg' ? '.jpg' : '.png';
-  const blob = await svgToPngBlob(b.svg, b.w, b.h, 2, mime);
+  const blob = await svgToPngBlob(b.svg, b.w, b.h, exportScaleFor(b.w, b.h), mime);
   let name = stripExt(sanitizeFile($('#projName').value));
   if (previewRow >= 0 && state.vars.rows[previewRow])
     name += '_' + stripExt(sanitizeFile(state.vars.rows[previewRow].name));
@@ -4536,33 +4557,207 @@ async function importXlsx(file) {
 }
 
 /* =====================================================================
-   EKSPORT do .xlsx (ExcelJS) — aktywny projekt jako jeden arkusz.
-   Rysunek renderujemy do PNG i osadzamy jako obraz zakotwiczony w A1
-   (grafika wektorowa nie daje się wiarygodnie odtworzyć jako komórki).
-   ===================================================================== */
+   EKSPORT do .xlsx (ExcelJS + własny drawing1.xml) — aktywny projekt jako
+   jeden arkusz z PRAWDZIWYMI, edytowalnymi obiektami (prostokąty/elipsy/
+   linie/tekst jako <xdr:sp>/<xdr:cxnSp>, obrazy jako <xdr:pic>), nie jednym
+   płaskim obrazkiem PNG wklejonym w A1. ExcelJS umie zapisać tylko obrazy —
+   kształty wektorowe dopisujemy sami, dokładnie odwrotnością tego, co
+   czytamy przy imporcie (patrz parseShapeNode/parseConnectorNode w
+   js/05-zip.js): budujemy bazowy skoroszyt przez ExcelJS, rozpakowujemy go
+   naszym readZipAll, doklejamy xl/drawings/drawing1.xml (+ rels + media +
+   wpis w [Content_Types].xml + <drawing r:id> w arkuszu) i pakujemy
+   z powrotem przez makeZip. Grupy (shape.g) eksportują się jako osobne,
+   niezgrupowane kształty — Excel nie zobaczy ich jako jednej grupy, ale
+   każdy z osobna jest w pełni edytowalny. ===================================================================== */
 function sanitizeSheetName(name) {
   let n = String(name || 'Arkusz').replace(/[\[\]\*\?\/\\:]/g, ' ').trim();
   if (!n) n = 'Arkusz';
   return n.slice(0, 31);
 }
+const XLSX_OUT_EPX = 9525;   // px -> EMU (96 dpi)
+const XLSX_OUT_PRESET = { triangle: 'triangle', rtTriangle: 'rtTriangle', diamond: 'diamond', pentagon: 'pentagon',
+  hexagon: 'hexagon', heptagon: 'heptagon', octagon: 'octagon', star4: 'star4', star5: 'star5', star6: 'star6',
+  cross: 'plus', rightArrow: 'rightArrow', leftArrow: 'leftArrow', parallelogram: 'parallelogram', trapezoid: 'trapezoid', chevron: 'chevron' };
+const XLSX_OUT_DASH = { solid: 'solid', dash: 'dash', dot: 'dot', dashdot: 'dashDot', longdash: 'lgDash' };
+function xlsxOutEmu(px) { return Math.max(0, Math.round(px * XLSX_OUT_EPX)); }
+function xlsxOutHex(hex) { return (hex || '#000000').replace('#', '').toUpperCase(); }
+function xlsxOutFillLn(s) {
+  const hasFill = !s.noFill && s.fill;
+  const fill = hasFill ? `<a:solidFill><a:srgbClr val="${xlsxOutHex(s.fill)}"/></a:solidFill>` : '<a:noFill/>';
+  const hasStroke = !s.noStroke && s.stroke;
+  const ln = hasStroke
+    ? `<a:ln w="${Math.max(1, Math.round((s.sw || 1) * 12700))}"><a:solidFill><a:srgbClr val="${xlsxOutHex(s.stroke)}"/></a:solidFill><a:prstDash val="${XLSX_OUT_DASH[s.dash] || 'solid'}"/></a:ln>`
+    : '<a:ln><a:noFill/></a:ln>';
+  return fill + ln;
+}
+function xlsxOutTextBody(s) {
+  const raw = subst(s.text || '', currentVals());
+  const lines = raw ? raw.split('\n') : [''];
+  const paras = lines.map(line => {
+    if (!line) return '<a:p><a:endParaRPr lang="en-US"/></a:p>';
+    const sz = Math.max(100, Math.round((s.fs || 14) * 100 * 72 / 96));
+    const rPr = `sz="${sz}"${s.bold ? ' b="1"' : ''}${s.italic ? ' i="1"' : ''}`;
+    return `<a:p><a:pPr algn="ctr"/><a:r><a:rPr ${rPr}><a:solidFill><a:srgbClr val="${xlsxOutHex(s.tc)}"/></a:solidFill>` +
+      `<a:latin typeface="${escXml(s.font || 'Calibri')}"/></a:rPr><a:t>${escXml(line)}</a:t></a:r></a:p>`;
+  }).join('');
+  return `<xdr:txBody><a:bodyPr wrap="square" anchor="ctr" lIns="0" tIns="0" rIns="0" bIns="0"/><a:lstStyle/>${paras}</xdr:txBody>`;
+}
+let _xlsxOutId = 1;
+/* siatka domyślna (bez jawnie ustawionych szerokości/wysokości) używana przez
+   ExcelJS/nasz import przy braku formatowania kolumn/wierszy — patrz
+   ejsSheetGeom(): defColCh=8.43 -> round(8.43*7+5)=64px, defRowPt=15pt ->
+   round(15*96/72)=20px. Kotwiczymy piksele do TEJ SAMEJ siatki, żeby
+   ponowny import (przez naszą applySelectedSheets) odtworzył dokładną
+   pozycję/rozmiar. */
+const XLSX_OUT_COL_PX = 64, XLSX_OUT_ROW_PX = 20;
+function xlsxOutCellRef(px, cellPx) {
+  const idx = Math.max(0, Math.floor(px / cellPx));
+  const off = Math.max(0, Math.round((px - idx * cellPx) * XLSX_OUT_EPX));
+  return { idx, off };
+}
+/* owija zawartość kształtu w <xdr:twoCellAnchor editAs="absolute">. Świadomie NIE
+   używamy <xdr:absoluteAnchor> — ExcelJS (i realny Excel/LibreOffice/Sheets) czyta
+   obrazy z drawingu tylko przez oneCell/twoCellAnchor; z absoluteAnchor obrazy
+   eksportu znikały przy ponownym imporcie (ws.getImages() ich nie widziało). */
+function xlsxOutAnchorTag(x, y, w, h, innerXml) {
+  const c1 = xlsxOutCellRef(x, XLSX_OUT_COL_PX), r1 = xlsxOutCellRef(y, XLSX_OUT_ROW_PX);
+  const c2 = xlsxOutCellRef(x + Math.max(w, 1), XLSX_OUT_COL_PX), r2 = xlsxOutCellRef(y + Math.max(h, 1), XLSX_OUT_ROW_PX);
+  return `<xdr:twoCellAnchor editAs="absolute">` +
+    `<xdr:from><xdr:col>${c1.idx}</xdr:col><xdr:colOff>${c1.off}</xdr:colOff><xdr:row>${r1.idx}</xdr:row><xdr:rowOff>${r1.off}</xdr:rowOff></xdr:from>` +
+    `<xdr:to><xdr:col>${c2.idx}</xdr:col><xdr:colOff>${c2.off}</xdr:colOff><xdr:row>${r2.idx}</xdr:row><xdr:rowOff>${r2.off}</xdr:rowOff></xdr:to>` +
+    innerXml + `<xdr:clientData/></xdr:twoCellAnchor>`;
+}
+/* kształt ProdDraw -> XML <xdr:twoCellAnchor>...</xdr:twoCellAnchor>. mediaRel = rId obrazu (tylko dla type image) */
+function xlsxOutShapeXml(s, mediaRel) {
+  const id = ++_xlsxOutId;
+  if (s.type === 'image') {
+    const c = s.crop;
+    const srcRect = c ? `<a:srcRect l="${Math.round((c.l || 0) * 100000)}" t="${Math.round((c.t || 0) * 100000)}" r="${Math.round((c.r || 0) * 100000)}" b="${Math.round((c.b || 0) * 100000)}"/>` : '';
+    const rot = s.rot ? ` rot="${Math.round((((s.rot % 360) + 360) % 360) * 60000)}"` : '';
+    const flip = `${s.flipH ? ' flipH="1"' : ''}${s.flipV ? ' flipV="1"' : ''}`;
+    const border = (!s.noStroke && s.stroke) ? `<a:ln w="${Math.max(1, Math.round((s.sw || 1) * 12700))}"><a:solidFill><a:srgbClr val="${xlsxOutHex(s.stroke)}"/></a:solidFill></a:ln>` : '';
+    if (!mediaRel) return '';   // brak danych obrazu (nie powinno się zdarzyć, ale nie eksportuj złamanego odwołania)
+    const inner = `<xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${id}" name="Obraz ${id}"/><xdr:cNvPicPr/></xdr:nvPicPr>` +
+      `<xdr:blipFill><a:blip r:embed="${mediaRel}"/>${srcRect}<a:stretch><a:fillRect/></a:stretch></xdr:blipFill>` +
+      `<xdr:spPr><a:xfrm${rot}${flip}><a:off x="${xlsxOutEmu(s.x)}" y="${xlsxOutEmu(s.y)}"/><a:ext cx="${xlsxOutEmu(s.w)}" cy="${xlsxOutEmu(s.h)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${border}</xdr:spPr>` +
+      `</xdr:pic>`;
+    return xlsxOutAnchorTag(s.x, s.y, s.w, s.h, inner);
+  }
+  if (s.type === 'line') {
+    const x = Math.min(s.x1, s.x2), y = Math.min(s.y1, s.y2);
+    const w = Math.abs(s.x2 - s.x1), h = Math.abs(s.y2 - s.y1);
+    const flipH = s.x2 < s.x1 ? ' flipH="1"' : '', flipV = s.y2 < s.y1 ? ' flipV="1"' : '';
+    const arrow = end => `<a:${end}End type="triangle"/>`;
+    const ln = `<a:ln w="${Math.max(1, Math.round((s.sw || 1) * 12700))}"><a:solidFill><a:srgbClr val="${xlsxOutHex(s.stroke || '#000000')}"/></a:solidFill>` +
+      `<a:prstDash val="${XLSX_OUT_DASH[s.dash] || 'solid'}"/>${s.as ? arrow('head') : ''}${s.ae ? arrow('tail') : ''}</a:ln>`;
+    const inner = `<xdr:cxnSp><xdr:nvCxnSpPr><xdr:cNvPr id="${id}" name="Łącznik ${id}"/><xdr:cNvCxnSpPr/></xdr:nvCxnSpPr>` +
+      `<xdr:spPr><a:xfrm${flipH}${flipV}><a:off x="${xlsxOutEmu(x)}" y="${xlsxOutEmu(y)}"/><a:ext cx="${xlsxOutEmu(w) || 1}" cy="${xlsxOutEmu(h) || 1}"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom>${ln}</xdr:spPr>` +
+      `</xdr:cxnSp>`;
+    return xlsxOutAnchorTag(x, y, w, h, inner);
+  }
+  /* rect / roundRect / ellipse / poly / text — wszystkie jako <xdr:sp>, pozycja z bboxOf (tekst bez własnych w/h liczy się z treści) */
+  const b = bboxOf(s);
+  const rot = s.rot ? ` rot="${Math.round((((s.rot % 360) + 360) % 360) * 60000)}"` : '';
+  const flip = `${s.flipH ? ' flipH="1"' : ''}${s.flipV ? ' flipV="1"' : ''}`;
+  const prst = s.type === 'ellipse' ? 'ellipse' : s.type === 'roundRect' ? 'roundRect' : s.type === 'poly' ? (XLSX_OUT_PRESET[s.preset] || 'rect') : 'rect';
+  const avLst = prst === 'roundRect' ? `<a:gd name="adj" fmla="val ${Math.round(((s.rx || 8) / Math.max(1, Math.min(b.w, b.h))) * 100000)}"/>` : '';
+  const inner = `<xdr:sp macro="" textlink=""><xdr:nvSpPr><xdr:cNvPr id="${id}" name="Kształt ${id}"/><xdr:cNvSpPr/></xdr:nvSpPr>` +
+    `<xdr:spPr><a:xfrm${rot}${flip}><a:off x="${xlsxOutEmu(b.x)}" y="${xlsxOutEmu(b.y)}"/><a:ext cx="${xlsxOutEmu(b.w) || 1}" cy="${xlsxOutEmu(b.h) || 1}"/></a:xfrm><a:prstGeom prst="${prst}"><a:avLst>${avLst}</a:avLst></a:prstGeom>${xlsxOutFillLn(s)}</xdr:spPr>` +
+    xlsxOutTextBody(s) +
+    `</xdr:sp>`;
+  return xlsxOutAnchorTag(b.x, b.y, b.w, b.h, inner);
+}
+/* tło pod eksportowanymi kształtami — bez niego widać siatkę Excela w
+   miejscach, gdzie kanwa jest przezroczysta (przy PNG/JPG tę samą rolę
+   pełni biały <rect> w buildSVG()/svgToPngBlob()). Zwykły <xdr:sp> typu
+   rect, wstawiany jako PIERWSZY (spód z-order). */
+function xlsxOutBgRect(box) {
+  const inner = `<xdr:sp macro="" textlink=""><xdr:nvSpPr><xdr:cNvPr id="${++_xlsxOutId}" name="Tło"/><xdr:cNvSpPr/></xdr:nvSpPr>` +
+    `<xdr:spPr><a:xfrm><a:off x="${xlsxOutEmu(box.x)}" y="${xlsxOutEmu(box.y)}"/><a:ext cx="${xlsxOutEmu(box.w) || 1}" cy="${xlsxOutEmu(box.h) || 1}"/></a:xfrm>` +
+    `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:ln><a:noFill/></a:ln></xdr:spPr>` +
+    `<xdr:txBody><a:bodyPr/><a:lstStyle/><a:p/></xdr:txBody></xdr:sp>`;
+  return xlsxOutAnchorTag(box.x, box.y, box.w, box.h, inner);
+}
+/* data: URL obrazu -> {bytes, ext} do zapisu jako plik w xl/media */
+function xlsxOutImageBytes(href) {
+  const m = /^data:image\/([a-zA-Z0-9.+-]+);base64,(.*)$/.exec(href || '');
+  if (!m) return null;
+  let ext = m[1].toLowerCase(); if (ext === 'svg+xml') ext = 'svg'; if (ext === 'jpg') ext = 'jpeg';
+  const bin = atob(m[2]);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return { bytes, ext };
+}
 async function exportXlsx() {
   try {
     if (typeof ExcelJS === 'undefined') return toast(t('t.importErr') + 'ExcelJS');
-    const region = pageRegion();
-    if (!state.shapes.length && !region) return toast(t('t.emptyCanvas'));
+    const shapes = state.shapes;
+    if (!shapes.length) return toast(t('t.emptyCanvas'));
     toast(t('t.reading'));
-    const pad = (settings.infiniteCanvasMargin != null) ? settings.infiniteCanvasMargin : 16;
-    const b = buildSVG(state.shapes, currentVals(), pad, region);
-    const blob = await svgToPngBlob(b.svg, b.w, b.h, 2, 'image/png');
-    const arr = new Uint8Array(await blob.arrayBuffer());
+    _xlsxOutId = 1;
+    /* 1) bazowy skoroszyt przez ExcelJS (arkusz, ustawienia, style — to ExcelJS robi dobrze) */
     const wb = new ExcelJS.Workbook();
     wb.creator = 'ProdDraw';
-    const ws = wb.addWorksheet(sanitizeSheetName($('#projName').value || state.name));
-    const id = wb.addImage({ buffer: arr, extension: 'png' });
-    ws.addImage(id, { tl: { col: 0, row: 0 }, ext: { width: b.w, height: b.h } });
-    const out = await wb.xlsx.writeBuffer();
+    wb.addWorksheet(sanitizeSheetName($('#projName').value || state.name));
+    const base = await wb.xlsx.writeBuffer();
+    const baseAb = base.buffer ? base.buffer.slice(base.byteOffset, base.byteOffset + base.byteLength) : base;
+    const parts = await readZipAll(baseAb);
+    /* 2) media (obrazy) + relacje drawing1.xml.rels */
+    const mediaFiles = [];
+    let drawingRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">';
+    let relN = 0;
+    const mediaRelFor = s => {
+      const img = xlsxOutImageBytes(s.href);
+      if (!img) return null;
+      relN++;
+      const name = `image${relN}.${img.ext}`;
+      mediaFiles.push({ name: 'xl/media/' + name, data: img.bytes });
+      drawingRels += `<Relationship Id="rId${relN}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${name}"/>`;
+      return 'rId' + relN;
+    };
+    /* 3) drawing1.xml — jeden <xdr:twoCellAnchor> na kształt, w kolejności z-order (patrz layeredShapes()),
+       poprzedzony białym tłem na spodzie (patrz xlsxOutBgRect) tak samo rozciągniętym jak przy PNG/JPG:
+       format strony jeśli ustawiony, inaczej obrys kształtów + margines kanwy nieskończonej */
+    const visible = layeredShapes().filter(s => !isShapeEffectivelyHidden(s));
+    let bgBox = pageRegion();
+    if (!bgBox && visible.length) {
+      const pad = (settings.infiniteCanvasMargin != null) ? settings.infiniteCanvasMargin : 16;
+      const b = unionBBox(visible);
+      bgBox = { x: b.x - pad, y: b.y - pad, w: b.w + 2 * pad, h: b.h + 2 * pad };
+    }
+    let drawingBody = bgBox ? xlsxOutBgRect(bgBox) : '';
+    for (const s of visible) {
+      drawingBody += xlsxOutShapeXml(s, s.type === 'image' ? mediaRelFor(s) : null);
+    }
+    drawingRels += '</Relationships>';
+    const drawingXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      drawingBody + '</xdr:wsDr>';
+    /* 4) dopnij drawing1.xml do arkusza: rels arkusza + <drawing r:id> w sheet1.xml + wpisy w [Content_Types].xml */
+    const enc = new TextEncoder(), td = new TextDecoder();
+    const sheetPart = parts.find(p => p.name === 'xl/worksheets/sheet1.xml');
+    let sheetXml = td.decode(sheetPart.data);
+    sheetXml = sheetXml.replace('</worksheet>', '<drawing r:id="rId1"/></worksheet>');
+    sheetPart.data = enc.encode(sheetXml);
+    const sheetRelsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>';
+    const ctPart = parts.find(p => p.name === '[Content_Types].xml');
+    let ctXml = td.decode(ctPart.data);
+    const extras = ['<Default Extension="png" ContentType="image/png"/>', '<Default Extension="jpeg" ContentType="image/jpeg"/>',
+      '<Default Extension="gif" ContentType="image/gif"/>', '<Default Extension="bmp" ContentType="image/bmp"/>',
+      '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>']
+      .filter(tag => !ctXml.includes(tag.match(/Extension="([^"]+)"|PartName="([^"]+)"/)[0]));
+    ctXml = ctXml.replace('</Types>', extras.join('') + '</Types>');
+    ctPart.data = enc.encode(ctXml);
+    /* 5) spakuj z powrotem: pliki istniejące (bez katalogów-atrap) + nowe */
+    const outFiles = parts.filter(p => !p.name.endsWith('/')).map(p => ({ name: p.name, data: p.data }));
+    outFiles.push({ name: 'xl/drawings/drawing1.xml', data: enc.encode(drawingXml) });
+    outFiles.push({ name: 'xl/drawings/_rels/drawing1.xml.rels', data: enc.encode(drawingRels) });
+    outFiles.push({ name: 'xl/worksheets/_rels/sheet1.xml.rels', data: enc.encode(sheetRelsXml) });
+    outFiles.push(...mediaFiles);
+    const blob = makeZip(outFiles);
     const name = (stripExt(sanitizeFile($('#projName').value)) || 'ProdDraw') + '.xlsx';
-    downloadBlob(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), name);
+    downloadBlob(new Blob([blob], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), name);
     toast(t('t.xlsxExported') + name, 6000);
   } catch (err) { toast(t('t.saveErr')); }
 }
@@ -5063,13 +5258,15 @@ let _setSubtab = 'general';   // która pod-zakładka Ustawień jest widoczna (n
 function renderSettings() {
   const el = $('#tab-settings');
   const D = settings.defaults || (settings.defaults = { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' });
+  const EI = settings.exportImg || (settings.exportImg = { limit: true, w: 1920, h: 1080 });
   const fonts = ['Calibri', 'Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact'];
   const th = themeState(), eff = themeEffective();
-  const onGen = _setSubtab !== 'theme';
+  const onGen = _setSubtab === 'general', onExp = _setSubtab === 'export', onThm = _setSubtab === 'theme';
   el.innerHTML = `
     <div class="subtabbar">
       <button class="subtab ${onGen ? 'on' : ''}" data-sub="general">${t('set.general')}</button>
-      <button class="subtab ${!onGen ? 'on' : ''}" data-sub="theme">${t('set.theme')}</button>
+      <button class="subtab ${onExp ? 'on' : ''}" data-sub="export">${t('set.exportImport')}</button>
+      <button class="subtab ${onThm ? 'on' : ''}" data-sub="theme">${t('set.theme')}</button>
     </div>
     <div class="subtabBody" id="setSubGeneral" style="display:${onGen ? '' : 'none'}">
     <div class="grp"><h4>${t('set.language')}</h4>
@@ -5087,14 +5284,6 @@ function renderSettings() {
       <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setAutosave" ${settings.autosave !== false ? 'checked' : ''}> ${t('set.autosave')}</label></div>
       <div class="hint">${helpLink('settings')}</div>
     </div>
-    <div class="grp"><h4>${t('set.canvas')}</h4>
-      <div class="row"><label>${t('set.infMargin')}</label><input class="in" type="number" id="setInfMargin" min="0" max="500" step="1" value="${settings.infiniteCanvasMargin ?? 16}"></div>
-      <div class="hint">${helpLink('settings')}</div>
-    </div>
-    <div class="grp"><h4>${t('set.xlsxImport')}</h4>
-      <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setXlsxAutoCrop" ${settings.xlsxAutoCrop !== false ? 'checked' : ''}> ${t('set.xlsxAutoCrop')}</label></div>
-      <div class="hint">${helpLink('settings')}</div>
-    </div>
     <div class="grp"><h4>${t('set.defaults')}</h4>
       <div class="row"><label>${t('props.font')}</label><select class="in" id="dFont" style="width:130px">
         ${fonts.map(f => `<option value="${f}" ${D.font === f ? 'selected' : ''}>${f}</option>`).join('')}</select></div>
@@ -5103,13 +5292,30 @@ function renderSettings() {
       <div class="row"><label>${t('set.colStroke')}</label><input class="in" type="color" id="dStroke" value="${D.stroke}"></div>
       <div class="row"><label>${t('set.colText')}</label><input class="in" type="color" id="dTc" value="${D.tc}"></div>
       <div class="row"><label>${t('set.colFill')}</label><input class="in" type="color" id="dFill" value="${D.fill}"></div></div>
+    <div class="grp"><div class="hint">${t('set.about')}</div></div>
+    </div>
+    <div class="subtabBody" id="setSubExport" style="display:${onExp ? '' : 'none'}">
+    <div class="grp"><h4>${t('set.canvas')}</h4>
+      <div class="row"><label>${t('set.infMargin')}</label><input class="in" type="number" id="setInfMargin" min="0" max="500" step="1" value="${settings.infiniteCanvasMargin ?? 16}"></div>
+      <div class="hint">${helpLink('settings')}</div>
+    </div>
+    <div class="grp"><h4>${t('set.exportImgMax')}</h4>
+      <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setExpImgLimit" ${EI.limit !== false ? 'checked' : ''}> ${t('set.exportImgLimit')}</label></div>
+      <div class="row"><label>${t('set.exportImgSize')}</label>
+        <input class="in" type="number" id="setExpImgW" min="10" max="20000" step="1" value="${EI.w}" style="width:80px"> ×
+        <input class="in" type="number" id="setExpImgH" min="10" max="20000" step="1" value="${EI.h}" style="width:80px"> px</div>
+      <div class="hint">${helpLink('settings')}</div>
+    </div>
+    <div class="grp"><h4>${t('set.xlsxImport')}</h4>
+      <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setXlsxAutoCrop" ${settings.xlsxAutoCrop !== false ? 'checked' : ''}> ${t('set.xlsxAutoCrop')}</label></div>
+      <div class="hint">${helpLink('settings')}</div>
+    </div>
     <div class="grp"><h4>${t('set.config')}</h4>
       <div class="row"><button class="btn" id="setTmpl">${t('config.saveTmpl')}</button></div>
       <div class="row"><button class="btn" id="setExpCfg">${t('config.save')}</button>
         <button class="btn" id="setImpCfg">${t('config.load')}</button></div></div>
-    <div class="grp"><div class="hint">${t('set.about')}</div></div>
     </div>
-    <div class="subtabBody" id="setSubTheme" style="display:${onGen ? 'none' : ''}">
+    <div class="subtabBody" id="setSubTheme" style="display:${onThm ? '' : 'none'}">
     <div class="grp"><h4>${t('set.themePreset')}</h4>
       <div class="row" id="themePresetRow">${themePresetRowHTML(th)}</div>
     </div>
@@ -5131,6 +5337,9 @@ function renderSettings() {
   $('#setAutosave').addEventListener('change', e => { settings.autosave = e.target.checked; saveSettingsLS(); if (settings.autosave) autosave(); });
   on2('setInfMargin', e => { settings.infiniteCanvasMargin = clamp(parseInt(e.target.value) || 0, 0, 500); saveSettingsLS(); });
   $('#setXlsxAutoCrop').addEventListener('change', e => { settings.xlsxAutoCrop = e.target.checked; saveSettingsLS(); });
+  $('#setExpImgLimit').addEventListener('change', e => { EI.limit = e.target.checked; saveSettingsLS(); });
+  on2('setExpImgW', e => { EI.w = clamp(parseInt(e.target.value) || 1920, 10, 20000); saveSettingsLS(); });
+  on2('setExpImgH', e => { EI.h = clamp(parseInt(e.target.value) || 1080, 10, 20000); saveSettingsLS(); });
   on2('setZoomDiv', e => { settings.zoomDiv = clamp(parseFloat(e.target.value) || 4, 1, 20); saveSettingsLS(); });
   const dSave = () => saveSettingsLS();
   $('#dFont').addEventListener('change', e => { D.font = e.target.value; dSave(); });
@@ -5339,25 +5548,33 @@ function winClampPos(x, y) {
 }
 /* ---------- przyciąganie okien (do krawędzi ekranu i do siebie nawzajem) ----------
    Dwa niezależne mechanizmy, jak w zwykłych menedżerach okien:
-   1) strefy brzegu ekranu (jak Aero Snap w Windows) — dociągnięcie okna do
-      lewej/prawej krawędzi obszaru roboczego daje połowę szerokości, do
-      górnej — cały obszar, do rogu — ćwiartkę. Podgląd (przezroczysty
-      prostokąt) pokazuje co się stanie PRZED puszczeniem, samo okno w
-      trakcie przeciągania nadal jedzie za kursorem.
-   2) magnetyczne przyciąganie do innych okien — gdy krawędź przeciąganego
-      okna zbliży się do krawędzi innego widocznego okna, delikatnie się
-      do niej dopasowuje (bez zmiany rozmiaru), więc łatwo ułożyć panele
-      krawędź w krawędź bez szczeliny. */
-const SNAP_ZONE = 26, SNAP_MAG = 10;
+   1) strefy brzegu ekranu (jak Aero Snap w Windows) — dotknięcie KURSOREM
+      lewej/prawej krawędzi obszaru roboczego daje połowę szerokości, góry —
+      cały obszar, rogu — ćwiartkę. Podgląd (przezroczysty prostokąt)
+      pokazuje co się stanie PRZED puszczeniem.
+      WAŻNE: próg liczony od pozycji KURSORA, nie krawędzi okna — okno
+      przesuwane w środek ekranu, którego szerokość PRZYPADKIEM sięga
+      brzegu (np. drugie okno dokowane pod pierwszym w tej samej kolumnie),
+      nie ma być siłą rozciągane na pół ekranu tylko dlatego, że jego WŁASNA
+      krawędź tam akurat leży — to źle rozumiane jako "okna nie chcą się do
+      siebie przyciągać".
+   2) magnetyczne przyciąganie do innych okien I do krawędzi obszaru
+      roboczego — gdy krawędź przeciąganego/skalowanego okna zbliży się do
+      krawędzi innego widocznego okna (albo do brzegu obszaru), dopasowuje
+      się do niej dokładnie (bez wymuszania połowy/ćwiartki), więc łatwo
+      ułożyć panele krawędź w krawędź bez szczeliny — nawet gdy nie chodzi
+      o brzeg ekranu (np. drugie okno pod pierwszym, oba węższe niż pół
+      ekranu). Działa też przy zmianie rozmiaru (przeciąganej krawędzi). */
+const SNAP_ZONE = 22, SNAP_MAG = 18;
 function workspaceRect() {
   const cw = document.getElementById('cwrap');
   const r = cw ? cw.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
   return { x: r.left, y: r.top, w: r.width, h: r.height };
 }
-function screenSnapZone(x, y, w, h) {
+function screenSnapZone(cursorX, cursorY) {
   const ws = workspaceRect();
-  const nearL = x <= ws.x + SNAP_ZONE, nearR = (x + w) >= ws.x + ws.w - SNAP_ZONE;
-  const nearT = y <= ws.y + SNAP_ZONE, nearB = (y + h) >= ws.y + ws.h - SNAP_ZONE;
+  const nearL = cursorX <= ws.x + SNAP_ZONE, nearR = cursorX >= ws.x + ws.w - SNAP_ZONE;
+  const nearT = cursorY <= ws.y + SNAP_ZONE, nearB = cursorY >= ws.y + ws.h - SNAP_ZONE;
   if (nearL && nearT) return { x: ws.x, y: ws.y, w: ws.w / 2, h: ws.h / 2 };
   if (nearR && nearT) return { x: ws.x + ws.w / 2, y: ws.y, w: ws.w / 2, h: ws.h / 2 };
   if (nearL && nearB) return { x: ws.x, y: ws.y + ws.h / 2, w: ws.w / 2, h: ws.h / 2 };
@@ -5367,23 +5584,43 @@ function screenSnapZone(x, y, w, h) {
   if (nearR) return { x: ws.x + ws.w / 2, y: ws.y, w: ws.w / 2, h: ws.h };
   return null;
 }
-function magneticSnap(x, y, w, h, selfId) {
-  let dx = null, dy = null;
+/* krawędzie X/Y wszystkich widocznych okien (poza selfId) + brzegów obszaru
+   roboczego — wspólna pula celów magnetycznych dla przesuwania i skalowania */
+function snapTargets(selfId) {
+  const ws = workspaceRect();
+  const xs = [ws.x, ws.x + ws.w], ys = [ws.y, ws.y + ws.h];
   for (const id of WIN_IDS) {
     if (id === selfId) continue;
     const st = winGet(id);
     if (!st.visible) continue;
-    if (dx === null) {
-      const cx = [[x, st.x + st.w], [x + w, st.x], [x, st.x], [x + w, st.x + st.w]];
-      for (const [my, target] of cx) if (Math.abs(my - target) <= SNAP_MAG) { dx = target - my; break; }
-    }
-    if (dy === null) {
-      const cy = [[y, st.y + st.h], [y + h, st.y], [y, st.y], [y + h, st.y + st.h]];
-      for (const [my, target] of cy) if (Math.abs(my - target) <= SNAP_MAG) { dy = target - my; break; }
-    }
-    if (dx !== null && dy !== null) break;
+    xs.push(st.x, st.x + st.w); ys.push(st.y, st.y + st.h);
+  }
+  return { xs, ys };
+}
+function nearestTarget(value, targets) {
+  let best = null, bestD = SNAP_MAG + 1;
+  for (const t of targets) { const d = Math.abs(value - t); if (d < bestD) { bestD = d; best = t; } }
+  return best;
+}
+function magneticSnap(x, y, w, h, selfId) {
+  const { xs, ys } = snapTargets(selfId);
+  let dx = null, dy = null;
+  for (const my of [x, x + w]) {
+    const tgt = nearestTarget(my, xs);
+    if (tgt !== null) { dx = tgt - my; break; }
+  }
+  for (const my of [y, y + h]) {
+    const tgt = nearestTarget(my, ys);
+    if (tgt !== null) { dy = tgt - my; break; }
   }
   return { dx: dx || 0, dy: dy || 0 };
+}
+/* przyciągnij POJEDYNCZĄ współrzędną krawędzi (używane przy skalowaniu —
+   rusza się tylko jedna krawędź na raz, więc nie ma co próbować obu naraz
+   jak w magneticSnap dla przesuwania) */
+function snapEdgeValue(value, targets) {
+  const tgt = nearestTarget(value, targets);
+  return tgt === null ? value : tgt;
 }
 function winSnapPreviewEl() {
   let el = document.getElementById('winSnapPreview');
@@ -5415,13 +5652,44 @@ function winFront(id) { const st = winGet(id); st.z = ++winZTop; winApply(id); w
 function winShow(id) { const st = winGet(id); st.visible = true; st.z = ++winZTop; winApply(id); winSave(); }
 function winHide(id) { const st = winGet(id); st.visible = false; winApply(id); winSave(); }
 function winToggle(id) { winGet(id).visible ? winHide(id) : winShow(id); }
+const RESIZE_DIRS = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+const WIN_MIN_W = 220, WIN_MIN_H = 160;
+/* przeciągnięcie krawędzi/rogu — kierunek decyduje którą kombinację x/y/w/h
+   rusza; przeciwległa krawędź zawsze zostaje na miejscu. Krawędź, którą się
+   właśnie ciągnie, przyciąga się magnetycznie do brzegu obszaru roboczego i
+   do krawędzi innych okien (patrz snapEdgeValue). */
+function startResize(id, el, dir, e) {
+  e.preventDefault(); e.stopPropagation();
+  const st = winGet(id);
+  const sx = e.clientX, sy = e.clientY;
+  const ox = st.x, oy = st.y, ow = st.w, oh = st.h;
+  const onMove = me => {
+    const dxMouse = me.clientX - sx, dyMouse = me.clientY - sy;
+    let nx = ox, ny = oy, nw = ow, nh = oh;
+    const { xs, ys } = snapTargets(id);
+    if (dir.includes('e')) nw = Math.max(WIN_MIN_W, snapEdgeValue(ox + ow + dxMouse, xs) - ox);
+    if (dir.includes('w')) { nw = Math.max(WIN_MIN_W, (ox + ow) - snapEdgeValue(ox + dxMouse, xs)); nx = (ox + ow) - nw; }
+    if (dir.includes('s')) nh = Math.max(WIN_MIN_H, snapEdgeValue(oy + oh + dyMouse, ys) - oy);
+    if (dir.includes('n')) { nh = Math.max(WIN_MIN_H, (oy + oh) - snapEdgeValue(oy + dyMouse, ys)); ny = (oy + oh) - nh; }
+    st.x = nx; st.y = ny; st.w = nw; st.h = nh;
+    el.style.left = nx + 'px'; el.style.top = ny + 'px'; el.style.width = nw + 'px'; el.style.height = nh + 'px';
+  };
+  const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); winSave(); };
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+}
 function initWindows() {
   WIN_IDS.forEach((id, idx) => {
     const el = document.getElementById('win-' + id);
     if (!el) return;
     winApply(id);
     const head = el.querySelector('.winHead');
-    const resizeHandle = el.querySelector('.winResize');
+    RESIZE_DIRS.forEach(dir => {
+      const h = document.createElement('div');
+      h.className = 'winResizeH dir-' + dir;
+      h.addEventListener('pointerdown', e => startResize(id, el, dir, e));
+      el.appendChild(h);
+    });
     el.addEventListener('pointerdown', () => winFront(id), { capture: true });
     head.addEventListener('pointerdown', e => {
       if (e.target.closest('[data-close]')) return;
@@ -5431,7 +5699,7 @@ function initWindows() {
       let pendingZone = null;
       const onMove = me => {
         let c = winClampPos(ox + (me.clientX - sx), oy + (me.clientY - sy));
-        const zone = screenSnapZone(c.x, c.y, st.w, st.h);
+        const zone = screenSnapZone(me.clientX, me.clientY);
         if (zone) { pendingZone = zone; showSnapPreview(zone); }
         else {
           pendingZone = null; hideSnapPreview();
@@ -5447,19 +5715,6 @@ function initWindows() {
         if (pendingZone) { st.x = pendingZone.x; st.y = pendingZone.y; st.w = pendingZone.w; st.h = pendingZone.h; winApply(id); }
         winSave();
       };
-      window.addEventListener('pointermove', onMove);
-      window.addEventListener('pointerup', onUp);
-    });
-    resizeHandle.addEventListener('pointerdown', e => {
-      e.preventDefault(); e.stopPropagation();
-      const st = winGet(id);
-      const sx = e.clientX, sy = e.clientY, ow = st.w, oh = st.h;
-      const onMove = me => {
-        st.w = Math.max(220, ow + (me.clientX - sx));
-        st.h = Math.max(160, oh + (me.clientY - sy));
-        el.style.width = st.w + 'px'; el.style.height = st.h + 'px';
-      };
-      const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); winSave(); };
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
     });
