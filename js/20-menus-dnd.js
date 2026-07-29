@@ -55,7 +55,11 @@ $('#projName').addEventListener('change', () => { state.name = $('#projName').va
 $('#gridSize').addEventListener('change', render);
 
 /* ---------- przeciągnij i upuść pliki na okno ---------- */
-window.addEventListener('dragover', e => { e.preventDefault(); });
+/* capture:true + dragenter also prevented -- belt-and-braces so Chromium
+   never gets a chance to treat this as page navigation (see main.js
+   will-navigate guard for the other half of the fix) */
+window.addEventListener('dragenter', e => { e.preventDefault(); }, true);
+window.addEventListener('dragover', e => { e.preventDefault(); }, true);
 window.addEventListener('drop', async e => {
   e.preventDefault();
   /* spróbuj pobrać uchwyt pliku (zapis w miejscu dla przeciągniętego projektu) */

@@ -95,6 +95,20 @@ function createWindow() {
   mainWindow.setTitle('ProdDraw');
   mainWindow.loadFile(path.join(__dirname, '..', 'index.html'));
 
+  /**
+   * Block navigation away from the app. Without this, dropping a file (XLSX,
+   * image, etc.) onto the window can make Chromium navigate the BrowserWindow
+   * to `file://<dropped path>` at the browser-process level -- this happens
+   * "above" the renderer, so the page's own dragover/drop preventDefault()
+   * calls don't reliably stop it. That's what broke drag-and-drop import:
+   * the window would silently try to navigate instead of handing the file to
+   * our drop handler. See Electron's security guide, "Disable or limit
+   * navigation".
+   */
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url !== mainWindow.webContents.getURL()) event.preventDefault();
+  });
+
   // Open DevTools in development (optional, comment out for production)
   // mainWindow.webContents.openDevTools();
 
