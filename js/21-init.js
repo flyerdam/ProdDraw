@@ -5,7 +5,6 @@
   try { const st = localStorage.getItem('prodrys_settings');
     if (st) settings = Object.assign(settings, JSON.parse(st)); } catch (e) {}
   if (!I18N[settings.lang]) settings.lang = 'pl';
-  document.documentElement.style.setProperty('--sideW', settings.sideW + 'px');
   applyTheme();
   applyI18n();
   /* biblioteka */
@@ -45,4 +44,5 @@
   renderLib();
   renderSettings();
   renderHelp();
+  initWindows();
 })();

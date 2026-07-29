@@ -770,7 +770,3 @@ $$('.tool').forEach(b => b.addEventListener('click', () => {
   if (b.dataset.tool === 'shapes') { openShapeModal(); return; }
   setTool(b.dataset.tool);
 }));
-$$('.tab').forEach(b => b.addEventListener('click', () => {
-  $$('.tab').forEach(t => t.classList.toggle('on', t === b));
-  $$('.tabBody').forEach(t => t.classList.toggle('on', t.id === 'tab-' + b.dataset.tab));
-}));

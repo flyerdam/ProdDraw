@@ -4,8 +4,7 @@
    pełny tekst wprost przy polu — teraz jest tam tylko krótki link, a treść mieszka
    w jednym miejscu (tu, w Pomocy), więc się nie rozjeżdża między zakładkami. */
 function goHelp(anchor) {
-  const helpBtn = document.querySelector('.tab[data-tab="help"]');
-  if (helpBtn) helpBtn.click();
+  if (typeof winShow === 'function') winShow('help');
   requestAnimationFrame(() => {
     const target = document.getElementById('help-' + anchor);
     if (!target) return;

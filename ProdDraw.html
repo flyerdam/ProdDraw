@@ -20,8 +20,8 @@ body{
   font-family:"Segoe UI",system-ui,-apple-system,sans-serif;
   background:var(--bg); color:var(--txt);
   display:grid; grid-template-rows:46px 32px 1fr 30px;
-  grid-template-columns:46px 1fr 272px;
-  grid-template-areas:"tb tb tb" "tabs tabs tabs" "rail canvas side" "status status status";
+  grid-template-columns:46px 1fr 40px;
+  grid-template-areas:"tb tb tb" "tabs tabs tabs" "rail canvas winrail" "status status status";
 }
 /* ---------- top bar ---------- */
 .tb{grid-area:tb; display:flex; align-items:center; gap:8px; padding:0 10px;
@@ -58,17 +58,30 @@ body{
 #txtEd{position:absolute;display:none;background:#fff;border:1.5px solid var(--sel);
   font-family:Arial,sans-serif;resize:none;overflow:hidden;padding:2px 4px;line-height:1.25;
   box-shadow:0 2px 10px rgba(0,0,0,.25);z-index:20;}
-/* ---------- side panel ---------- */
-.side{grid-area:side;background:var(--panel);border-left:1px solid var(--line);
-  display:flex;flex-direction:column;min-height:0;}
-.tabbar{display:flex;flex-wrap:wrap;border-bottom:1px solid var(--line);}
-.tab{flex:1 1 auto;min-width:fit-content;padding:8px 9px;text-align:center;cursor:pointer;color:var(--txt2);
-  font-size:12.5px;border-bottom:2px solid transparent;background:none;border-top:none;border-right:none;
-  border-left:1px solid var(--line);white-space:nowrap;}
-.tab:first-child{border-left:none;}
-.tab.on{color:var(--acc);border-bottom-color:var(--acc);}
-.tabBody{flex:1;overflow-y:auto;padding:10px;display:none;min-height:0;}
-.tabBody.on{display:block;}
+/* ---------- prawa szyna: ikony otwierania/zamykania okien paneli ---------- */
+.winRail{grid-area:winrail;background:var(--panel);border-left:1px solid var(--line);
+  display:flex;flex-direction:column;align-items:center;padding-top:8px;gap:4px;}
+.winRailBtn{width:30px;height:30px;border:1px solid transparent;border-radius:4px;background:none;
+  color:var(--txt2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;}
+.winRailBtn:hover{color:#fff;background:var(--panel2);}
+.winRailBtn.on{color:var(--acc);border-color:var(--acc);background:var(--panel2);}
+/* ---------- pływające okna paneli (Właściwości/Biblioteka/Warstwy/…) ---------- */
+#floatLayer{position:fixed;inset:0;pointer-events:none;z-index:400;}
+.floatWin{position:absolute;display:flex;flex-direction:column;pointer-events:auto;
+  background:var(--panel);border:1px solid var(--line);border-radius:6px;
+  box-shadow:0 8px 28px rgba(0,0,0,.35);min-width:220px;min-height:160px;overflow:hidden;}
+.floatWin.hidden{display:none;}
+.winHead{display:flex;align-items:center;gap:6px;padding:7px 6px 7px 10px;background:var(--panel2);
+  border-bottom:1px solid var(--line);cursor:move;flex-shrink:0;}
+.winTitle{flex:1;font-size:12.5px;font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.winClose{width:20px;height:20px;border:none;border-radius:3px;background:none;color:var(--txt2);
+  cursor:pointer;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;}
+.winClose:hover{background:#c0392b;color:#fff;}
+.winBody{flex:1;overflow-y:auto;padding:10px;min-height:0;}
+.winResize{position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize;}
+.winResize::after{content:'';position:absolute;right:3px;bottom:3px;width:8px;height:8px;
+  border-right:2px solid var(--line);border-bottom:2px solid var(--line);}
+.floatWin.front{box-shadow:0 12px 34px rgba(0,0,0,.5);}
 .grp{margin-bottom:14px;}
 /* czytelniejsze rozdzielenie sekcji we Właściwościach */
 #tab-props .grp{padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid var(--line);}
@@ -188,11 +201,6 @@ input[type=checkbox]{accent-color:var(--acc);}
 .menuItem .sc{font-size:11px;opacity:.6;font-family:ui-monospace,monospace;}
 .menuItem:hover .sc{opacity:.85;}
 .menuSep{height:1px;background:var(--line);margin:4px 2px;}
-/* ---------- resizable side panel ---------- */
-body{grid-template-columns:46px 1fr var(--sideW,272px);}
-.sideResizer{grid-area:side;justify-self:start;width:6px;margin-left:-3px;cursor:ew-resize;z-index:5;
-  background:transparent;position:relative;}
-.sideResizer:hover{background:var(--acc);opacity:.5;}
 /* ---------- pasek kart projektów ---------- */
 .tabsbar{grid-area:tabs;display:flex;align-items:stretch;gap:2px;padding:0 6px;
   background:var(--panel2);border-bottom:1px solid var(--line);overflow-x:auto;overflow-y:hidden;}
@@ -303,23 +311,49 @@ body.desktop-mode #mExport { display: none; }
   </div>
 </div>
 
-<!-- ======= SIDE PANEL ======= -->
-<div class="sideResizer" id="sideResizer" title="Przeciągnij, aby zmienić szerokość"></div>
-<div class="side">
-  <div class="tabbar">
-    <button class="tab on" data-tab="props" data-i18n="tab.props">Właściwości</button>
-    <button class="tab" data-tab="lib" data-i18n="tab.lib">Biblioteka</button>
-    <button class="tab" data-tab="vars" data-i18n="tab.vars">Warianty</button>
-    <button class="tab" data-tab="objects" data-i18n="tab.objects">Obiekty</button>
-    <button class="tab" data-tab="settings" data-i18n="tab.settings">Ustawienia</button>
-    <button class="tab" data-tab="help" data-i18n="tab.help">Pomoc</button>
+<!-- ======= PRAWA SZYNA: otwieranie/zamykanie okien paneli ======= -->
+<div class="winRail" id="winRail">
+  <button class="winRailBtn" data-win="props" data-i18n-title="tab.props" title="Właściwości"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 10v10"/></svg></button>
+  <button class="winRailBtn" data-win="lib" data-i18n-title="tab.lib" title="Biblioteka"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="8" height="8" rx="1"/><rect x="13" y="4" width="8" height="8" rx="1"/><rect x="3" y="14" width="8" height="8" rx="1"/><rect x="13" y="14" width="8" height="8" rx="1"/></svg></button>
+  <button class="winRailBtn" data-win="vars" data-i18n-title="tab.vars" title="Warianty"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>
+  <button class="winRailBtn" data-win="layers" data-i18n-title="tab.layers" title="Warstwy"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><polygon points="12,4 21,9 12,14 3,9"/><polyline points="3,14 12,19 21,14"/></svg></button>
+  <div class="sep" style="width:24px;height:1px;margin:4px 0;"></div>
+  <button class="winRailBtn" data-win="settings" data-i18n-title="tab.settings" title="Ustawienia"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></button>
+  <button class="winRailBtn" data-win="help" data-i18n-title="tab.help" title="Pomoc"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.2 2-2.5 4"/><circle cx="12" cy="17" r=".3" fill="currentColor"/></svg></button>
+</div>
+
+<!-- ======= PŁYWAJĄCE OKNA PANELI ======= -->
+<div id="floatLayer">
+  <div class="floatWin" id="win-props" data-win="props">
+    <div class="winHead"><span class="winTitle" data-i18n="tab.props">Właściwości</span><button class="winClose" data-close>&times;</button></div>
+    <div class="winBody" id="tab-props"></div>
+    <div class="winResize"></div>
   </div>
-  <div class="tabBody on" id="tab-props"></div>
-  <div class="tabBody" id="tab-lib"></div>
-  <div class="tabBody" id="tab-vars"></div>
-  <div class="tabBody" id="tab-objects"></div>
-  <div class="tabBody" id="tab-settings"></div>
-  <div class="tabBody" id="tab-help"></div>
+  <div class="floatWin hidden" id="win-lib" data-win="lib">
+    <div class="winHead"><span class="winTitle" data-i18n="tab.lib">Biblioteka</span><button class="winClose" data-close>&times;</button></div>
+    <div class="winBody" id="tab-lib"></div>
+    <div class="winResize"></div>
+  </div>
+  <div class="floatWin hidden" id="win-vars" data-win="vars">
+    <div class="winHead"><span class="winTitle" data-i18n="tab.vars">Warianty</span><button class="winClose" data-close>&times;</button></div>
+    <div class="winBody" id="tab-vars"></div>
+    <div class="winResize"></div>
+  </div>
+  <div class="floatWin" id="win-layers" data-win="layers">
+    <div class="winHead"><span class="winTitle" data-i18n="tab.layers">Warstwy</span><button class="winClose" data-close>&times;</button></div>
+    <div class="winBody" id="tab-objects"></div>
+    <div class="winResize"></div>
+  </div>
+  <div class="floatWin hidden" id="win-settings" data-win="settings">
+    <div class="winHead"><span class="winTitle" data-i18n="tab.settings">Ustawienia</span><button class="winClose" data-close>&times;</button></div>
+    <div class="winBody" id="tab-settings"></div>
+    <div class="winResize"></div>
+  </div>
+  <div class="floatWin hidden" id="win-help" data-win="help">
+    <div class="winHead"><span class="winTitle" data-i18n="tab.help">Pomoc</span><button class="winClose" data-close>&times;</button></div>
+    <div class="winBody" id="tab-help"></div>
+    <div class="winResize"></div>
+  </div>
 </div>
 
 <!-- ======= STATUS ======= -->
@@ -478,7 +512,7 @@ const ROT_STEP = 10;        // krok skokowego obrotu
 let currentProjectHandle = null;  // uchwyt pliku (zapis w miejscu, File System Access API)
 
 /* ---------- ustawienia aplikacji + szablony ---------- */
-let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, sideW: 272, autosave: true, infiniteCanvasMargin: 16, xlsxAutoCrop: true,
+let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, autosave: true, infiniteCanvasMargin: 16, xlsxAutoCrop: true,
   defaults: { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' },
   theme: { preset: 'dark', custom: {} } };   // preset = jedno z THEME_PRESETS (js/19-settings.js); custom = nadpisania per-zmienna CSS
 let templates = [];         // [{name, shapes, vars, page}]
@@ -814,7 +848,7 @@ const I18N = {
     'tt.tool.select':'Zaznaczanie (V)','tt.tool.rect':'Prostokąt (R)','tt.tool.ellipse':'Elipsa / koło (C)',
     'tt.tool.line':'Linia (L)','tt.tool.arrow':'Strzałka (A)','tt.tool.text':'Tekst (T)',
     'tt.tool.image':'Wstaw obraz PNG/JPG (I)','tt.tool.eyedrop':'Pipeta — pobierz kolor z ekranu (K)',
-    'tab.props':'Właściwości','tab.lib':'Biblioteka','tab.vars':'Warianty','tab.objects':'Obiekty','tab.settings':'Ustawienia','tab.help':'Pomoc',
+    'tab.props':'Właściwości','tab.lib':'Biblioteka','tab.vars':'Warianty','tab.layers':'Warstwy','tab.settings':'Ustawienia','tab.help':'Pomoc',
     'obj.empty':'Brak obiektów na kanwie.','obj.locked':'zablokowany','obj.group':'grupa','obj.shapes':'{n} obiektów',
     'help.more':'Pomoc ›',
     'obj.tRect':'Prostokąt','obj.tRoundRect':'Prostokąt zaokr.','obj.tEllipse':'Elipsa','obj.tPoly':'Wielokąt',
@@ -827,7 +861,7 @@ const I18N = {
     'btn.close':'Zamknij','btn.cancel':'Anuluj','btn.ok':'OK',
     'tmpl.title':'Wybierz szablon nowego projektu','tmpl.blank':'Pusty projekt','tmpl.default':'Domyślny szablon',
     'set.language':'Język','set.zoom':'Sterowanie zoomem','set.mxMaster':'Wolniejszy zoom',
-    'set.zoomDiv':'Dzielnik zoomu','set.panel':'Panel','set.panelWidth':'Szerokość panelu (px)',
+    'set.zoomDiv':'Dzielnik zoomu',
     'set.canvas':'Kanwa nieskończona','set.infMargin':'Margines przy eksporcie (px)',
     'xlsxcrop.hint':'Przeciągnij na kanwie, aby zaznaczyć obszar roboczy arkusza.',
     'xlsxcrop.removeOutside':'Usuń kształty poza obszarem','xlsxcrop.confirm':'Zatwierdź','xlsxcrop.skip':'Nie przycinaj',
@@ -901,7 +935,7 @@ const I18N = {
     'tt.tool.select':'Select (V)','tt.tool.rect':'Rectangle (R)','tt.tool.ellipse':'Ellipse / circle (C)',
     'tt.tool.line':'Line (L)','tt.tool.arrow':'Arrow (A)','tt.tool.text':'Text (T)',
     'tt.tool.image':'Insert PNG/JPG image (I)','tt.tool.eyedrop':'Eyedropper — pick a color from screen (K)',
-    'tab.props':'Properties','tab.lib':'Library','tab.vars':'Variants','tab.objects':'Objects','tab.settings':'Settings','tab.help':'Help',
+    'tab.props':'Properties','tab.lib':'Library','tab.vars':'Variants','tab.layers':'Layers','tab.settings':'Settings','tab.help':'Help',
     'obj.empty':'No objects on the canvas.','obj.locked':'locked','obj.group':'group','obj.shapes':'{n} objects',
     'help.more':'Help ›',
     'obj.tRect':'Rectangle','obj.tRoundRect':'Rounded rect.','obj.tEllipse':'Ellipse','obj.tPoly':'Polygon',
@@ -927,7 +961,7 @@ const I18N = {
     'props.cropHint':'Drag the frame handles to crop. Image proportions stay unchanged. Esc or “Done" finishes.',
     'lib.newFolder':'+ Folder','lib.folder':'Folder','lib.folderName':'Folder name:','lib.emptyFolder':'(empty folder)','lib.insertHint':'Click to insert',
     'lib.root':'No folder','lib.drag':'Drag to a folder','c.tmplOverwrite':'Template “{n}" already exists. Overwrite?','c.delFolder':'Delete folder “{n}"? Items move to root.',
-    'set.zoomDiv':'Zoom divider','set.panel':'Panel','set.panelWidth':'Panel width (px)',
+    'set.zoomDiv':'Zoom divider',
     'set.canvas':'Infinite canvas','set.infMargin':'Export margin (px)',
     'xlsxcrop.hint':'Drag on the canvas to select the sheet\'s working area.',
     'xlsxcrop.removeOutside':'Remove shapes outside the area','xlsxcrop.confirm':'Confirm','xlsxcrop.skip':'Don\'t crop',
@@ -988,7 +1022,7 @@ const I18N = {
     'tt.tool.select':'Auswahl (V)','tt.tool.rect':'Rechteck (R)','tt.tool.ellipse':'Ellipse / Kreis (C)',
     'tt.tool.line':'Linie (L)','tt.tool.arrow':'Pfeil (A)','tt.tool.text':'Text (T)',
     'tt.tool.image':'PNG/JPG-Bild einfügen (I)','tt.tool.eyedrop':'Pipette — Farbe vom Bildschirm wählen (K)',
-    'tab.props':'Eigenschaften','tab.lib':'Bibliothek','tab.vars':'Varianten','tab.objects':'Objekte','tab.settings':'Einstellungen','tab.help':'Hilfe',
+    'tab.props':'Eigenschaften','tab.lib':'Bibliothek','tab.vars':'Varianten','tab.layers':'Ebenen','tab.settings':'Einstellungen','tab.help':'Hilfe',
     'obj.empty':'Keine Objekte auf der Kanvas.','obj.locked':'gesperrt','obj.group':'Gruppe','obj.shapes':'{n} Objekte',
     'help.more':'Hilfe ›',
     'obj.tRect':'Rechteck','obj.tRoundRect':'Rechteck (rund)','obj.tEllipse':'Ellipse','obj.tPoly':'Vieleck',
@@ -1013,7 +1047,7 @@ const I18N = {
     'props.cropHint':'Rahmengriffe ziehen zum Zuschneiden. Bildproportionen bleiben. Esc oder „Fertig" beendet.',
     'lib.newFolder':'+ Ordner','lib.folder':'Ordner','lib.folderName':'Ordnername:','lib.emptyFolder':'(leerer Ordner)','lib.insertHint':'Zum Einfügen klicken',
     'lib.root':'Kein Ordner','lib.drag':'In Ordner ziehen','c.tmplOverwrite':'Vorlage „{n}" existiert bereits. Überschreiben?','c.delFolder':'Ordner „{n}" löschen? Elemente wandern in die Wurzel.',
-    'set.zoomDiv':'Zoom-Teiler','set.panel':'Panel','set.panelWidth':'Panelbreite (px)',
+    'set.zoomDiv':'Zoom-Teiler',
     'set.canvas':'Unendliche Kanvas','set.infMargin':'Rand beim Export (px)',
     'xlsxcrop.hint':'Auf der Kanvas ziehen, um den Arbeitsbereich des Arbeitsblatts festzulegen.',
     'xlsxcrop.removeOutside':'Formen außerhalb des Bereichs entfernen','xlsxcrop.confirm':'Bestätigen','xlsxcrop.skip':'Nicht zuschneiden',
@@ -4364,10 +4398,6 @@ $$('.tool').forEach(b => b.addEventListener('click', () => {
   if (b.dataset.tool === 'shapes') { openShapeModal(); return; }
   setTool(b.dataset.tool);
 }));
-$$('.tab').forEach(b => b.addEventListener('click', () => {
-  $$('.tab').forEach(t => t.classList.toggle('on', t === b));
-  $$('.tabBody').forEach(t => t.classList.toggle('on', t.id === 'tab-' + b.dataset.tab));
-}));
 
 "use strict";
 /* ---------- format kanwy + szablon ---------- */
@@ -4507,7 +4537,6 @@ function importConfig(obj) {
 }
 /* zastosuj ustawienia do UI (język, szerokość panelu) i odśwież */
 function applySettings() {
-  document.documentElement.style.setProperty('--sideW', settings.sideW + 'px');
   applyTheme();
   applyI18n();
   render(); renderProps(); renderVars(); renderLib(); renderSettings(); renderHelp();
@@ -4519,8 +4548,7 @@ function applySettings() {
    pełny tekst wprost przy polu — teraz jest tam tylko krótki link, a treść mieszka
    w jednym miejscu (tu, w Pomocy), więc się nie rozjeżdża między zakładkami. */
 function goHelp(anchor) {
-  const helpBtn = document.querySelector('.tab[data-tab="help"]');
-  if (helpBtn) helpBtn.click();
+  if (typeof winShow === 'function') winShow('help');
   requestAnimationFrame(() => {
     const target = document.getElementById('help-' + anchor);
     if (!target) return;
@@ -4780,9 +4808,6 @@ function renderSettings() {
       <div class="hint" style="margin-bottom:8px">${helpLink('settings')}</div>
       <div class="row"><label>${t('set.zoomDiv')}</label><input class="in" type="number" id="setZoomDiv" min="1" max="20" step="1" value="${settings.zoomDiv}"></div>
     </div>
-    <div class="grp"><h4>${t('set.panel')}</h4>
-      <div class="row"><label>${t('set.panelWidth')}</label><input class="in" type="number" id="setSideW" min="200" max="640" step="10" value="${settings.sideW}"></div>
-    </div>
     <div class="grp"><h4>${t('set.autosave')}</h4>
       <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setAutosave" ${settings.autosave !== false ? 'checked' : ''}> ${t('set.autosave')}</label></div>
       <div class="hint">${helpLink('settings')}</div>
@@ -4833,10 +4858,6 @@ function renderSettings() {
   on2('setInfMargin', e => { settings.infiniteCanvasMargin = clamp(parseInt(e.target.value) || 0, 0, 500); saveSettingsLS(); });
   $('#setXlsxAutoCrop').addEventListener('change', e => { settings.xlsxAutoCrop = e.target.checked; saveSettingsLS(); });
   on2('setZoomDiv', e => { settings.zoomDiv = clamp(parseFloat(e.target.value) || 4, 1, 20); saveSettingsLS(); });
-  on2('setSideW', e => {
-    settings.sideW = clamp(parseInt(e.target.value) || 272, 200, 640); saveSettingsLS();
-    document.documentElement.style.setProperty('--sideW', settings.sideW + 'px'); render();
-  });
   const dSave = () => saveSettingsLS();
   $('#dFont').addEventListener('change', e => { D.font = e.target.value; dSave(); });
   on2('dFs', e => { D.fs = Math.max(4, parseFloat(e.target.value) || 14); dSave(); });
@@ -4953,21 +4974,6 @@ window.addEventListener('drop', async e => {
   }
 });
 
-/* ---------- suwak szerokości panelu bocznego ---------- */
-(function () {
-  const rz = $('#sideResizer'); if (!rz) return;
-  let dragging = false;
-  rz.addEventListener('pointerdown', e => { dragging = true; rz.setPointerCapture(e.pointerId); e.preventDefault(); });
-  rz.addEventListener('pointermove', e => {
-    if (!dragging) return;
-    const w = clamp(window.innerWidth - e.clientX, 200, 640);
-    settings.sideW = Math.round(w);
-    document.documentElement.style.setProperty('--sideW', settings.sideW + 'px');
-    render();
-  });
-  rz.addEventListener('pointerup', () => { if (dragging) { dragging = false; saveSettingsLS(); renderSettings(); } });
-})();
-
 document.addEventListener('keydown', e => {
   const inField = document.activeElement &&
     ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
@@ -5016,6 +5022,107 @@ document.addEventListener('keyup', e => {
 /* zapis przy zamknięciu okna — patrz PS_init() w js/projects.js (respektuje
    przełącznik Autozapis i zwalnia gniazda w rejestrze "żywych" projektów) */
 
+
+"use strict";
+/* =====================================================================
+   Pływające okna paneli bocznych (Właściwości/Biblioteka/Warianty/
+   Warstwy/Ustawienia/Pomoc) — zamiast jednego paska zakładek (jeden
+   widoczny panel na raz), każdy panel to osobne, przeciągalne i
+   skalowalne okno. Kilka może być otwartych naraz (np. Właściwości +
+   Warstwy), da się je przesunąć gdzie wygodnie, zamknąć i przywrócić
+   ikoną z prawej szyny (#winRail). Pozycja/rozmiar/widoczność/kolejność
+   z-order każdego okna trwają w settings.panels (localStorage), więc
+   układ przetrwa przeładowanie — jak w "normalnym" oprogramowaniu z
+   dokowalnymi panelami.
+
+   Treść okien renderują te same funkcje co wcześniej (renderProps/
+   renderLib/renderVars/renderObjects/renderSettings/renderHelp) — piszą
+   do tych samych #tab-* divów, teraz zagnieżdżonych w .winBody zamiast
+   w .tabBody, więc żadna z nich nie wymagała zmian. ===================================================================== */
+const WIN_IDS = ['props', 'lib', 'vars', 'layers', 'settings', 'help'];
+let winZTop = 10;
+function winState() { return settings.panels || (settings.panels = {}); }
+/* domyślne położenie: kaskada w prawym górnym rogu, żeby od razu było
+   widać, że to osobne okna, a nie jedna sztywna kolumna jak kiedyś */
+function winDefaultRect(idx) {
+  const vw = Math.max(window.innerWidth, 900), vh = Math.max(window.innerHeight, 600);
+  const w = 340, h = Math.min(560, vh - 150);
+  return { x: Math.max(10, vw - w - 56 - (idx % 4) * 26), y: 84 + (idx % 4) * 26, w, h };
+}
+function winGet(id) {
+  const st = winState();
+  if (!st[id]) {
+    const idx = WIN_IDS.indexOf(id);
+    st[id] = Object.assign(winDefaultRect(idx), { visible: id === 'props' || id === 'layers', z: ++winZTop });
+  }
+  if (st[id].z > winZTop) winZTop = st[id].z;
+  return st[id];
+}
+function winSave() { saveSettingsLS(); }
+function winClampPos(x, y) {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  return { x: Math.min(Math.max(x, -260), vw - 60), y: Math.min(Math.max(y, 0), vh - 40) };
+}
+function winApply(id) {
+  const el = document.getElementById('win-' + id);
+  if (!el) return;
+  const st = winGet(id);
+  el.style.left = st.x + 'px'; el.style.top = st.y + 'px';
+  el.style.width = st.w + 'px'; el.style.height = st.h + 'px';
+  el.style.zIndex = st.z;
+  el.classList.toggle('hidden', !st.visible);
+  const btn = document.querySelector('.winRailBtn[data-win="' + id + '"]');
+  if (btn) btn.classList.toggle('on', !!st.visible);
+}
+function winFront(id) { const st = winGet(id); st.z = ++winZTop; winApply(id); winSave(); }
+function winShow(id) { const st = winGet(id); st.visible = true; st.z = ++winZTop; winApply(id); winSave(); }
+function winHide(id) { const st = winGet(id); st.visible = false; winApply(id); winSave(); }
+function winToggle(id) { winGet(id).visible ? winHide(id) : winShow(id); }
+function initWindows() {
+  WIN_IDS.forEach((id, idx) => {
+    const el = document.getElementById('win-' + id);
+    if (!el) return;
+    winApply(id);
+    const head = el.querySelector('.winHead');
+    const resizeHandle = el.querySelector('.winResize');
+    el.addEventListener('pointerdown', () => winFront(id), { capture: true });
+    head.addEventListener('pointerdown', e => {
+      if (e.target.closest('[data-close]')) return;
+      e.preventDefault();
+      const st = winGet(id);
+      const sx = e.clientX, sy = e.clientY, ox = st.x, oy = st.y;
+      const onMove = me => {
+        const c = winClampPos(ox + (me.clientX - sx), oy + (me.clientY - sy));
+        st.x = c.x; st.y = c.y;
+        el.style.left = st.x + 'px'; el.style.top = st.y + 'px';
+      };
+      const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); winSave(); };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
+    resizeHandle.addEventListener('pointerdown', e => {
+      e.preventDefault(); e.stopPropagation();
+      const st = winGet(id);
+      const sx = e.clientX, sy = e.clientY, ow = st.w, oh = st.h;
+      const onMove = me => {
+        st.w = Math.max(220, ow + (me.clientX - sx));
+        st.h = Math.max(160, oh + (me.clientY - sy));
+        el.style.width = st.w + 'px'; el.style.height = st.h + 'px';
+      };
+      const onUp = () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); winSave(); };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
+    el.querySelector('[data-close]').addEventListener('click', () => winHide(id));
+  });
+  $$('.winRailBtn').forEach(b => b.addEventListener('click', () => winToggle(b.dataset.win)));
+  /* okno przesunięte poza zmniejszone okno przeglądarki wraca w widoczny obszar */
+  window.addEventListener('resize', () => WIN_IDS.forEach(id => {
+    const st = winGet(id);
+    const c = winClampPos(st.x, st.y);
+    st.x = c.x; st.y = c.y; winApply(id);
+  }));
+}
 
 "use strict";
 
@@ -5105,7 +5212,6 @@ function Tabs_new() {
   try { const st = localStorage.getItem('prodrys_settings');
     if (st) settings = Object.assign(settings, JSON.parse(st)); } catch (e) {}
   if (!I18N[settings.lang]) settings.lang = 'pl';
-  document.documentElement.style.setProperty('--sideW', settings.sideW + 'px');
   applyTheme();
   applyI18n();
   /* biblioteka */
@@ -5145,6 +5251,7 @@ function Tabs_new() {
   renderLib();
   renderSettings();
   renderHelp();
+  initWindows();
 })();
 
 "use strict";

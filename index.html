@@ -75,23 +75,49 @@
   </div>
 </div>
 
-<!-- ======= SIDE PANEL ======= -->
-<div class="sideResizer" id="sideResizer" title="Przeciągnij, aby zmienić szerokość"></div>
-<div class="side">
-  <div class="tabbar">
-    <button class="tab on" data-tab="props" data-i18n="tab.props">Właściwości</button>
-    <button class="tab" data-tab="lib" data-i18n="tab.lib">Biblioteka</button>
-    <button class="tab" data-tab="vars" data-i18n="tab.vars">Warianty</button>
-    <button class="tab" data-tab="objects" data-i18n="tab.objects">Obiekty</button>
-    <button class="tab" data-tab="settings" data-i18n="tab.settings">Ustawienia</button>
-    <button class="tab" data-tab="help" data-i18n="tab.help">Pomoc</button>
+<!-- ======= PRAWA SZYNA: otwieranie/zamykanie okien paneli ======= -->
+<div class="winRail" id="winRail">
+  <button class="winRailBtn" data-win="props" data-i18n-title="tab.props" title="Właściwości"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 10v10"/></svg></button>
+  <button class="winRailBtn" data-win="lib" data-i18n-title="tab.lib" title="Biblioteka"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="8" height="8" rx="1"/><rect x="13" y="4" width="8" height="8" rx="1"/><rect x="3" y="14" width="8" height="8" rx="1"/><rect x="13" y="14" width="8" height="8" rx="1"/></svg></button>
+  <button class="winRailBtn" data-win="vars" data-i18n-title="tab.vars" title="Warianty"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>
+  <button class="winRailBtn" data-win="layers" data-i18n-title="tab.layers" title="Warstwy"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><polygon points="12,4 21,9 12,14 3,9"/><polyline points="3,14 12,19 21,14"/></svg></button>
+  <div class="sep" style="width:24px;height:1px;margin:4px 0;"></div>
+  <button class="winRailBtn" data-win="settings" data-i18n-title="tab.settings" title="Ustawienia"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></button>
+  <button class="winRailBtn" data-win="help" data-i18n-title="tab.help" title="Pomoc"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.2 2-2.5 4"/><circle cx="12" cy="17" r=".3" fill="currentColor"/></svg></button>
+</div>
+
+<!-- ======= PŁYWAJĄCE OKNA PANELI ======= -->
+<div id="floatLayer">
+  <div class="floatWin" id="win-props" data-win="props">
+    <div class="winHead"><span class="winTitle" data-i18n="tab.props">Właściwości</span><button class="winClose" data-close>&times;</button></div>
+    <div class="winBody" id="tab-props"></div>
+    <div class="winResize"></div>
   </div>
-  <div class="tabBody on" id="tab-props"></div>
-  <div class="tabBody" id="tab-lib"></div>
-  <div class="tabBody" id="tab-vars"></div>
-  <div class="tabBody" id="tab-objects"></div>
-  <div class="tabBody" id="tab-settings"></div>
-  <div class="tabBody" id="tab-help"></div>
+  <div class="floatWin hidden" id="win-lib" data-win="lib">
+    <div class="winHead"><span class="winTitle" data-i18n="tab.lib">Biblioteka</span><button class="winClose" data-close>&times;</button></div>
+    <div class="winBody" id="tab-lib"></div>
+    <div class="winResize"></div>
+  </div>
+  <div class="floatWin hidden" id="win-vars" data-win="vars">
+    <div class="winHead"><span class="winTitle" data-i18n="tab.vars">Warianty</span><button class="winClose" data-close>&times;</button></div>
+    <div class="winBody" id="tab-vars"></div>
+    <div class="winResize"></div>
+  </div>
+  <div class="floatWin" id="win-layers" data-win="layers">
+    <div class="winHead"><span class="winTitle" data-i18n="tab.layers">Warstwy</span><button class="winClose" data-close>&times;</button></div>
+    <div class="winBody" id="tab-objects"></div>
+    <div class="winResize"></div>
+  </div>
+  <div class="floatWin hidden" id="win-settings" data-win="settings">
+    <div class="winHead"><span class="winTitle" data-i18n="tab.settings">Ustawienia</span><button class="winClose" data-close>&times;</button></div>
+    <div class="winBody" id="tab-settings"></div>
+    <div class="winResize"></div>
+  </div>
+  <div class="floatWin hidden" id="win-help" data-win="help">
+    <div class="winHead"><span class="winTitle" data-i18n="tab.help">Pomoc</span><button class="winClose" data-close>&times;</button></div>
+    <div class="winBody" id="tab-help"></div>
+    <div class="winResize"></div>
+  </div>
 </div>
 
 <!-- ======= STATUS ======= -->
@@ -189,6 +215,7 @@
 <script src="js/18-help.js"></script>
 <script src="js/19-settings.js"></script>
 <script src="js/20-menus-dnd.js"></script>
+<script src="js/20b-windows.js"></script>
 <script src="js/tabs.js"></script>
 <script src="js/21-init.js"></script>
 <script src="js/desktop.js"></script>

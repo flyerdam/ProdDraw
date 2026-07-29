@@ -59,9 +59,6 @@ function renderSettings() {
       <div class="hint" style="margin-bottom:8px">${helpLink('settings')}</div>
       <div class="row"><label>${t('set.zoomDiv')}</label><input class="in" type="number" id="setZoomDiv" min="1" max="20" step="1" value="${settings.zoomDiv}"></div>
     </div>
-    <div class="grp"><h4>${t('set.panel')}</h4>
-      <div class="row"><label>${t('set.panelWidth')}</label><input class="in" type="number" id="setSideW" min="200" max="640" step="10" value="${settings.sideW}"></div>
-    </div>
     <div class="grp"><h4>${t('set.autosave')}</h4>
       <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setAutosave" ${settings.autosave !== false ? 'checked' : ''}> ${t('set.autosave')}</label></div>
       <div class="hint">${helpLink('settings')}</div>
@@ -112,10 +109,6 @@ function renderSettings() {
   on2('setInfMargin', e => { settings.infiniteCanvasMargin = clamp(parseInt(e.target.value) || 0, 0, 500); saveSettingsLS(); });
   $('#setXlsxAutoCrop').addEventListener('change', e => { settings.xlsxAutoCrop = e.target.checked; saveSettingsLS(); });
   on2('setZoomDiv', e => { settings.zoomDiv = clamp(parseFloat(e.target.value) || 4, 1, 20); saveSettingsLS(); });
-  on2('setSideW', e => {
-    settings.sideW = clamp(parseInt(e.target.value) || 272, 200, 640); saveSettingsLS();
-    document.documentElement.style.setProperty('--sideW', settings.sideW + 'px'); render();
-  });
   const dSave = () => saveSettingsLS();
   $('#dFont').addEventListener('change', e => { D.font = e.target.value; dSave(); });
   on2('dFs', e => { D.fs = Math.max(4, parseFloat(e.target.value) || 14); dSave(); });

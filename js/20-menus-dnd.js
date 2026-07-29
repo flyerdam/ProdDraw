@@ -77,21 +77,6 @@ window.addEventListener('drop', async e => {
   }
 });
 
-/* ---------- suwak szerokości panelu bocznego ---------- */
-(function () {
-  const rz = $('#sideResizer'); if (!rz) return;
-  let dragging = false;
-  rz.addEventListener('pointerdown', e => { dragging = true; rz.setPointerCapture(e.pointerId); e.preventDefault(); });
-  rz.addEventListener('pointermove', e => {
-    if (!dragging) return;
-    const w = clamp(window.innerWidth - e.clientX, 200, 640);
-    settings.sideW = Math.round(w);
-    document.documentElement.style.setProperty('--sideW', settings.sideW + 'px');
-    render();
-  });
-  rz.addEventListener('pointerup', () => { if (dragging) { dragging = false; saveSettingsLS(); renderSettings(); } });
-})();
-
 document.addEventListener('keydown', e => {
   const inField = document.activeElement &&
     ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
