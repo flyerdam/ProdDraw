@@ -40,16 +40,6 @@ function dispatch(cmd) {
       }
       break;
 
-    case 'importXlsx':
-      var el = document.getElementById('fXlsx');
-      if (el) el.click();
-      break;
-
-    case 'insertImage':
-      var el = document.getElementById('fImg');
-      if (el) el.click();
-      break;
-
     case 'exportPng':
       if (typeof exportImage === 'function') {
         exportImage('png');
@@ -159,4 +149,27 @@ if (window.prodrawDesktop && typeof window.prodrawDesktop.onMenu === 'function')
   window.prodrawDesktop.onMenu(dispatch);
   // Hide in-page menu buttons when running in Electron (native menu replaces them)
   document.body.classList.add('desktop-mode');
+
+  /**
+   * Import XLSX / Insert Image are picked via native OS dialogs in the main
+   * process (see electron/main.js) instead of a hidden <input type=file>,
+   * because triggering that input's .click() from an IPC callback has no
+   * transient user activation and silently fails to open a file picker.
+   * The main process reads the file and hands us the raw bytes here.
+   */
+  if (typeof window.prodrawDesktop.onImportXlsxData === 'function') {
+    window.prodrawDesktop.onImportXlsxData(({ name, data }) => {
+      if (typeof importXlsx !== 'function') return;
+      const bin = atob(data);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const file = new File([bytes], name || 'Import.xlsx');
+      importXlsx(file);
+    });
+  }
+  if (typeof window.prodrawDesktop.onInsertImageData === 'function') {
+    window.prodrawDesktop.onInsertImageData(({ dataURL }) => {
+      if (typeof insertImageURL === 'function' && dataURL) insertImageURL(dataURL);
+    });
+  }
 }

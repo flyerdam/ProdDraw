@@ -1,5 +1,6 @@
-const { app, BrowserWindow, Menu } = require('electron');
+const { app, BrowserWindow, Menu, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 let mainWindow;
 
@@ -13,6 +14,68 @@ const send = (cmd) => () => {
 };
 
 /**
+ * MIME type lookup for insert-image dialog (file extension -> data URL mime)
+ */
+const IMAGE_MIME = {
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml'
+};
+
+/**
+ * Open a native "Import XLSX" dialog and send the picked file's contents to
+ * the renderer. Using dialog.showOpenDialog here (instead of asking the
+ * renderer to click a hidden <input type=file>) avoids a Chromium quirk:
+ * input.click() requires transient user activation, which does not survive
+ * the main->renderer IPC hop from a native menu click, so the file picker
+ * silently never opened.
+ */
+async function importXlsxDialog() {
+  if (!mainWindow) return;
+  const res = await dialog.showOpenDialog(mainWindow, {
+    title: 'Import XLSX/XLSM',
+    filters: [{ name: 'Excel', extensions: ['xlsx', 'xlsm'] }],
+    properties: ['openFile']
+  });
+  if (res.canceled || !res.filePaths.length) return;
+  const filePath = res.filePaths[0];
+  try {
+    const buf = fs.readFileSync(filePath);
+    mainWindow.webContents.send('import-xlsx-data', {
+      name: path.basename(filePath),
+      data: buf.toString('base64')
+    });
+  } catch (err) {
+    dialog.showErrorBox('Import XLSX', `Failed to read file: ${err.message}`);
+  }
+}
+
+/**
+ * Open a native "Insert Image" dialog and send a data URL of the picked
+ * image to the renderer. See importXlsxDialog() for why this is done from
+ * the main process rather than triggering a hidden file input.
+ */
+async function insertImageDialog() {
+  if (!mainWindow) return;
+  const res = await dialog.showOpenDialog(mainWindow, {
+    title: 'Insert Image',
+    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'] }],
+    properties: ['openFile']
+  });
+  if (res.canceled || !res.filePaths.length) return;
+  const filePath = res.filePaths[0];
+  try {
+    const buf = fs.readFileSync(filePath);
+    const ext = path.extname(filePath).toLowerCase();
+    const mime = IMAGE_MIME[ext] || 'application/octet-stream';
+    mainWindow.webContents.send('insert-image-data', {
+      dataURL: `data:${mime};base64,${buf.toString('base64')}`
+    });
+  } catch (err) {
+    dialog.showErrorBox('Insert Image', `Failed to read file: ${err.message}`);
+  }
+}
+
+/**
  * Create the main application window
  */
 function createWindow() {
@@ -21,6 +84,7 @@ function createWindow() {
     height: 900,
     minWidth: 900,
     minHeight: 600,
+    icon: path.join(__dirname, '..', 'build', 'icon.png'),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -66,11 +130,11 @@ function createWindow() {
         { type: 'separator' },
         {
           label: 'Import XLSX',
-          click: send('importXlsx')
+          click: importXlsxDialog
         },
         {
           label: 'Insert Image',
-          click: send('insertImage')
+          click: insertImageDialog
         },
         { type: 'separator' },
         {

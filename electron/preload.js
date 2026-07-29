@@ -13,5 +13,7 @@ const { contextBridge, ipcRenderer } = require('electron');
  */
 contextBridge.exposeInMainWorld('prodrawDesktop', {
   isDesktop: true,
-  onMenu: (cb) => ipcRenderer.on('menu-action', (_e, cmd) => cb(cmd))
+  onMenu: (cb) => ipcRenderer.on('menu-action', (_e, cmd) => cb(cmd)),
+  onImportXlsxData: (cb) => ipcRenderer.on('import-xlsx-data', (_e, payload) => cb(payload)),
+  onInsertImageData: (cb) => ipcRenderer.on('insert-image-data', (_e, payload) => cb(payload))
 });

@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ProdRys — edytor instrukcji produkcyjnych</title>
+<title>ProdDraw — edytor instrukcji produkcyjnych</title>
+<link rel="icon" type="image/png" href="data:image/png;base64,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">
 <style>
 :root{
   --bg:#1b1e23; --panel:#22262c; --panel2:#282d34; --line:#343a43;
@@ -5901,16 +5902,6 @@ function dispatch(cmd) {
       }
       break;
 
-    case 'importXlsx':
-      var el = document.getElementById('fXlsx');
-      if (el) el.click();
-      break;
-
-    case 'insertImage':
-      var el = document.getElementById('fImg');
-      if (el) el.click();
-      break;
-
     case 'exportPng':
       if (typeof exportImage === 'function') {
         exportImage('png');
@@ -6020,6 +6011,29 @@ if (window.prodrawDesktop && typeof window.prodrawDesktop.onMenu === 'function')
   window.prodrawDesktop.onMenu(dispatch);
   // Hide in-page menu buttons when running in Electron (native menu replaces them)
   document.body.classList.add('desktop-mode');
+
+  /**
+   * Import XLSX / Insert Image are picked via native OS dialogs in the main
+   * process (see electron/main.js) instead of a hidden <input type=file>,
+   * because triggering that input's .click() from an IPC callback has no
+   * transient user activation and silently fails to open a file picker.
+   * The main process reads the file and hands us the raw bytes here.
+   */
+  if (typeof window.prodrawDesktop.onImportXlsxData === 'function') {
+    window.prodrawDesktop.onImportXlsxData(({ name, data }) => {
+      if (typeof importXlsx !== 'function') return;
+      const bin = atob(data);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const file = new File([bytes], name || 'Import.xlsx');
+      importXlsx(file);
+    });
+  }
+  if (typeof window.prodrawDesktop.onInsertImageData === 'function') {
+    window.prodrawDesktop.onInsertImageData(({ dataURL }) => {
+      if (typeof insertImageURL === 'function' && dataURL) insertImageURL(dataURL);
+    });
+  }
 }
 
 </script></body>

@@ -23,9 +23,11 @@
       "index.html",
       "css/**/*",
       "js/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "build/icon.png"
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         "nsis",
         "portable"
