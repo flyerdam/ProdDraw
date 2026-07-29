@@ -64,13 +64,15 @@ let _setSubtab = 'general';   // która pod-zakładka Ustawień jest widoczna (n
 function renderSettings() {
   const el = $('#tab-settings');
   const D = settings.defaults || (settings.defaults = { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' });
+  const EI = settings.exportImg || (settings.exportImg = { limit: true, w: 1920, h: 1080 });
   const fonts = ['Calibri', 'Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact'];
   const th = themeState(), eff = themeEffective();
-  const onGen = _setSubtab !== 'theme';
+  const onGen = _setSubtab === 'general', onExp = _setSubtab === 'export', onThm = _setSubtab === 'theme';
   el.innerHTML = `
     <div class="subtabbar">
       <button class="subtab ${onGen ? 'on' : ''}" data-sub="general">${t('set.general')}</button>
-      <button class="subtab ${!onGen ? 'on' : ''}" data-sub="theme">${t('set.theme')}</button>
+      <button class="subtab ${onExp ? 'on' : ''}" data-sub="export">${t('set.exportImport')}</button>
+      <button class="subtab ${onThm ? 'on' : ''}" data-sub="theme">${t('set.theme')}</button>
     </div>
     <div class="subtabBody" id="setSubGeneral" style="display:${onGen ? '' : 'none'}">
     <div class="grp"><h4>${t('set.language')}</h4>
@@ -88,14 +90,6 @@ function renderSettings() {
       <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setAutosave" ${settings.autosave !== false ? 'checked' : ''}> ${t('set.autosave')}</label></div>
       <div class="hint">${helpLink('settings')}</div>
     </div>
-    <div class="grp"><h4>${t('set.canvas')}</h4>
-      <div class="row"><label>${t('set.infMargin')}</label><input class="in" type="number" id="setInfMargin" min="0" max="500" step="1" value="${settings.infiniteCanvasMargin ?? 16}"></div>
-      <div class="hint">${helpLink('settings')}</div>
-    </div>
-    <div class="grp"><h4>${t('set.xlsxImport')}</h4>
-      <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setXlsxAutoCrop" ${settings.xlsxAutoCrop !== false ? 'checked' : ''}> ${t('set.xlsxAutoCrop')}</label></div>
-      <div class="hint">${helpLink('settings')}</div>
-    </div>
     <div class="grp"><h4>${t('set.defaults')}</h4>
       <div class="row"><label>${t('props.font')}</label><select class="in" id="dFont" style="width:130px">
         ${fonts.map(f => `<option value="${f}" ${D.font === f ? 'selected' : ''}>${f}</option>`).join('')}</select></div>
@@ -104,13 +98,30 @@ function renderSettings() {
       <div class="row"><label>${t('set.colStroke')}</label><input class="in" type="color" id="dStroke" value="${D.stroke}"></div>
       <div class="row"><label>${t('set.colText')}</label><input class="in" type="color" id="dTc" value="${D.tc}"></div>
       <div class="row"><label>${t('set.colFill')}</label><input class="in" type="color" id="dFill" value="${D.fill}"></div></div>
+    <div class="grp"><div class="hint">${t('set.about')}</div></div>
+    </div>
+    <div class="subtabBody" id="setSubExport" style="display:${onExp ? '' : 'none'}">
+    <div class="grp"><h4>${t('set.canvas')}</h4>
+      <div class="row"><label>${t('set.infMargin')}</label><input class="in" type="number" id="setInfMargin" min="0" max="500" step="1" value="${settings.infiniteCanvasMargin ?? 16}"></div>
+      <div class="hint">${helpLink('settings')}</div>
+    </div>
+    <div class="grp"><h4>${t('set.exportImgMax')}</h4>
+      <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setExpImgLimit" ${EI.limit !== false ? 'checked' : ''}> ${t('set.exportImgLimit')}</label></div>
+      <div class="row"><label>${t('set.exportImgSize')}</label>
+        <input class="in" type="number" id="setExpImgW" min="10" max="20000" step="1" value="${EI.w}" style="width:80px"> ×
+        <input class="in" type="number" id="setExpImgH" min="10" max="20000" step="1" value="${EI.h}" style="width:80px"> px</div>
+      <div class="hint">${helpLink('settings')}</div>
+    </div>
+    <div class="grp"><h4>${t('set.xlsxImport')}</h4>
+      <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setXlsxAutoCrop" ${settings.xlsxAutoCrop !== false ? 'checked' : ''}> ${t('set.xlsxAutoCrop')}</label></div>
+      <div class="hint">${helpLink('settings')}</div>
+    </div>
     <div class="grp"><h4>${t('set.config')}</h4>
       <div class="row"><button class="btn" id="setTmpl">${t('config.saveTmpl')}</button></div>
       <div class="row"><button class="btn" id="setExpCfg">${t('config.save')}</button>
         <button class="btn" id="setImpCfg">${t('config.load')}</button></div></div>
-    <div class="grp"><div class="hint">${t('set.about')}</div></div>
     </div>
-    <div class="subtabBody" id="setSubTheme" style="display:${onGen ? 'none' : ''}">
+    <div class="subtabBody" id="setSubTheme" style="display:${onThm ? '' : 'none'}">
     <div class="grp"><h4>${t('set.themePreset')}</h4>
       <div class="row" id="themePresetRow">${themePresetRowHTML(th)}</div>
     </div>
@@ -132,6 +143,9 @@ function renderSettings() {
   $('#setAutosave').addEventListener('change', e => { settings.autosave = e.target.checked; saveSettingsLS(); if (settings.autosave) autosave(); });
   on2('setInfMargin', e => { settings.infiniteCanvasMargin = clamp(parseInt(e.target.value) || 0, 0, 500); saveSettingsLS(); });
   $('#setXlsxAutoCrop').addEventListener('change', e => { settings.xlsxAutoCrop = e.target.checked; saveSettingsLS(); });
+  $('#setExpImgLimit').addEventListener('change', e => { EI.limit = e.target.checked; saveSettingsLS(); });
+  on2('setExpImgW', e => { EI.w = clamp(parseInt(e.target.value) || 1920, 10, 20000); saveSettingsLS(); });
+  on2('setExpImgH', e => { EI.h = clamp(parseInt(e.target.value) || 1080, 10, 20000); saveSettingsLS(); });
   on2('setZoomDiv', e => { settings.zoomDiv = clamp(parseFloat(e.target.value) || 4, 1, 20); saveSettingsLS(); });
   const dSave = () => saveSettingsLS();
   $('#dFont').addEventListener('change', e => { D.font = e.target.value; dSave(); });

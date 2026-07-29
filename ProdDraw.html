@@ -573,7 +573,8 @@ let currentProjectHandle = null;  // uchwyt pliku (zapis w miejscu, File System 
 /* ---------- ustawienia aplikacji + szablony ---------- */
 let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, autosave: true, infiniteCanvasMargin: 16, xlsxAutoCrop: true,
   defaults: { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' },
-  theme: { preset: 'dark', custom: {} } };   // preset = jedno z THEME_PRESETS (js/19-settings.js); custom = nadpisania per-zmienna CSS
+  theme: { preset: 'dark', custom: {} },   // preset = jedno z THEME_PRESETS (js/19-settings.js); custom = nadpisania per-zmienna CSS
+  exportImg: { limit: true, w: 1920, h: 1080 } };   // limit maks. rozdzielczości PNG/JPG (patrz exportImage() w js/14-project.js)
 let templates = [];         // [{name, shapes, vars, page}]
 let imgCascade = 0;         // przesunięcie kolejnych wstawianych obrazów
 
@@ -936,7 +937,9 @@ const I18N = {
     'xlsxcrop.aborted':'Import odrzucony.',
     'set.xlsxImport':'Import XLSX','set.xlsxAutoCrop':'Automatycznie otwórz kreator kadru po imporcie',
     'set.defaults':'Domyślne nowych kształtów','set.config':'Konfiguracja',
-    'set.general':'Ogólne','set.theme':'Motyw','set.themePreset':'Zestaw kolorów','set.themeCustom':'Dostosuj kolory','set.themeReset':'Przywróć domyślne',
+    'set.general':'Ogólne','set.exportImport':'Eksport / Import','set.theme':'Motyw','set.themePreset':'Zestaw kolorów','set.themeCustom':'Dostosuj kolory','set.themeReset':'Przywróć domyślne',
+    'set.exportImgMax':'Maksymalna rozdzielczość PNG/JPG','set.exportImgLimit':'Ogranicz rozmiar eksportowanego obrazu',
+    'set.exportImgSize':'Maks. rozmiar',
     'theme.preset_dark':'Ciemny (domyślny)','theme.preset_light':'Jasny','theme.preset_midnight':'Nocny błękit','theme.preset_forest':'Leśna zieleń',
     'theme.preset_custom':'Własny','theme.customHint':'Co najmniej jeden kolor zmieniono ręcznie — motyw nie odpowiada już żadnemu gotowemu zestawowi.',
     'theme.bg':'Tło aplikacji','theme.panel':'Panel boczny','theme.panel2':'Panel boczny (jaśniejszy)','theme.line':'Linie i obramowania',
@@ -1021,7 +1024,9 @@ const I18N = {
     'tmpl.title':'Choose a template for the new project','tmpl.blank':'Blank project','tmpl.default':'Default template',
     'set.language':'Language','set.zoom':'Zoom control','set.mxMaster':'Slower zoom',
     'set.defaults':'Defaults for new shapes','set.config':'Configuration',
-    'set.general':'General','set.theme':'Theme','set.themePreset':'Color preset','set.themeCustom':'Customize colors','set.themeReset':'Reset to default',
+    'set.general':'General','set.exportImport':'Export / Import','set.theme':'Theme','set.themePreset':'Color preset','set.themeCustom':'Customize colors','set.themeReset':'Reset to default',
+    'set.exportImgMax':'Maximum PNG/JPG resolution','set.exportImgLimit':'Limit exported image size',
+    'set.exportImgSize':'Max size',
     'theme.preset_dark':'Dark (default)','theme.preset_light':'Light','theme.preset_midnight':'Midnight blue','theme.preset_forest':'Forest green',
     'theme.preset_custom':'Custom','theme.customHint':'At least one color was changed by hand — the theme no longer matches any stock preset.',
     'theme.bg':'App background','theme.panel':'Side panel','theme.panel2':'Side panel (lighter)','theme.line':'Lines and borders',
@@ -1114,7 +1119,9 @@ const I18N = {
     'tmpl.title':'Vorlage für das neue Projekt wählen','tmpl.blank':'Leeres Projekt','tmpl.default':'Standardvorlage',
     'set.language':'Sprache','set.zoom':'Zoom-Steuerung','set.mxMaster':'Langsamerer Zoom',
     'set.defaults':'Vorgaben für neue Formen','set.config':'Konfiguration',
-    'set.general':'Allgemein','set.theme':'Design','set.themePreset':'Farbschema','set.themeCustom':'Farben anpassen','set.themeReset':'Auf Standard zurücksetzen',
+    'set.general':'Allgemein','set.exportImport':'Export / Import','set.theme':'Design','set.themePreset':'Farbschema','set.themeCustom':'Farben anpassen','set.themeReset':'Auf Standard zurücksetzen',
+    'set.exportImgMax':'Maximale PNG/JPG-Auflösung','set.exportImgLimit':'Exportierte Bildgröße begrenzen',
+    'set.exportImgSize':'Max. Größe',
     'theme.preset_dark':'Dunkel (Standard)','theme.preset_light':'Hell','theme.preset_midnight':'Mitternachtsblau','theme.preset_forest':'Waldgrün',
     'theme.preset_custom':'Benutzerdefiniert','theme.customHint':'Mindestens eine Farbe wurde manuell geändert — das Design entspricht keinem Standardschema mehr.',
     'theme.bg':'App-Hintergrund','theme.panel':'Seitenpanel','theme.panel2':'Seitenpanel (heller)','theme.line':'Linien und Rahmen',
@@ -3689,7 +3696,7 @@ async function generateVariants() {
   for (const row of state.vars.rows) {
     const b = buildSVG(state.shapes, row.vals, pad, region);
     if (!b) continue;
-    const jpg = await svgToPngBlob(b.svg, b.w, b.h, 2, 'image/jpeg');   /* JPG zamiast PNG — mniejsze pliki przy masowym eksporcie */
+    const jpg = await svgToPngBlob(b.svg, b.w, b.h, exportScaleFor(b.w, b.h), 'image/jpeg');   /* JPG zamiast PNG — mniejsze pliki przy masowym eksporcie */
     let nm = variantName(row);
     if (used[nm]) nm += '_' + (++used[nm]); else used[nm] = 1;   /* unikaj kolizji nazw */
     files.push({ name: proj + '_' + nm + '.jpg', data: new Uint8Array(await jpg.arrayBuffer()) });
@@ -3837,6 +3844,17 @@ function exportHandlesFor(slot) {
   if (!h) { h = { png: null, jpg: null }; exportHandlesBySlot.set(slot, h); }
   return h;
 }
+/* domyślnie 2x dla ostrości; jeśli w Ustawieniach włączony limit rozdzielczości
+   (np. 1920x1080), NIE eksportuj coraz większego obrazu w miarę jak rośnie
+   projekt — przytnij skalę tak, by zmieścić się w limicie (bez powiększania
+   małych projektów ponad 2x). Współdzielone przez export pojedynczego obrazu
+   i masowy eksport wariantów (js/13-variants.js). */
+function exportScaleFor(w, h) {
+  let scale = 2;
+  const EI = settings.exportImg;
+  if (EI && EI.limit) scale = Math.min(scale, EI.w / w, EI.h / h);
+  return Math.max(scale, 0.05);
+}
 async function exportImage(fmt, forcePicker = false) {
   const region = pageRegion();
   if (!state.shapes.length && !region) return toast(t('t.emptyCanvas'));
@@ -3846,7 +3864,7 @@ async function exportImage(fmt, forcePicker = false) {
   const b = buildSVG(state.shapes, currentVals(), pad, region);
   const mime = fmt === 'jpg' ? 'image/jpeg' : 'image/png';
   const ext = fmt === 'jpg' ? '.jpg' : '.png';
-  const blob = await svgToPngBlob(b.svg, b.w, b.h, 2, mime);
+  const blob = await svgToPngBlob(b.svg, b.w, b.h, exportScaleFor(b.w, b.h), mime);
   let name = stripExt(sanitizeFile($('#projName').value));
   if (previewRow >= 0 && state.vars.rows[previewRow])
     name += '_' + stripExt(sanitizeFile(state.vars.rows[previewRow].name));
@@ -5240,13 +5258,15 @@ let _setSubtab = 'general';   // która pod-zakładka Ustawień jest widoczna (n
 function renderSettings() {
   const el = $('#tab-settings');
   const D = settings.defaults || (settings.defaults = { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' });
+  const EI = settings.exportImg || (settings.exportImg = { limit: true, w: 1920, h: 1080 });
   const fonts = ['Calibri', 'Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact'];
   const th = themeState(), eff = themeEffective();
-  const onGen = _setSubtab !== 'theme';
+  const onGen = _setSubtab === 'general', onExp = _setSubtab === 'export', onThm = _setSubtab === 'theme';
   el.innerHTML = `
     <div class="subtabbar">
       <button class="subtab ${onGen ? 'on' : ''}" data-sub="general">${t('set.general')}</button>
-      <button class="subtab ${!onGen ? 'on' : ''}" data-sub="theme">${t('set.theme')}</button>
+      <button class="subtab ${onExp ? 'on' : ''}" data-sub="export">${t('set.exportImport')}</button>
+      <button class="subtab ${onThm ? 'on' : ''}" data-sub="theme">${t('set.theme')}</button>
     </div>
     <div class="subtabBody" id="setSubGeneral" style="display:${onGen ? '' : 'none'}">
     <div class="grp"><h4>${t('set.language')}</h4>
@@ -5264,14 +5284,6 @@ function renderSettings() {
       <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setAutosave" ${settings.autosave !== false ? 'checked' : ''}> ${t('set.autosave')}</label></div>
       <div class="hint">${helpLink('settings')}</div>
     </div>
-    <div class="grp"><h4>${t('set.canvas')}</h4>
-      <div class="row"><label>${t('set.infMargin')}</label><input class="in" type="number" id="setInfMargin" min="0" max="500" step="1" value="${settings.infiniteCanvasMargin ?? 16}"></div>
-      <div class="hint">${helpLink('settings')}</div>
-    </div>
-    <div class="grp"><h4>${t('set.xlsxImport')}</h4>
-      <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setXlsxAutoCrop" ${settings.xlsxAutoCrop !== false ? 'checked' : ''}> ${t('set.xlsxAutoCrop')}</label></div>
-      <div class="hint">${helpLink('settings')}</div>
-    </div>
     <div class="grp"><h4>${t('set.defaults')}</h4>
       <div class="row"><label>${t('props.font')}</label><select class="in" id="dFont" style="width:130px">
         ${fonts.map(f => `<option value="${f}" ${D.font === f ? 'selected' : ''}>${f}</option>`).join('')}</select></div>
@@ -5280,13 +5292,30 @@ function renderSettings() {
       <div class="row"><label>${t('set.colStroke')}</label><input class="in" type="color" id="dStroke" value="${D.stroke}"></div>
       <div class="row"><label>${t('set.colText')}</label><input class="in" type="color" id="dTc" value="${D.tc}"></div>
       <div class="row"><label>${t('set.colFill')}</label><input class="in" type="color" id="dFill" value="${D.fill}"></div></div>
+    <div class="grp"><div class="hint">${t('set.about')}</div></div>
+    </div>
+    <div class="subtabBody" id="setSubExport" style="display:${onExp ? '' : 'none'}">
+    <div class="grp"><h4>${t('set.canvas')}</h4>
+      <div class="row"><label>${t('set.infMargin')}</label><input class="in" type="number" id="setInfMargin" min="0" max="500" step="1" value="${settings.infiniteCanvasMargin ?? 16}"></div>
+      <div class="hint">${helpLink('settings')}</div>
+    </div>
+    <div class="grp"><h4>${t('set.exportImgMax')}</h4>
+      <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setExpImgLimit" ${EI.limit !== false ? 'checked' : ''}> ${t('set.exportImgLimit')}</label></div>
+      <div class="row"><label>${t('set.exportImgSize')}</label>
+        <input class="in" type="number" id="setExpImgW" min="10" max="20000" step="1" value="${EI.w}" style="width:80px"> ×
+        <input class="in" type="number" id="setExpImgH" min="10" max="20000" step="1" value="${EI.h}" style="width:80px"> px</div>
+      <div class="hint">${helpLink('settings')}</div>
+    </div>
+    <div class="grp"><h4>${t('set.xlsxImport')}</h4>
+      <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setXlsxAutoCrop" ${settings.xlsxAutoCrop !== false ? 'checked' : ''}> ${t('set.xlsxAutoCrop')}</label></div>
+      <div class="hint">${helpLink('settings')}</div>
+    </div>
     <div class="grp"><h4>${t('set.config')}</h4>
       <div class="row"><button class="btn" id="setTmpl">${t('config.saveTmpl')}</button></div>
       <div class="row"><button class="btn" id="setExpCfg">${t('config.save')}</button>
         <button class="btn" id="setImpCfg">${t('config.load')}</button></div></div>
-    <div class="grp"><div class="hint">${t('set.about')}</div></div>
     </div>
-    <div class="subtabBody" id="setSubTheme" style="display:${onGen ? 'none' : ''}">
+    <div class="subtabBody" id="setSubTheme" style="display:${onThm ? '' : 'none'}">
     <div class="grp"><h4>${t('set.themePreset')}</h4>
       <div class="row" id="themePresetRow">${themePresetRowHTML(th)}</div>
     </div>
@@ -5308,6 +5337,9 @@ function renderSettings() {
   $('#setAutosave').addEventListener('change', e => { settings.autosave = e.target.checked; saveSettingsLS(); if (settings.autosave) autosave(); });
   on2('setInfMargin', e => { settings.infiniteCanvasMargin = clamp(parseInt(e.target.value) || 0, 0, 500); saveSettingsLS(); });
   $('#setXlsxAutoCrop').addEventListener('change', e => { settings.xlsxAutoCrop = e.target.checked; saveSettingsLS(); });
+  $('#setExpImgLimit').addEventListener('change', e => { EI.limit = e.target.checked; saveSettingsLS(); });
+  on2('setExpImgW', e => { EI.w = clamp(parseInt(e.target.value) || 1920, 10, 20000); saveSettingsLS(); });
+  on2('setExpImgH', e => { EI.h = clamp(parseInt(e.target.value) || 1080, 10, 20000); saveSettingsLS(); });
   on2('setZoomDiv', e => { settings.zoomDiv = clamp(parseFloat(e.target.value) || 4, 1, 20); saveSettingsLS(); });
   const dSave = () => saveSettingsLS();
   $('#dFont').addEventListener('change', e => { D.font = e.target.value; dSave(); });
