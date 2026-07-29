@@ -773,6 +773,17 @@ function xlsxOutShapeXml(s, mediaRel) {
     `</xdr:sp>`;
   return xlsxOutAnchorTag(b.x, b.y, b.w, b.h, inner);
 }
+/* tło pod eksportowanymi kształtami — bez niego widać siatkę Excela w
+   miejscach, gdzie kanwa jest przezroczysta (przy PNG/JPG tę samą rolę
+   pełni biały <rect> w buildSVG()/svgToPngBlob()). Zwykły <xdr:sp> typu
+   rect, wstawiany jako PIERWSZY (spód z-order). */
+function xlsxOutBgRect(box) {
+  const inner = `<xdr:sp macro="" textlink=""><xdr:nvSpPr><xdr:cNvPr id="${++_xlsxOutId}" name="Tło"/><xdr:cNvSpPr/></xdr:nvSpPr>` +
+    `<xdr:spPr><a:xfrm><a:off x="${xlsxOutEmu(box.x)}" y="${xlsxOutEmu(box.y)}"/><a:ext cx="${xlsxOutEmu(box.w) || 1}" cy="${xlsxOutEmu(box.h) || 1}"/></a:xfrm>` +
+    `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:ln><a:noFill/></a:ln></xdr:spPr>` +
+    `<xdr:txBody><a:bodyPr/><a:lstStyle/><a:p/></xdr:txBody></xdr:sp>`;
+  return xlsxOutAnchorTag(box.x, box.y, box.w, box.h, inner);
+}
 /* data: URL obrazu -> {bytes, ext} do zapisu jako plik w xl/media */
 function xlsxOutImageBytes(href) {
   const m = /^data:image\/([a-zA-Z0-9.+-]+);base64,(.*)$/.exec(href || '');
@@ -810,10 +821,18 @@ async function exportXlsx() {
       drawingRels += `<Relationship Id="rId${relN}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${name}"/>`;
       return 'rId' + relN;
     };
-    /* 3) drawing1.xml — jeden <xdr:absoluteAnchor> na kształt, w kolejności z-order (patrz layeredShapes()) */
-    let drawingBody = '';
-    for (const s of layeredShapes()) {
-      if (isShapeEffectivelyHidden(s)) continue;
+    /* 3) drawing1.xml — jeden <xdr:twoCellAnchor> na kształt, w kolejności z-order (patrz layeredShapes()),
+       poprzedzony białym tłem na spodzie (patrz xlsxOutBgRect) tak samo rozciągniętym jak przy PNG/JPG:
+       format strony jeśli ustawiony, inaczej obrys kształtów + margines kanwy nieskończonej */
+    const visible = layeredShapes().filter(s => !isShapeEffectivelyHidden(s));
+    let bgBox = pageRegion();
+    if (!bgBox && visible.length) {
+      const pad = (settings.infiniteCanvasMargin != null) ? settings.infiniteCanvasMargin : 16;
+      const b = unionBBox(visible);
+      bgBox = { x: b.x - pad, y: b.y - pad, w: b.w + 2 * pad, h: b.h + 2 * pad };
+    }
+    let drawingBody = bgBox ? xlsxOutBgRect(bgBox) : '';
+    for (const s of visible) {
       drawingBody += xlsxOutShapeXml(s, s.type === 'image' ? mediaRelFor(s) : null);
     }
     drawingRels += '</Relationships>';
