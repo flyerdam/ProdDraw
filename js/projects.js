@@ -50,9 +50,33 @@ function PS_nextSlot() { let m = 0; for (const p of PS_registry()) if (p.slot > 
    w nieskończoność licznika po usunięciu starych projektów */
 function PS_nextDisplayNumber() { return PS_registry().length + 1; }
 
-/* ---------- dane projektu ---------- */
-function PS_readData(slot) { try { return localStorage.getItem(PS_keyFor(slot)); } catch (e) { return null; } }
-function PS_writeData(slot, json) { try { localStorage.setItem(PS_keyFor(slot), json); } catch (e) {} }
+/* ---------- dane projektu ----------
+   Cache w pamięci (per okno/sesja) — ŹRÓDŁO PRAWDY przy przełączaniu kart.
+   localStorage bywa pełny (limit ~5MB na origin, niezależny od dużego
+   limitu z navigator.storage.estimate()) — projekt z kilkoma osadzonymi
+   obrazami łatwo go przekracza. Bez tej pamięci, ciche niepowodzenie
+   zapisu (QuotaExceededError, łykane w pustym catch) sprawiało, że
+   PS_loadInto przy powrocie na kartę czytało `null` z dysku i cichcem
+   podstawiało PUSTY szablon domyślny — projekt „znikał" po przełączeniu
+   kart. Teraz dysk to tylko trwałość między sesjami/przeładowaniami;
+   w obrębie tej samej sesji okna dane zawsze biorą się z pamięci. */
+const PS_memCache = new Map();   // slot -> JSON string
+let PS_storageWarned = false;
+function PS_safeSetItem(key, json) {
+  try { localStorage.setItem(key, json); return true; }
+  catch (e) {
+    if (!PS_storageWarned) {
+      PS_storageWarned = true;
+      if (typeof toast === 'function' && typeof t === 'function') toast(t('t.storageFull'), 9000);
+    }
+    return false;
+  }
+}
+function PS_readData(slot) {
+  if (PS_memCache.has(slot)) return PS_memCache.get(slot);
+  try { return localStorage.getItem(PS_keyFor(slot)); } catch (e) { return null; }
+}
+function PS_writeData(slot, json) { PS_memCache.set(slot, json); PS_safeSetItem(PS_keyFor(slot), json); }
 function PS_autosaveOn() { return settings.autosave !== false; }
 
 /* ---------- „żywe" gniazda (ten sam projekt otwarty w innym oknie) ---------- */
@@ -218,6 +242,7 @@ function PS_deleteProject(slot) {
     if (slot === PS_active) { PS_active = newActive; PS_loadInto(newActive); }
   }
   PS_saveRegistry(PS_registry().filter(p => p.slot !== slot));
+  PS_memCache.delete(slot);
   try { localStorage.removeItem(PS_keyFor(slot)); } catch (e) {}
   const l = PS_readLive(); delete l[slot]; PS_writeLive(l);
   if (typeof Tabs_render === 'function') Tabs_render();

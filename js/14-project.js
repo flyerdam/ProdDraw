@@ -106,8 +106,10 @@ function autosave() {
      ten wyścig całkowicie — timer tylko opóźnia zapis, nie odczyt. */
   const key = PS_autoKey();
   const json = projectJSON();
+  if (typeof PS_memCache !== 'undefined') PS_memCache.set(PS_active, json);   /* pamięć od razu — dysk to tylko trwałość */
   autosaveTm = setTimeout(() => {
-    try { localStorage.setItem(key, json); } catch (e) {}
+    if (typeof PS_safeSetItem === 'function') PS_safeSetItem(key, json);
+    else try { localStorage.setItem(key, json); } catch (e) {}
   }, 400);
 }
 /* zapamiętane pliki eksportu (jak zapis w miejscu) — PER PROJEKT (slot), nie

@@ -513,9 +513,33 @@ function PS_nextSlot() { let m = 0; for (const p of PS_registry()) if (p.slot > 
    w nieskończoność licznika po usunięciu starych projektów */
 function PS_nextDisplayNumber() { return PS_registry().length + 1; }
 
-/* ---------- dane projektu ---------- */
-function PS_readData(slot) { try { return localStorage.getItem(PS_keyFor(slot)); } catch (e) { return null; } }
-function PS_writeData(slot, json) { try { localStorage.setItem(PS_keyFor(slot), json); } catch (e) {} }
+/* ---------- dane projektu ----------
+   Cache w pamięci (per okno/sesja) — ŹRÓDŁO PRAWDY przy przełączaniu kart.
+   localStorage bywa pełny (limit ~5MB na origin, niezależny od dużego
+   limitu z navigator.storage.estimate()) — projekt z kilkoma osadzonymi
+   obrazami łatwo go przekracza. Bez tej pamięci, ciche niepowodzenie
+   zapisu (QuotaExceededError, łykane w pustym catch) sprawiało, że
+   PS_loadInto przy powrocie na kartę czytało `null` z dysku i cichcem
+   podstawiało PUSTY szablon domyślny — projekt „znikał" po przełączeniu
+   kart. Teraz dysk to tylko trwałość między sesjami/przeładowaniami;
+   w obrębie tej samej sesji okna dane zawsze biorą się z pamięci. */
+const PS_memCache = new Map();   // slot -> JSON string
+let PS_storageWarned = false;
+function PS_safeSetItem(key, json) {
+  try { localStorage.setItem(key, json); return true; }
+  catch (e) {
+    if (!PS_storageWarned) {
+      PS_storageWarned = true;
+      if (typeof toast === 'function' && typeof t === 'function') toast(t('t.storageFull'), 9000);
+    }
+    return false;
+  }
+}
+function PS_readData(slot) {
+  if (PS_memCache.has(slot)) return PS_memCache.get(slot);
+  try { return localStorage.getItem(PS_keyFor(slot)); } catch (e) { return null; }
+}
+function PS_writeData(slot, json) { PS_memCache.set(slot, json); PS_safeSetItem(PS_keyFor(slot), json); }
 function PS_autosaveOn() { return settings.autosave !== false; }
 
 /* ---------- „żywe" gniazda (ten sam projekt otwarty w innym oknie) ---------- */
@@ -681,6 +705,7 @@ function PS_deleteProject(slot) {
     if (slot === PS_active) { PS_active = newActive; PS_loadInto(newActive); }
   }
   PS_saveRegistry(PS_registry().filter(p => p.slot !== slot));
+  PS_memCache.delete(slot);
   try { localStorage.removeItem(PS_keyFor(slot)); } catch (e) {}
   const l = PS_readLive(); delete l[slot]; PS_writeLive(l);
   if (typeof Tabs_render === 'function') Tabs_render();
@@ -770,6 +795,7 @@ const I18N = {
     'set.colStroke':'Kolor obrysu','set.colText':'Kolor tekstu','set.colFill':'Kolor wypełnienia',
     'props.flip':'Odbicie','props.flipH':'Odbij w poziomie','props.flipV':'Odbij w pionie',
     'props.crop':'Przycięcie','props.cropStart':'Przytnij','props.cropDone':'Gotowe','props.cropReset':'Resetuj',
+    'props.imgBorder':'Obramowanie obrazu','props.imgBorderOn':'Pokaż obramowanie',
     'props.cropHint':'Przeciągnij uchwyty ramki, aby przyciąć. Proporcje obrazu bez zmian. Esc lub „Gotowe" kończy.',
     'lib.newFolder':'+ Folder','lib.folder':'Folder','lib.folderName':'Nazwa folderu:','lib.emptyFolder':'(pusty folder)','lib.insertHint':'Kliknij, aby wstawić',
     'lib.root':'Bez folderu','lib.drag':'Przeciągnij do folderu','lib.dragHint':'Przeciągnij kafelek do folderu. Kliknij nagłówek, aby zwinąć.',
@@ -783,7 +809,8 @@ const I18N = {
     'props.fill':'Wypełnienie','props.text':'Tekst','props.textHint':'(2×klik na kształcie, aby edytować)',
     'props.size':'Rozmiar','props.bold':'gruby','props.italic':'kursywa','props.arrows':'Groty strzałek','props.start':'początek','props.end':'koniec',
     'props.rotation':'Obrót','props.rotDeg':'Kąt (°)','props.rotStep':'skok {n}°','props.align':'Wyrównanie (min. 2 kształty)',
-    't.nativeSaved':'Zapisano w pliku: ','t.saveErr':'Błąd zapisu — pobieram plik','t.openErr':'Błąd otwierania pliku','props.altHint':'Alt+klik = edytuj pojedynczy obiekt w grupie',
+    't.nativeSaved':'Zapisano w pliku: ','t.saveErr':'Błąd zapisu — pobieram plik','t.openErr':'Błąd otwierania pliku',
+    't.storageFull':'Miejsce w przeglądarce pełne — automatyczny zapis kart nie działa. Użyj Zapisz/Zapisz jako, by nie stracić pracy.','props.altHint':'Alt+klik = edytuj pojedynczy obiekt w grupie',
     'props.gridGap':'Odstęp siatki','props.matrixFit':'Macierz + rozmiar','props.matrix':'Macierz',
     'props.order':'Kolejność','props.top':'Na wierzch','props.up':'Wyżej','props.down':'Niżej','props.bot':'Na spód',
     'props.group':'Grupa','props.doGroup':'Grupuj','props.ungroup':'Rozgrupuj','props.toLib':'Do biblioteki',
@@ -845,6 +872,7 @@ const I18N = {
     'set.colStroke':'Stroke color','set.colText':'Text color','set.colFill':'Fill color',
     'props.flip':'Flip','props.flipH':'Flip horizontally','props.flipV':'Flip vertically',
     'props.crop':'Crop','props.cropStart':'Crop','props.cropDone':'Done','props.cropReset':'Reset',
+    'props.imgBorder':'Image border','props.imgBorderOn':'Show border',
     'props.cropHint':'Drag the frame handles to crop. Image proportions stay unchanged. Esc or “Done" finishes.',
     'lib.newFolder':'+ Folder','lib.folder':'Folder','lib.folderName':'Folder name:','lib.emptyFolder':'(empty folder)','lib.insertHint':'Click to insert',
     'lib.root':'No folder','lib.drag':'Drag to a folder','lib.dragHint':'Drag a tile into a folder. Click a header to collapse.',
@@ -868,7 +896,8 @@ const I18N = {
     'props.fill':'Fill','props.text':'Text','props.textHint':'(double-click the shape to edit)',
     'props.size':'Size','props.bold':'bold','props.italic':'italic','props.arrows':'Arrowheads','props.start':'start','props.end':'end',
     'props.rotation':'Rotation','props.rotDeg':'Angle (°)','props.rotStep':'step {n}°','props.align':'Align (min. 2 shapes)',
-    't.nativeSaved':'Saved to file: ','t.saveErr':'Save error — downloading file','t.openErr':'Error opening file','props.altHint':'Alt+click = edit a single object in the group',
+    't.nativeSaved':'Saved to file: ','t.saveErr':'Save error — downloading file','t.openErr':'Error opening file',
+    't.storageFull':'Browser storage is full — tab autosave is not working. Use Save/Save As to avoid losing work.','props.altHint':'Alt+click = edit a single object in the group',
     'props.gridGap':'Grid gap','props.matrixFit':'Matrix + resize','props.matrix':'Matrix',
     'props.order':'Order','props.top':'To front','props.up':'Up','props.down':'Down','props.bot':'To back',
     'props.group':'Group','props.doGroup':'Group','props.ungroup':'Ungroup','props.toLib':'To library',
@@ -953,7 +982,8 @@ const I18N = {
     'props.fill':'Füllung','props.text':'Text','props.textHint':'(Form doppelklicken zum Bearbeiten)',
     'props.size':'Größe','props.bold':'fett','props.italic':'kursiv','props.arrows':'Pfeilspitzen','props.start':'Anfang','props.end':'Ende',
     'props.rotation':'Drehung','props.rotDeg':'Winkel (°)','props.rotStep':'Schritt {n}°','props.align':'Ausrichten (min. 2 Formen)',
-    't.nativeSaved':'In Datei gespeichert: ','t.saveErr':'Speicherfehler — Datei wird heruntergeladen','t.openErr':'Fehler beim Öffnen','props.altHint':'Alt+Klick = einzelnes Objekt in der Gruppe bearbeiten',
+    't.nativeSaved':'In Datei gespeichert: ','t.saveErr':'Speicherfehler — Datei wird heruntergeladen','t.openErr':'Fehler beim Öffnen',
+    't.storageFull':'Browser-Speicher ist voll — Autozapis der Tabs funktioniert nicht. Verwenden Sie Speichern/Speichern unter, um Arbeit nicht zu verlieren.','props.altHint':'Alt+Klick = einzelnes Objekt in der Gruppe bearbeiten',
     'props.gridGap':'Rasterabstand','props.matrixFit':'Matrix + Größe','props.matrix':'Matrix',
     'props.order':'Reihenfolge','props.top':'Nach vorn','props.up':'Höher','props.down':'Tiefer','props.bot':'Nach hinten',
     'props.group':'Gruppe','props.doGroup':'Gruppieren','props.ungroup':'Gruppierung aufheben','props.toLib':'In Bibliothek',
@@ -1844,6 +1874,11 @@ function shapeSVG(s, vals, live) {
   if (s.type === 'image') {
     const cr = s.crop;
     const F = fullRect(s);
+    /* opcjonalne obramowanie obrazu — na WIDOCZNYM (przyciętym) prostokącie
+       s.x/s.y/s.w/s.h, więc respektuje kadrowanie */
+    const imgBorder = (!s.noStroke && s.stroke)
+      ? `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="none" stroke="${s.stroke}" stroke-width="${s.sw || 1}"${getDash(s.dash, s.sw) ? ` stroke-dasharray="${getDash(s.dash, s.sw)}"` : ''}/>`
+      : '';
     /* w trybie przycinania: pokaż CAŁY obraz (przygaszenie/ramkę rysuje overlay) */
     if (live && cropMode === s.id) {
       return `<g${did}><image x="${F.x}" y="${F.y}" width="${F.w}" height="${F.h}" href="${s.href}" preserveAspectRatio="none" opacity="0.55"/></g>`;
@@ -1852,9 +1887,10 @@ function shapeSVG(s, vals, live) {
       const cid = 'clip_' + s.id;
       return `<g${did}><clipPath id="${cid}"><rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}"/></clipPath>` +
         `<image x="${F.x}" y="${F.y}" width="${F.w}" height="${F.h}" href="${s.href}" preserveAspectRatio="none" clip-path="url(#${cid})"/>` +
+        imgBorder +
         (live ? `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="transparent"/>` : '') + `</g>`;
     }
-    return `<g${did}><image x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" href="${s.href}" preserveAspectRatio="none"/></g>`;
+    return `<g${did}><image x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" href="${s.href}" preserveAspectRatio="none"/>${imgBorder}</g>`;
   }
   if (s.type === 'roundRect') {
     const rx = Math.min(s.rx || 8, s.w / 2, s.h / 2);
@@ -2641,6 +2677,17 @@ function renderProps() {
         <button class="btn" id="pCropReset">${t('props.cropReset')}</button></div>
       ${cropping ? `<div class="hint" style="margin-top:4px">${t('props.cropHint')}</div>` : ''}</div>`;
   }
+  /* obramowanie obrazu (wszystkie zaznaczone to obrazy) — respektuje kadrowanie */
+  if (types.size === 1 && types.has('image')) {
+    const hasB = !s.noStroke && s.stroke;
+    h += `<div class="grp"><h4>${t('props.imgBorder')}</h4>
+      <div class="row"><label style="min-width:0"><input type="checkbox" id="pImgBorder" ${hasB ? 'checked' : ''}> ${t('props.imgBorderOn')}</label></div>
+      <div class="row"><label>${t('props.color')}</label><input class="in" type="color" id="pImgStroke" value="${s.stroke || '#c00000'}"></div>
+      <div class="row"><label>${t('props.width')}</label><input class="in" type="number" id="pImgSw" min="0.5" step="0.5" value="${s.sw ?? 3}"></div>
+      <div class="row"><label>${t('props.style')}</label><select class="in" id="pImgDash">` +
+      DASH_OPTS.map(([v, n]) => `<option value="${v}" ${s.dash === v ? 'selected' : ''}>${n}</option>`).join('') +
+      `</select></div></div>`;
+  }
   if (one && s.type === 'line') {
     h += `<div class="grp"><h4>${t('props.linePts')}</h4>
       <div class="row"><label>P1</label><input class="in" type="number" id="pX1"><input class="in" type="number" id="pY1"></div>
@@ -2742,6 +2789,10 @@ function renderProps() {
   on('pCropStart', 'click', () => { if (isSizeLocked(s)) return lockToast(); cropMode = s.id; setTool('select'); render(); renderProps(); });
   on('pCropDone', 'click', () => { cropMode = null; render(); renderProps(); autosave(); });
   on('pCropReset', 'click', () => { applySizeAll(a => { if (a.type === 'image' && a.crop) { const F = fullRect(a); a.x = F.x; a.y = F.y; a.w = F.w; a.h = F.h; a.crop = null; } }); renderProps(); });
+  on('pImgBorder', 'change', () => { applyStyleAll(a => { if (a.type === 'image') { a.noStroke = !$('#pImgBorder').checked; if (!a.noStroke) { if (!a.stroke) a.stroke = '#c00000'; if (a.sw == null) a.sw = 3; if (!a.dash) a.dash = 'solid'; } } }); renderProps(); });
+  bindColor('pImgStroke', a => { if (a.type === 'image') { a.stroke = $('#pImgStroke').value; a.noStroke = false; } });
+  on('pImgSw', 'change', () => applyStyleAll(a => { if (a.type === 'image') a.sw = Math.max(0.5, num('pImgSw')); }));
+  on('pImgDash', 'change', () => applyStyleAll(a => { if (a.type === 'image') a.dash = $('#pImgDash').value; }));
   on('pText', 'focus', () => pushUndo());
   on('pText', 'input', () => {
     const v = $('#pText').value;
@@ -3316,8 +3367,10 @@ function autosave() {
      ten wyścig całkowicie — timer tylko opóźnia zapis, nie odczyt. */
   const key = PS_autoKey();
   const json = projectJSON();
+  if (typeof PS_memCache !== 'undefined') PS_memCache.set(PS_active, json);   /* pamięć od razu — dysk to tylko trwałość */
   autosaveTm = setTimeout(() => {
-    try { localStorage.setItem(key, json); } catch (e) {}
+    if (typeof PS_safeSetItem === 'function') PS_safeSetItem(key, json);
+    else try { localStorage.setItem(key, json); } catch (e) {}
   }, 400);
 }
 /* zapamiętane pliki eksportu (jak zapis w miejscu) — PER PROJEKT (slot), nie
@@ -3712,7 +3765,7 @@ async function emfToPngDataURL(bytes) {
     };
     /* narysuj DIB w prostokącie docelowym; maska 1bpp -> kanał alfa (biel=przezroczyste),
        a pojedynczy DIB -> kluczowanie bieli, żeby ikona nie miała białego pudełka na tle */
-    const drawDibs = async (colorBmp, maskBmp, x, y, w, h) => {
+    const drawDibs = async (colorBmp, maskBmp, x, y, w, h, flipH, flipV) => {
       const colorID = await loadImgData(colorBmp); if (!colorID) return;
       const d = colorID.data;
       const maskID = maskBmp ? await loadImgData(maskBmp) : null;
@@ -3724,7 +3777,15 @@ async function emfToPngDataURL(bytes) {
       }
       const tmp = document.createElement('canvas'); tmp.width = colorID.width; tmp.height = colorID.height;
       tmp.getContext('2d').putImageData(colorID, 0, 0);
-      ctx.drawImage(tmp, x, y, w || colorID.width, h || colorID.height); hadDraw = true;
+      const dw = w || colorID.width, dh = h || colorID.height;
+      /* honoruj znak cxDest/cyDest ze STRETCHDIBITS (ujemny = odbicie bitmapy) —
+         bez tego ciężarówka była lustrzana względem strzałki */
+      ctx.save();
+      ctx.translate(flipH ? x + dw : x, flipV ? y + dh : y);
+      ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+      ctx.drawImage(tmp, 0, 0, dw, dh);
+      ctx.restore();
+      hadDraw = true;
     };
     const dibAt = off => {
       const gu = k => dv.getUint32(off + k, true);
@@ -3772,6 +3833,7 @@ async function emfToPngDataURL(bytes) {
         if (curPen && curPen.color) { ctx.strokeStyle = curPen.color; ctx.lineWidth = curPen.w || 1; ctx.stroke(); hadDraw = true; }
       } else if (t === 81) {                                    // STRETCHDIBITS
         const R = rcl(off);
+        const cxDest = dv.getInt32(off + 72, true), cyDest = dv.getInt32(off + 76, true);
         let color = dibAt(off), mask = null;
         /* para w tym samym prostokącie = (maska, kolor) dla przezroczystości ikony */
         const nOff = off + sz;
@@ -3783,7 +3845,7 @@ async function emfToPngDataURL(bytes) {
           }
         }
         if (mask && color && mask.length > color.length) { const tmp = mask; mask = color; color = tmp; }
-        if (color) await drawDibs(color, mask, Math.min(R.l, R.r) - bl, Math.min(R.t, R.b) - bt, Math.abs(R.r - R.l), Math.abs(R.b - R.t));
+        if (color) await drawDibs(color, mask, Math.min(R.l, R.r) - bl, Math.min(R.t, R.b) - bt, Math.abs(R.r - R.l), Math.abs(R.b - R.t), cxDest < 0, cyDest < 0);
       }
       if (t === 14) break;                                      // EOF
       off += sz;

@@ -166,6 +166,11 @@ function shapeSVG(s, vals, live) {
   if (s.type === 'image') {
     const cr = s.crop;
     const F = fullRect(s);
+    /* opcjonalne obramowanie obrazu — na WIDOCZNYM (przyciętym) prostokącie
+       s.x/s.y/s.w/s.h, więc respektuje kadrowanie */
+    const imgBorder = (!s.noStroke && s.stroke)
+      ? `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="none" stroke="${s.stroke}" stroke-width="${s.sw || 1}"${getDash(s.dash, s.sw) ? ` stroke-dasharray="${getDash(s.dash, s.sw)}"` : ''}/>`
+      : '';
     /* w trybie przycinania: pokaż CAŁY obraz (przygaszenie/ramkę rysuje overlay) */
     if (live && cropMode === s.id) {
       return `<g${did}><image x="${F.x}" y="${F.y}" width="${F.w}" height="${F.h}" href="${s.href}" preserveAspectRatio="none" opacity="0.55"/></g>`;
@@ -174,9 +179,10 @@ function shapeSVG(s, vals, live) {
       const cid = 'clip_' + s.id;
       return `<g${did}><clipPath id="${cid}"><rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}"/></clipPath>` +
         `<image x="${F.x}" y="${F.y}" width="${F.w}" height="${F.h}" href="${s.href}" preserveAspectRatio="none" clip-path="url(#${cid})"/>` +
+        imgBorder +
         (live ? `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="transparent"/>` : '') + `</g>`;
     }
-    return `<g${did}><image x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" href="${s.href}" preserveAspectRatio="none"/></g>`;
+    return `<g${did}><image x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" href="${s.href}" preserveAspectRatio="none"/>${imgBorder}</g>`;
   }
   if (s.type === 'roundRect') {
     const rx = Math.min(s.rx || 8, s.w / 2, s.h / 2);

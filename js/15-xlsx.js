@@ -342,7 +342,7 @@ async function emfToPngDataURL(bytes) {
     };
     /* narysuj DIB w prostokącie docelowym; maska 1bpp -> kanał alfa (biel=przezroczyste),
        a pojedynczy DIB -> kluczowanie bieli, żeby ikona nie miała białego pudełka na tle */
-    const drawDibs = async (colorBmp, maskBmp, x, y, w, h) => {
+    const drawDibs = async (colorBmp, maskBmp, x, y, w, h, flipH, flipV) => {
       const colorID = await loadImgData(colorBmp); if (!colorID) return;
       const d = colorID.data;
       const maskID = maskBmp ? await loadImgData(maskBmp) : null;
@@ -354,7 +354,15 @@ async function emfToPngDataURL(bytes) {
       }
       const tmp = document.createElement('canvas'); tmp.width = colorID.width; tmp.height = colorID.height;
       tmp.getContext('2d').putImageData(colorID, 0, 0);
-      ctx.drawImage(tmp, x, y, w || colorID.width, h || colorID.height); hadDraw = true;
+      const dw = w || colorID.width, dh = h || colorID.height;
+      /* honoruj znak cxDest/cyDest ze STRETCHDIBITS (ujemny = odbicie bitmapy) —
+         bez tego ciężarówka była lustrzana względem strzałki */
+      ctx.save();
+      ctx.translate(flipH ? x + dw : x, flipV ? y + dh : y);
+      ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+      ctx.drawImage(tmp, 0, 0, dw, dh);
+      ctx.restore();
+      hadDraw = true;
     };
     const dibAt = off => {
       const gu = k => dv.getUint32(off + k, true);
@@ -402,6 +410,7 @@ async function emfToPngDataURL(bytes) {
         if (curPen && curPen.color) { ctx.strokeStyle = curPen.color; ctx.lineWidth = curPen.w || 1; ctx.stroke(); hadDraw = true; }
       } else if (t === 81) {                                    // STRETCHDIBITS
         const R = rcl(off);
+        const cxDest = dv.getInt32(off + 72, true), cyDest = dv.getInt32(off + 76, true);
         let color = dibAt(off), mask = null;
         /* para w tym samym prostokącie = (maska, kolor) dla przezroczystości ikony */
         const nOff = off + sz;
@@ -413,7 +422,7 @@ async function emfToPngDataURL(bytes) {
           }
         }
         if (mask && color && mask.length > color.length) { const tmp = mask; mask = color; color = tmp; }
-        if (color) await drawDibs(color, mask, Math.min(R.l, R.r) - bl, Math.min(R.t, R.b) - bt, Math.abs(R.r - R.l), Math.abs(R.b - R.t));
+        if (color) await drawDibs(color, mask, Math.min(R.l, R.r) - bl, Math.min(R.t, R.b) - bt, Math.abs(R.r - R.l), Math.abs(R.b - R.t), cxDest < 0, cyDest < 0);
       }
       if (t === 14) break;                                      // EOF
       off += sz;

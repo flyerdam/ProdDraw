@@ -67,6 +67,17 @@ function renderProps() {
         <button class="btn" id="pCropReset">${t('props.cropReset')}</button></div>
       ${cropping ? `<div class="hint" style="margin-top:4px">${t('props.cropHint')}</div>` : ''}</div>`;
   }
+  /* obramowanie obrazu (wszystkie zaznaczone to obrazy) — respektuje kadrowanie */
+  if (types.size === 1 && types.has('image')) {
+    const hasB = !s.noStroke && s.stroke;
+    h += `<div class="grp"><h4>${t('props.imgBorder')}</h4>
+      <div class="row"><label style="min-width:0"><input type="checkbox" id="pImgBorder" ${hasB ? 'checked' : ''}> ${t('props.imgBorderOn')}</label></div>
+      <div class="row"><label>${t('props.color')}</label><input class="in" type="color" id="pImgStroke" value="${s.stroke || '#c00000'}"></div>
+      <div class="row"><label>${t('props.width')}</label><input class="in" type="number" id="pImgSw" min="0.5" step="0.5" value="${s.sw ?? 3}"></div>
+      <div class="row"><label>${t('props.style')}</label><select class="in" id="pImgDash">` +
+      DASH_OPTS.map(([v, n]) => `<option value="${v}" ${s.dash === v ? 'selected' : ''}>${n}</option>`).join('') +
+      `</select></div></div>`;
+  }
   if (one && s.type === 'line') {
     h += `<div class="grp"><h4>${t('props.linePts')}</h4>
       <div class="row"><label>P1</label><input class="in" type="number" id="pX1"><input class="in" type="number" id="pY1"></div>
@@ -168,6 +179,10 @@ function renderProps() {
   on('pCropStart', 'click', () => { if (isSizeLocked(s)) return lockToast(); cropMode = s.id; setTool('select'); render(); renderProps(); });
   on('pCropDone', 'click', () => { cropMode = null; render(); renderProps(); autosave(); });
   on('pCropReset', 'click', () => { applySizeAll(a => { if (a.type === 'image' && a.crop) { const F = fullRect(a); a.x = F.x; a.y = F.y; a.w = F.w; a.h = F.h; a.crop = null; } }); renderProps(); });
+  on('pImgBorder', 'change', () => { applyStyleAll(a => { if (a.type === 'image') { a.noStroke = !$('#pImgBorder').checked; if (!a.noStroke) { if (!a.stroke) a.stroke = '#c00000'; if (a.sw == null) a.sw = 3; if (!a.dash) a.dash = 'solid'; } } }); renderProps(); });
+  bindColor('pImgStroke', a => { if (a.type === 'image') { a.stroke = $('#pImgStroke').value; a.noStroke = false; } });
+  on('pImgSw', 'change', () => applyStyleAll(a => { if (a.type === 'image') a.sw = Math.max(0.5, num('pImgSw')); }));
+  on('pImgDash', 'change', () => applyStyleAll(a => { if (a.type === 'image') a.dash = $('#pImgDash').value; }));
   on('pText', 'focus', () => pushUndo());
   on('pText', 'input', () => {
     const v = $('#pText').value;
