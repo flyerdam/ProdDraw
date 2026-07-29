@@ -2726,17 +2726,18 @@ function refreshRot() {
   const ss = selShapes(); if (ss.length !== 1) return;
   const el = $('#pRot'); if (el && document.activeElement !== el) el.value = Math.round((ss[0].rot || 0) * 10) / 10;
 }
-function applyAll(fn) { pushUndo(); selShapes().forEach(fn); render(); autosave(); }
-/* zastosuj do kształtów, które nie mają danej blokady (pred = test blokady) */
-function applyFiltered(pred, fn) {
-  const u = selShapes().filter(s => !pred(s));
+/* zastosuj do kształtów, które nie mają danej blokady (pred = test blokady).
+   Działa na PODANEJ (zamrożonej) liście kształtów, NIE na bieżącym (live)
+   zaznaczeniu — patrz komentarz przy "ss" w renderProps(): pole formularza
+   commitowane na 'change' (blur) potrafi odpalić się PO tym, jak klik na
+   inny kształt na kanwie już przestawił zaznaczenie — bez zamrożenia
+   własnego zestawu kształtów z TEGO renderu zmiana trafiłaby w nowo
+   kliknięty kształt zamiast w ten, który był edytowany. */
+function applyOnShapes(shapes, pred, fn) {
+  const u = shapes.filter(s => !pred(s));
   if (!u.length) return lockToast();
   pushUndo(); u.forEach(fn); render(); autosave();
 }
-const applyMoveAll = fn => applyFiltered(isMoveLocked, fn);   /* pozycja */
-const applySizeAll = fn => applyFiltered(isSizeLocked, fn);   /* rozmiar / obrót / geometria */
-const applyStyleAll = fn => applyFiltered(isStyleLocked, fn); /* kolory / obrys / czcionka */
-const applyUnlockedAll = applyMoveAll;                        /* zgodność wstecz */
 /* ---------- lista obiektów (zakładka "Obiekty") ----------
    Płaski wykaz wszystkich kształtów, od wierzchu (ostatnio narysowany,
    czyli na wierzchu z-ordera) do spodu — klik zaznacza (grupę w całości,
@@ -2888,53 +2889,63 @@ function renderProps() {
 
   /* zdarzenia panelu */
   const on = (id, ev, fn) => { const n = $('#' + id); if (n) n.addEventListener(ev, fn); };
-  const num = id => parseFloat($('#' + id).value);
+  /* WAŻNE: wartości i cele bierzemy z ZAMROŻONEGO stanu tego renderu (e.target,
+     ss/s), NIE z live $('#id')/selShapes() — pole commitowane na 'change'
+     potrafi odpalić się już PO tym, jak klik na inny kształt na kanwie
+     przestawił zaznaczenie (a bywa, że nawet PODCZAS obsługi tego kliku: samo
+     ustawienie innerHTML w renderProps() przy przełączaniu zaznaczenia
+     natywnie commituje jeszcze skupione, zmienione pole). Bez zamrożenia
+     zmiana trafiała w nowo klikany kształt zamiast w ten edytowany. */
+  const numE = e => parseFloat(e.target.value);
+  const applyStyleNow = fn => applyOnShapes(ss, isStyleLocked, fn);
+  const applyMoveNow = fn => applyOnShapes(ss, isMoveLocked, fn);
+  const applySizeNow = fn => applyOnShapes(ss, isSizeLocked, fn);
   /* blokady granularne */
-  on('pLockAll', 'change', () => { const v = $('#pLockAll').checked; applyAll(a => { a.lockMove = a.lockSize = a.lockStyle = a.lockText = v; a.locked = false; }); renderProps(); });
-  on('pLockMove', 'change', () => { applyAll(a => { materializeLock(a); a.lockMove = $('#pLockMove').checked; }); renderProps(); });
-  on('pLockSize', 'change', () => { applyAll(a => { materializeLock(a); a.lockSize = $('#pLockSize').checked; }); renderProps(); });
-  on('pLockStyle', 'change', () => { applyAll(a => { materializeLock(a); a.lockStyle = $('#pLockStyle').checked; }); renderProps(); });
-  on('pLockText', 'change', () => { applyAll(a => { materializeLock(a); a.lockText = $('#pLockText').checked; }); renderProps(); });
-  on('pX', 'change', () => applyMoveAll(a => { if (a.x !== undefined) a.x = num('pX'); }));
-  on('pY', 'change', () => applyMoveAll(a => { if (a.y !== undefined) a.y = num('pY'); }));
-  on('pW', 'change', () => applySizeAll(a => { if (a.w !== undefined) a.w = Math.max(1, num('pW')); }));
-  on('pH', 'change', () => applySizeAll(a => { if (a.h !== undefined) a.h = Math.max(1, num('pH')); }));
-  on('pRot', 'change', () => applySizeAll(a => { if (a.type !== 'line') a.rot = ((num('pRot') % 360) + 360) % 360; }));
+  on('pLockAll', 'change', e => { const v = e.target.checked; pushUndo(); ss.forEach(a => { a.lockMove = a.lockSize = a.lockStyle = a.lockText = v; a.locked = false; }); render(); autosave(); renderProps(); });
+  on('pLockMove', 'change', e => { const v = e.target.checked; pushUndo(); ss.forEach(a => { materializeLock(a); a.lockMove = v; }); render(); autosave(); renderProps(); });
+  on('pLockSize', 'change', e => { const v = e.target.checked; pushUndo(); ss.forEach(a => { materializeLock(a); a.lockSize = v; }); render(); autosave(); renderProps(); });
+  on('pLockStyle', 'change', e => { const v = e.target.checked; pushUndo(); ss.forEach(a => { materializeLock(a); a.lockStyle = v; }); render(); autosave(); renderProps(); });
+  on('pLockText', 'change', e => { const v = e.target.checked; pushUndo(); ss.forEach(a => { materializeLock(a); a.lockText = v; }); render(); autosave(); renderProps(); });
+  on('pX', 'change', e => { const v = numE(e); applyMoveNow(a => { if (a.x !== undefined) a.x = v; }); });
+  on('pY', 'change', e => { const v = numE(e); applyMoveNow(a => { if (a.y !== undefined) a.y = v; }); });
+  on('pW', 'change', e => { const v = Math.max(1, numE(e)); applySizeNow(a => { if (a.w !== undefined) a.w = v; }); });
+  on('pH', 'change', e => { const v = Math.max(1, numE(e)); applySizeNow(a => { if (a.h !== undefined) a.h = v; }); });
+  on('pRot', 'change', e => { const v = ((numE(e) % 360) + 360) % 360; applySizeNow(a => { if (a.type !== 'line') a.rot = v; }); });
   ['pX1', 'pY1', 'pX2', 'pY2'].forEach(id =>
-    on(id, 'change', () => applySizeAll(a => { if (a.type === 'line') a[id[1].toLowerCase() + id[2]] = num(id); })));
+    on(id, 'change', e => { const v = numE(e), key = id[1].toLowerCase() + id[2]; applySizeNow(a => { if (a.type === 'line') a[key] = v; }); }));
   /* kolory: cofnij łapie CAŁĄ zmianę — pushUndo raz przy focusie, potem live bez undo (pomija zablok. wygląd) */
   /* kolory: TYLKO 'change' (raz, po zamknięciu okna koloru/pipety) — brak re-renderu
      w trakcie otwartego natywnego dialogu = brak zawieszki na Edge */
-  const bindColor = (id, fn) => on(id, 'change', () => applyStyleAll(fn));
-  bindColor('pStroke', a => { if (a.stroke !== undefined) { a.stroke = $('#pStroke').value; a.noStroke = false; } });
-  on('pNoStroke', 'change', () => applyStyleAll(a => { if ('noStroke' in a || a.type === 'rect' || a.type === 'ellipse') a.noStroke = $('#pNoStroke').checked; }));
-  on('pSw', 'change', () => applyStyleAll(a => { if (a.sw !== undefined) a.sw = Math.max(0.5, num('pSw')); }));
-  on('pDash', 'change', () => applyStyleAll(a => { if (a.dash !== undefined) a.dash = $('#pDash').value; }));
-  bindColor('pFill', a => { if (a.fill !== undefined) { a.fill = $('#pFill').value; a.noFill = false; } });
-  on('pNoFill', 'change', () => applyStyleAll(a => { if (a.fill !== undefined) a.noFill = $('#pNoFill').checked; }));
-  on('pFont', 'change', () => applyStyleAll(a => { if ('font' in a || a.fs !== undefined) a.font = $('#pFont').value; }));
-  on('pFs', 'change', () => applyStyleAll(a => { if (a.fs !== undefined) a.fs = Math.max(4, num('pFs')); }));
-  bindColor('pTc', a => { if (a.tc !== undefined) a.tc = $('#pTc').value; });
-  on('pBold', 'change', () => applyStyleAll(a => { if ('fs' in a) a.bold = $('#pBold').checked; }));
-  on('pItalic', 'change', () => applyStyleAll(a => { if ('fs' in a) a.italic = $('#pItalic').checked; }));
-  on('pRotStep', 'change', () => { rotStepOn = $('#pRotStep').checked; });
-  on('pFlipH', 'click', () => applySizeAll(a => { if (a.type !== 'line') a.flipH = !a.flipH; }));
-  on('pFlipV', 'click', () => applySizeAll(a => { if (a.type !== 'line') a.flipV = !a.flipV; }));
+  const bindColor = (id, fn) => on(id, 'change', e => { const v = e.target.value; applyStyleNow(a => fn(a, v)); });
+  bindColor('pStroke', (a, v) => { if (a.stroke !== undefined) { a.stroke = v; a.noStroke = false; } });
+  on('pNoStroke', 'change', e => { const v = e.target.checked; applyStyleNow(a => { if ('noStroke' in a || a.type === 'rect' || a.type === 'ellipse') a.noStroke = v; }); });
+  on('pSw', 'change', e => { const v = Math.max(0.5, numE(e)); applyStyleNow(a => { if (a.sw !== undefined) a.sw = v; }); });
+  on('pDash', 'change', e => { const v = e.target.value; applyStyleNow(a => { if (a.dash !== undefined) a.dash = v; }); });
+  bindColor('pFill', (a, v) => { if (a.fill !== undefined) { a.fill = v; a.noFill = false; } });
+  on('pNoFill', 'change', e => { const v = e.target.checked; applyStyleNow(a => { if (a.fill !== undefined) a.noFill = v; }); });
+  on('pFont', 'change', e => { const v = e.target.value; applyStyleNow(a => { if ('font' in a || a.fs !== undefined) a.font = v; }); });
+  on('pFs', 'change', e => { const v = Math.max(4, numE(e)); applyStyleNow(a => { if (a.fs !== undefined) a.fs = v; }); });
+  bindColor('pTc', (a, v) => { if (a.tc !== undefined) a.tc = v; });
+  on('pBold', 'change', e => { const v = e.target.checked; applyStyleNow(a => { if ('fs' in a) a.bold = v; }); });
+  on('pItalic', 'change', e => { const v = e.target.checked; applyStyleNow(a => { if ('fs' in a) a.italic = v; }); });
+  on('pRotStep', 'change', e => { rotStepOn = e.target.checked; });
+  on('pFlipH', 'click', () => applySizeNow(a => { if (a.type !== 'line') a.flipH = !a.flipH; }));
+  on('pFlipV', 'click', () => applySizeNow(a => { if (a.type !== 'line') a.flipV = !a.flipV; }));
   on('pCropStart', 'click', () => { if (isSizeLocked(s)) return lockToast(); cropMode = s.id; setTool('select'); render(); renderProps(); });
   on('pCropDone', 'click', () => { cropMode = null; render(); renderProps(); autosave(); });
-  on('pCropReset', 'click', () => { applySizeAll(a => { if (a.type === 'image' && a.crop) { const F = fullRect(a); a.x = F.x; a.y = F.y; a.w = F.w; a.h = F.h; a.crop = null; } }); renderProps(); });
-  on('pImgBorder', 'change', () => { applyStyleAll(a => { if (a.type === 'image') { a.noStroke = !$('#pImgBorder').checked; if (!a.noStroke) { if (!a.stroke) a.stroke = '#c00000'; if (a.sw == null) a.sw = 3; if (!a.dash) a.dash = 'solid'; } } }); renderProps(); });
-  bindColor('pImgStroke', a => { if (a.type === 'image') { a.stroke = $('#pImgStroke').value; a.noStroke = false; } });
-  on('pImgSw', 'change', () => applyStyleAll(a => { if (a.type === 'image') a.sw = Math.max(0.5, num('pImgSw')); }));
-  on('pImgDash', 'change', () => applyStyleAll(a => { if (a.type === 'image') a.dash = $('#pImgDash').value; }));
+  on('pCropReset', 'click', () => applySizeNow(a => { if (a.type === 'image' && a.crop) { const F = fullRect(a); a.x = F.x; a.y = F.y; a.w = F.w; a.h = F.h; a.crop = null; } }));
+  on('pImgBorder', 'change', e => { const v = e.target.checked; applyStyleNow(a => { if (a.type === 'image') { a.noStroke = !v; if (!a.noStroke) { if (!a.stroke) a.stroke = '#c00000'; if (a.sw == null) a.sw = 3; if (!a.dash) a.dash = 'solid'; } } }); renderProps(); });
+  bindColor('pImgStroke', (a, v) => { if (a.type === 'image') { a.stroke = v; a.noStroke = false; } });
+  on('pImgSw', 'change', e => { const v = Math.max(0.5, numE(e)); applyStyleNow(a => { if (a.type === 'image') a.sw = v; }); });
+  on('pImgDash', 'change', e => { const v = e.target.value; applyStyleNow(a => { if (a.type === 'image') a.dash = v; }); });
   on('pText', 'focus', () => pushUndo());
-  on('pText', 'input', () => {
-    const v = $('#pText').value;
-    selShapes().forEach(a => { if (a.text !== undefined && !isTextLocked(a)) a.text = v; });
+  on('pText', 'input', e => {
+    const v = e.target.value;
+    ss.forEach(a => { if (a.text !== undefined && !isTextLocked(a)) a.text = v; });
     render(); autosave();
   });
-  on('pAs', 'change', () => applyStyleAll(a => { if (a.type === 'line') a.as = $('#pAs').checked; }));
-  on('pAe', 'change', () => applyStyleAll(a => { if (a.type === 'line') a.ae = $('#pAe').checked; }));
+  on('pAs', 'change', e => { const v = e.target.checked; applyStyleNow(a => { if (a.type === 'line') a.as = v; }); });
+  on('pAe', 'change', e => { const v = e.target.checked; applyStyleNow(a => { if (a.type === 'line') a.ae = v; }); });
   $$('#tab-props [data-al]').forEach(b => b.addEventListener('click', () => alignSel(b.dataset.al)));
   on('matrixGap', 'change', () => { matrixGap = Math.max(0, parseFloat($('#matrixGap').value) || 0); });
   $$('#tab-props [data-mx]').forEach(b => b.addEventListener('click', () => gridArrange(b.dataset.mx === 'fit')));
