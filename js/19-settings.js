@@ -31,6 +31,31 @@ function themeEffective() {
   const th = themeState();
   return Object.assign({}, THEME_PRESETS[th.preset] || THEME_PRESETS.dark, th.custom || {});
 }
+/* czy bieżący motyw różni się od "czystego" presetu — np. wybrano Ciemny,
+   a potem ręcznie zmieniono jeden kolor. Porównuje WARTOŚCI, nie samą
+   obecność nadpisania — cofnięcie koloru ręcznie z powrotem do tego, co
+   ma preset, przestaje liczyć się jako "dostosowany". */
+function themeIsCustomized(th) {
+  const base = THEME_PRESETS[th.preset] || THEME_PRESETS.dark;
+  const custom = th.custom || {};
+  return Object.keys(custom).some(k => custom[k] && String(custom[k]).toLowerCase() !== String(base[k] || '').toLowerCase());
+}
+function themePresetRowHTML(th) {
+  return Object.keys(THEME_PRESETS).map(id =>
+    `<button class="btn themePresetBtn ${th.preset === id && !themeIsCustomized(th) ? 'primary' : ''}" data-preset="${id}">${t('theme.preset_' + id)}</button>`).join('') +
+    (themeIsCustomized(th) ? `<button class="btn themePresetBtn primary" disabled title="${t('theme.customHint')}">${t('theme.preset_custom')}</button>` : '');
+}
+/* odśwież SAM wiersz presetów (nie cały panel Ustawień) po zmianie
+   pojedynczego koloru — pełny renderSettings() zniszczyłby aktywny natywny
+   picker koloru w trakcie przeciągania */
+function refreshThemePresetRow() {
+  const row = $('#themePresetRow'); if (!row) return;
+  const th = themeState();
+  row.innerHTML = themePresetRowHTML(th);
+  $$('#themePresetRow .themePresetBtn').forEach(b => b.addEventListener('click', () => {
+    th.preset = b.dataset.preset; th.custom = {}; saveSettingsLS(); applyTheme(); renderSettings();
+  }));
+}
 function applyTheme() {
   const eff = themeEffective();
   for (const v of THEME_VARS) document.documentElement.style.setProperty(v.css, eff[v.k]);
@@ -87,8 +112,7 @@ function renderSettings() {
     </div>
     <div class="subtabBody" id="setSubTheme" style="display:${onGen ? 'none' : ''}">
     <div class="grp"><h4>${t('set.themePreset')}</h4>
-      <div class="row" id="themePresetRow">${Object.keys(THEME_PRESETS).map(id =>
-        `<button class="btn themePresetBtn ${th.preset === id ? 'primary' : ''}" data-preset="${id}">${t('theme.preset_' + id)}</button>`).join('')}</div>
+      <div class="row" id="themePresetRow">${themePresetRowHTML(th)}</div>
     </div>
     <div class="grp"><h4>${t('set.themeCustom')}</h4>
       ${THEME_VARS.map(v => `<div class="row"><label>${t(v.label)}</label><input class="in" type="color" id="thm_${v.k}" value="${eff[v.k]}"></div>`).join('')}
@@ -125,7 +149,7 @@ function renderSettings() {
   }));
   THEME_VARS.forEach(v => {
     const inp = $('#thm_' + v.k);
-    ['input', 'change'].forEach(ev => inp.addEventListener(ev, e => { th.custom[v.k] = e.target.value; saveSettingsLS(); applyTheme(); }));
+    ['input', 'change'].forEach(ev => inp.addEventListener(ev, e => { th.custom[v.k] = e.target.value; saveSettingsLS(); applyTheme(); refreshThemePresetRow(); }));
   });
   $('#themeResetBtn').addEventListener('click', () => { th.custom = {}; saveSettingsLS(); applyTheme(); renderSettings(); });
 }

@@ -883,6 +883,7 @@ const I18N = {
     'set.defaults':'Domyślne nowych kształtów','set.config':'Konfiguracja',
     'set.general':'Ogólne','set.theme':'Motyw','set.themePreset':'Zestaw kolorów','set.themeCustom':'Dostosuj kolory','set.themeReset':'Przywróć domyślne',
     'theme.preset_dark':'Ciemny (domyślny)','theme.preset_light':'Jasny','theme.preset_midnight':'Nocny błękit','theme.preset_forest':'Leśna zieleń',
+    'theme.preset_custom':'Własny','theme.customHint':'Co najmniej jeden kolor zmieniono ręcznie — motyw nie odpowiada już żadnemu gotowemu zestawowi.',
     'theme.bg':'Tło aplikacji','theme.panel':'Panel boczny','theme.panel2':'Panel boczny (jaśniejszy)','theme.line':'Linie i obramowania',
     'theme.txt':'Tekst','theme.txt2':'Tekst (przygaszony)','theme.acc':'Akcent','theme.acc2':'Akcent (najechanie)',
     'theme.canvas':'Tło kanwy','theme.grid':'Siatka','theme.sel':'Zaznaczenie','theme.guide':'Linie pomocnicze',
@@ -963,6 +964,7 @@ const I18N = {
     'set.defaults':'Defaults for new shapes','set.config':'Configuration',
     'set.general':'General','set.theme':'Theme','set.themePreset':'Color preset','set.themeCustom':'Customize colors','set.themeReset':'Reset to default',
     'theme.preset_dark':'Dark (default)','theme.preset_light':'Light','theme.preset_midnight':'Midnight blue','theme.preset_forest':'Forest green',
+    'theme.preset_custom':'Custom','theme.customHint':'At least one color was changed by hand — the theme no longer matches any stock preset.',
     'theme.bg':'App background','theme.panel':'Side panel','theme.panel2':'Side panel (lighter)','theme.line':'Lines and borders',
     'theme.txt':'Text','theme.txt2':'Text (dimmed)','theme.acc':'Accent','theme.acc2':'Accent (hover)',
     'theme.canvas':'Canvas background','theme.grid':'Grid','theme.sel':'Selection','theme.guide':'Guide lines',
@@ -1051,6 +1053,7 @@ const I18N = {
     'set.defaults':'Vorgaben für neue Formen','set.config':'Konfiguration',
     'set.general':'Allgemein','set.theme':'Design','set.themePreset':'Farbschema','set.themeCustom':'Farben anpassen','set.themeReset':'Auf Standard zurücksetzen',
     'theme.preset_dark':'Dunkel (Standard)','theme.preset_light':'Hell','theme.preset_midnight':'Mitternachtsblau','theme.preset_forest':'Waldgrün',
+    'theme.preset_custom':'Benutzerdefiniert','theme.customHint':'Mindestens eine Farbe wurde manuell geändert — das Design entspricht keinem Standardschema mehr.',
     'theme.bg':'App-Hintergrund','theme.panel':'Seitenpanel','theme.panel2':'Seitenpanel (heller)','theme.line':'Linien und Rahmen',
     'theme.txt':'Text','theme.txt2':'Text (gedimmt)','theme.acc':'Akzent','theme.acc2':'Akzent (Hover)',
     'theme.canvas':'Kanvas-Hintergrund','theme.grid':'Raster','theme.sel':'Auswahl','theme.guide':'Hilfslinien',
@@ -4864,6 +4867,31 @@ function themeEffective() {
   const th = themeState();
   return Object.assign({}, THEME_PRESETS[th.preset] || THEME_PRESETS.dark, th.custom || {});
 }
+/* czy bieżący motyw różni się od "czystego" presetu — np. wybrano Ciemny,
+   a potem ręcznie zmieniono jeden kolor. Porównuje WARTOŚCI, nie samą
+   obecność nadpisania — cofnięcie koloru ręcznie z powrotem do tego, co
+   ma preset, przestaje liczyć się jako "dostosowany". */
+function themeIsCustomized(th) {
+  const base = THEME_PRESETS[th.preset] || THEME_PRESETS.dark;
+  const custom = th.custom || {};
+  return Object.keys(custom).some(k => custom[k] && String(custom[k]).toLowerCase() !== String(base[k] || '').toLowerCase());
+}
+function themePresetRowHTML(th) {
+  return Object.keys(THEME_PRESETS).map(id =>
+    `<button class="btn themePresetBtn ${th.preset === id && !themeIsCustomized(th) ? 'primary' : ''}" data-preset="${id}">${t('theme.preset_' + id)}</button>`).join('') +
+    (themeIsCustomized(th) ? `<button class="btn themePresetBtn primary" disabled title="${t('theme.customHint')}">${t('theme.preset_custom')}</button>` : '');
+}
+/* odśwież SAM wiersz presetów (nie cały panel Ustawień) po zmianie
+   pojedynczego koloru — pełny renderSettings() zniszczyłby aktywny natywny
+   picker koloru w trakcie przeciągania */
+function refreshThemePresetRow() {
+  const row = $('#themePresetRow'); if (!row) return;
+  const th = themeState();
+  row.innerHTML = themePresetRowHTML(th);
+  $$('#themePresetRow .themePresetBtn').forEach(b => b.addEventListener('click', () => {
+    th.preset = b.dataset.preset; th.custom = {}; saveSettingsLS(); applyTheme(); renderSettings();
+  }));
+}
 function applyTheme() {
   const eff = themeEffective();
   for (const v of THEME_VARS) document.documentElement.style.setProperty(v.css, eff[v.k]);
@@ -4920,8 +4948,7 @@ function renderSettings() {
     </div>
     <div class="subtabBody" id="setSubTheme" style="display:${onGen ? 'none' : ''}">
     <div class="grp"><h4>${t('set.themePreset')}</h4>
-      <div class="row" id="themePresetRow">${Object.keys(THEME_PRESETS).map(id =>
-        `<button class="btn themePresetBtn ${th.preset === id ? 'primary' : ''}" data-preset="${id}">${t('theme.preset_' + id)}</button>`).join('')}</div>
+      <div class="row" id="themePresetRow">${themePresetRowHTML(th)}</div>
     </div>
     <div class="grp"><h4>${t('set.themeCustom')}</h4>
       ${THEME_VARS.map(v => `<div class="row"><label>${t(v.label)}</label><input class="in" type="color" id="thm_${v.k}" value="${eff[v.k]}"></div>`).join('')}
@@ -4958,7 +4985,7 @@ function renderSettings() {
   }));
   THEME_VARS.forEach(v => {
     const inp = $('#thm_' + v.k);
-    ['input', 'change'].forEach(ev => inp.addEventListener(ev, e => { th.custom[v.k] = e.target.value; saveSettingsLS(); applyTheme(); }));
+    ['input', 'change'].forEach(ev => inp.addEventListener(ev, e => { th.custom[v.k] = e.target.value; saveSettingsLS(); applyTheme(); refreshThemePresetRow(); }));
   });
   $('#themeResetBtn').addEventListener('click', () => { th.custom = {}; saveSettingsLS(); applyTheme(); renderSettings(); });
 }
