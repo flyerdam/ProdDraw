@@ -76,13 +76,52 @@ function cellPx(col, colOff, row, rowOff, dims) {
   for (let r = 0; r < row && r < dims.rowHeights.length; r++) y += dims.rowHeights[r];
   return { x, y };
 }
-/* kolory motywu Office (schemeClr) — nazwa -> hex domyślnej palety */
+/* kolory motywu Office (schemeClr) — nazwa -> hex. Zaczyna jako domyślna
+   paleta Office 2013+ (fallback), ale KAŻDY import podmienia ją realnym
+   motywem z xl/theme/themeN.xml tego skoroszytu (patrz applyWorkbookTheme
+   niżej) — różne szablony (np. starszy motyw "Office 2007", jak w plikach
+   MAN) mają zupełnie inne kolory bg2/tx2/accent*, więc trzymanie się
+   sztywnej domyślnej palety dawało złe kolory teł/obramowań/linii (czasem
+   nawet niewidoczne — np. ciemna linia wychodziła w kolorze zbliżonym do
+   tła strony). bg1/tx1 są zawsze bezpieczne (to sysClr window/windowText —
+   czysta biel/czerń niezależnie od motywu). */
 const SCHEME_HEX = {
   bg1: '#ffffff', lt1: '#ffffff', tx1: '#000000', dk1: '#000000',
   bg2: '#e7e6e6', lt2: '#e7e6e6', tx2: '#44546a', dk2: '#44546a',
   accent1: '#4472c4', accent2: '#ed7d31', accent3: '#a5a5a5', accent4: '#ffc000',
   accent5: '#5b9bd5', accent6: '#70ad47', hlink: '#0563c1', folHlink: '#954f72'
 };
+const SCHEME_HEX_DEFAULT = { ...SCHEME_HEX };
+/* wyciąga <a:clrScheme> z theme1.xml skoroszytu -> {dk1,lt1,dk2,lt2,bg1,tx1,bg2,tx2,accent1..6,hlink,folHlink} */
+function parseWorkbookTheme(xml) {
+  const m = xml && xml.match(/<a:clrScheme\b[^>]*>([\s\S]*?)<\/a:clrScheme>/);
+  if (!m) return null;
+  const body = m[1];
+  const grab = tag => {
+    const t = body.match(new RegExp(`<a:${tag}>\\s*(?:<a:srgbClr val="([0-9a-fA-F]{6})"\\s*/?>|<a:sysClr val="[^"]*" lastClr="([0-9a-fA-F]{6})"\\s*/?>)`));
+    return t ? '#' + (t[1] || t[2]).toLowerCase() : null;
+  };
+  const out = {};
+  const dk1 = grab('dk1'), lt1 = grab('lt1'), dk2 = grab('dk2'), lt2 = grab('lt2');
+  if (dk1) out.dk1 = out.tx1 = dk1;
+  if (lt1) out.lt1 = out.bg1 = lt1;
+  if (dk2) out.dk2 = out.tx2 = dk2;
+  if (lt2) out.lt2 = out.bg2 = lt2;
+  for (let i = 1; i <= 6; i++) { const c = grab('accent' + i); if (c) out['accent' + i] = c; }
+  const hl = grab('hlink'); if (hl) out.hlink = hl;
+  const fh = grab('folHlink'); if (fh) out.folHlink = fh;
+  return out;
+}
+/* podmień SCHEME_HEX motywem BIEŻĄCEGO importu; map=null -> wróć do domyślnej
+   palety (np. skoroszyt bez własnego theme1.xml) */
+function applyWorkbookTheme(map) { Object.assign(SCHEME_HEX, SCHEME_HEX_DEFAULT, map || {}); }
+/* SCHEME_HEX w kolejności indeksów motywu Excela (cell.style.fill.fgColor.theme):
+   0=tło1/biały, 1=tekst1/czarny, 2=tło2, 3=tekst2, 4..9=akcenty, 10/11=hiperłącza */
+function xlThemeArr() {
+  return [SCHEME_HEX.bg1, SCHEME_HEX.tx1, SCHEME_HEX.bg2, SCHEME_HEX.tx2,
+    SCHEME_HEX.accent1, SCHEME_HEX.accent2, SCHEME_HEX.accent3, SCHEME_HEX.accent4,
+    SCHEME_HEX.accent5, SCHEME_HEX.accent6, SCHEME_HEX.hlink, SCHEME_HEX.folHlink];
+}
 /* jasność: lumMod skaluje, lumOff dodaje (0..100000 -> 0..1); shade przyciemnia */
 function applyLum(hex, mod, off) {
   const ap = v => Math.max(0, Math.min(255, Math.round(v * mod + 255 * off)));
@@ -211,23 +250,46 @@ function parseShapeNode(nodeXml, box) {
   s._embedRid = rid;
   return s;
 }
+/* prstDash (OOXML) -> słownik myślników ProdDraw (patrz DASH_OPTS w js/09-props.js) */
+function mapPrstDash(val) {
+  switch (val) {
+    case 'dot': case 'sysDot': return 'dot';
+    case 'dash': case 'sysDash': return 'dash';
+    case 'lgDash': return 'longdash';
+    case 'dashDot': case 'sysDashDot': case 'lgDashDot': case 'lgDashDotDot': case 'sysDashDotDot': return 'dashdot';
+    default: return 'solid';
+  }
+}
 function parseConnectorNode(nodeXml, box) {
-  let stroke = '#111827', sw = 1.5;
-  const lnM = nodeXml.match(/<a:ln(?:\s[^>]*)?>[\s\S]*?<\/a:ln>/);
+  let stroke = '#111827', sw = 1.5, dash = 'solid';
+  /* <a:ln> bywa samozamykający (tylko atrybuty, np. szerokość, bez koloru/
+     stylu własnego — kolor/styl wtedy dziedziczy z lnRef) — dopasuj OBIE
+     formy, inaczej regex wymagający </a:ln> milczkiem zeruje te właściwości */
+  const lnM = nodeXml.match(/<a:ln\b[^>]*>[\s\S]*?<\/a:ln>/) || nodeXml.match(/<a:ln\b[^>]*\/>/);
+  const lnRefM = nodeXml.match(/<a:lnRef\b[^>]*>([\s\S]*?)<\/a:lnRef>/)?.[1] || '';
   if (lnM) {
     const wm = lnM[0].match(/\bw="(\d+)"/);
     if (wm) sw = Math.max(0.5, Math.round(+wm[1] / 12700 * 10) / 10);
-    const lc = xlColor(lnM[0]); if (lc) stroke = lc;
+    const dm = lnM[0].match(/<a:prstDash\s+val="([a-zA-Z]+)"/);
+    if (dm) dash = mapPrstDash(dm[1]);
+    let lc = xlColor(lnM[0]); if (!lc && lnRefM) lc = xlColor(lnRefM);
+    if (lc) stroke = lc;
+  } else if (lnRefM) {
+    const lc = xlColor(lnRefM); if (lc) stroke = lc;
   }
   const flipH = /<a:xfrm[^>]*\bflipH="1"/.test(nodeXml);
   const flipV = /<a:xfrm[^>]*\bflipV="1"/.test(nodeXml);
-  const ae = /<a:tailEnd[^>]*(?:type="arrow"|type="triangle")/.test(nodeXml) ||
-             /<a:headEnd[^>]*(?:type="arrow"|type="triangle")/.test(nodeXml);
+  /* headEnd = początek łącznika w układzie LOKALNYM (przed odbiciem) -> (x1,y1)
+     tailEnd = koniec w układzie lokalnym -> (x2,y2); odbicie zamienia im
+     rogi ramki, ale nie zamienia ze sobą head<->tail */
+  const hasArrow = tag => new RegExp(`<a:${tag}\\b[^>]*type="(?:triangle|arrow|oval|diamond|stealth)"`).test(nodeXml);
+  const as = hasArrow('headEnd');
+  const ae = hasArrow('tailEnd');
   return {
     id: uid(), type: 'line',
     x1: flipH ? box.x + box.w : box.x, y1: flipV ? box.y + box.h : box.y,
     x2: flipH ? box.x : box.x + box.w, y2: flipV ? box.y : box.y + box.h,
-    stroke, sw, dash: 'solid', as: false, ae, locked: false
+    stroke, sw, dash, as, ae, locked: false
   };
 }
 function parseGroupedShapes(aXml, anchorBox, relMap = {}, mediaMap = {}) {
@@ -355,9 +417,11 @@ function parseDrawingShapes(xml, dims, relMap = {}, mediaMap = {}) {
   }
   return { shapes, pictures, unsupportedFallbacks };
 }
-/* odbicia obrazów (flipH/flipV) per kotwica — ExcelJS ich nie zwraca, a bez
-   nich dwa różnie odbite wstawienia tego samego obrazu wyglądają identycznie.
-   Klucz = komórka „from" (col,row), do dopasowania z ExcelJS getImages(). */
+/* odbicia + obrót obrazów (flipH/flipV/rot) per kotwica — ExcelJS ich nie
+   zwraca, a bez nich różnie odbite/obrócone wstawienia tego samego obrazu
+   (np. ta sama ikonka raz wprost, raz obrócona o 90°/180°) wyglądają
+   identycznie. Klucz = komórka „from" (col,row), do dopasowania z ExcelJS
+   getImages(). rot w XML jest w 60000-nych stopnia, w kierunku zegara. */
 function parseDrawingPicFlips(xml) {
   const out = [];
   const anchorRe = /<xdr:(absoluteAnchor|twoCellAnchor|oneCellAnchor)\b[^>]*>([\s\S]*?)<\/xdr:\1>/g;
@@ -369,7 +433,9 @@ function parseDrawingPicFlips(xml) {
     const col = fm ? +(fm[1].match(/<xdr:col>(\d+)/)?.[1] ?? -1) : -1;
     const row = fm ? +(fm[1].match(/<xdr:row>(\d+)/)?.[1] ?? -1) : -1;
     const xf = a.match(/<a:xfrm\b([^>]*)>/);
-    out.push({ col, row, flipH: xf ? /\bflipH="1"/.test(xf[1]) : false, flipV: xf ? /\bflipV="1"/.test(xf[1]) : false });
+    const rotEmu = xf ? +(xf[1].match(/\brot="(-?\d+)"/)?.[1] ?? 0) : 0;
+    out.push({ col, row, flipH: xf ? /\bflipH="1"/.test(xf[1]) : false, flipV: xf ? /\bflipV="1"/.test(xf[1]) : false,
+      rot: ((rotEmu / 60000) % 360 + 360) % 360 });
   }
   return out;
 }

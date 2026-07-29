@@ -112,11 +112,12 @@ function gridPreviewSVG(shapes) {
 let xlsxSheets = [];   // bufor arkuszy z ostatniego wczytania (do okna wyboru)
 let xlsxFileBase = ''; // nazwa pliku xlsx (bez rozszerzenia) — do nazwania projektów
 
-/* kolory motywu Excela (domyślna paleta Office 2013+); ExcelJS podaje kolor
-   jako {argb} ALBO {theme, tint} ALBO {indexed}. Bez rozwiązania motywu białe
-   nagłówki na ciemnym tle wychodziły czarne. Kolejność wg indeksów Excela
-   (0=tło1/biały, 1=tekst1/czarny, 2=tło2, 3=tekst2, 4..9=akcenty, 10/11=hiperłącza). */
-const XL_THEME = ['#ffffff', '#000000', '#e7e6e6', '#44546a', '#4472c4', '#ed7d31', '#a5a5a5', '#ffc000', '#5b9bd5', '#70ad47', '#0563c1', '#954f72'];
+/* kolory motywu Excela; ExcelJS podaje kolor jako {argb} ALBO {theme, tint}
+   ALBO {indexed}. Bez rozwiązania motywu białe nagłówki na ciemnym tle
+   wychodziły czarne. Tablica indeksów Excela bierze się z SCHEME_HEX
+   (js/05-zip.js), które applyWorkbookTheme() podmienia REALNYM motywem
+   tego skoroszytu na początku importXlsx() — różne szablony mają różne
+   kolory akcentów/tła2, sztywna paleta domyślna dawała złe kolory. */
 function xlApplyTint(hex, tint) {
   if (!tint) return hex;
   const ap = v => tint < 0 ? Math.round(v * (1 + tint)) : Math.round(v * (1 - tint) + 255 * tint);
@@ -126,6 +127,7 @@ function xlApplyTint(hex, tint) {
 function xlColorHex(c) {
   if (!c) return null;
   if (c.argb) return argbToHex(c.argb);
+  const XL_THEME = xlThemeArr();
   if (c.theme != null && XL_THEME[c.theme]) return xlApplyTint(XL_THEME[c.theme], c.tint || 0);
   return null;
 }
@@ -433,7 +435,7 @@ async function emfToPngDataURL(bytes) {
 }
 
 /* obrazy arkusza z ExcelJS -> kształty image (href=dataURL, pozycja z kotwicy).
-   flips = [{col,row,flipH,flipV}] z rysunku (ExcelJS nie zwraca odbić). */
+   flips = [{col,row,flipH,flipV,rot}] z rysunku (ExcelJS ich nie zwraca). */
 async function ejsSheetImages(ws, wb, gi, flips = []) {
   const out = [];
   for (const im of ws.getImages()) {
@@ -463,6 +465,7 @@ async function ejsSheetImages(ws, wb, gi, flips = []) {
     const sh = { id: uid(), type: 'image', href, x: Math.round(x1), y: Math.round(y1), w, h, locked: false };
     if (flip && flip.flipH) sh.flipH = true;
     if (flip && flip.flipV) sh.flipV = true;
+    if (flip && flip.rot) sh.rot = Math.round(flip.rot * 10) / 10;
     out.push(sh);
   }
   return out;
@@ -606,6 +609,13 @@ async function importXlsx(file) {
     let allZip = [], sheetMap = [];
     try { allZip = await readZipAll(buf); sheetMap = parseWorkbookSheetMap(allZip); } catch (e) {}
     const td = new TextDecoder();
+    /* motyw TEGO skoroszytu (kolory akcentów/tła/tekstu) -> podmień domyślną
+       paletę, inaczej kolory z schemeClr/theme index wychodzą złe (patrz
+       SCHEME_HEX w js/05-zip.js) */
+    try {
+      const themeFile = allZip.find(f => /^xl\/theme\/theme\d*\.xml$/i.test(f.name));
+      applyWorkbookTheme(themeFile ? parseWorkbookTheme(td.decode(themeFile.data)) : null);
+    } catch (e) { applyWorkbookTheme(null); }
     /* pobierz XML rysunku raz -> kształty wektorowe (ExcelJS ich nie czyta) + odbicia obrazów */
     const drawingDataFor = (drawingFile, dims) => {
       const empty = { vectors: [], flips: [] };
