@@ -75,6 +75,8 @@ body{
 .winResize::after{content:'';position:absolute;right:3px;bottom:3px;width:8px;height:8px;
   border-right:2px solid var(--line);border-bottom:2px solid var(--line);}
 .floatWin.front{box-shadow:0 12px 34px rgba(0,0,0,.5);}
+#winSnapPreview{position:absolute;display:none;background:rgba(29,127,212,.22);
+  border:2px solid var(--sel);border-radius:6px;z-index:1000;pointer-events:none;}
 .grp{margin-bottom:14px;}
 /* czytelniejsze rozdzielenie sekcji we Właściwościach */
 #tab-props .grp{padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid var(--line);}
