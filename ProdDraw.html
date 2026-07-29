@@ -5441,25 +5441,34 @@ $('#gridSize').addEventListener('change', render);
    will-navigate guard for the other half of the fix) */
 window.addEventListener('dragenter', e => { e.preventDefault(); }, true);
 window.addEventListener('dragover', e => { e.preventDefault(); }, true);
-window.addEventListener('drop', async e => {
+window.addEventListener('drop', e => {
   e.preventDefault();
-  /* spróbuj pobrać uchwyt pliku (zapis w miejscu dla przeciągniętego projektu) */
-  let handle = null;
-  const it0 = e.dataTransfer && e.dataTransfer.items && e.dataTransfer.items[0];
-  if (it0 && it0.getAsFileSystemHandle) { try { handle = await it0.getAsFileSystemHandle(); } catch (er) {} }
+  /* KRYTYCZNE: dane realnego (natywnego, z Eksploratora) przeciągnięcia są ważne
+     tylko synchronicznie w trakcie tego handlera -- każde "await" przed ich
+     odczytem oddaje sterowanie pętli zdarzeń i Chromium czyści magazyn danych
+     przeciągnięcia, więc e.dataTransfer.files wraca puste (stąd "nic się nie
+     dzieje" mimo poprawnego kursora upuszczenia). Dlatego najpierw *synchronicznie*
+     wyciągamy plik i tylko opcjonalny uchwyt do zapisu, dopiero potem robimy await. */
   const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  const it0 = e.dataTransfer && e.dataTransfer.items && e.dataTransfer.items[0];
+  const handleP = (it0 && it0.getAsFileSystemHandle) ? it0.getAsFileSystemHandle().catch(() => null) : Promise.resolve(null);
   if (!f) return;
-  if (/\.(pdraw|json|prodrys)$/i.test(f.name)) {
-    try {
-      const obj = JSON.parse(await f.text());
-      if (obj.app === 'prodrys-config' || obj.app === 'prodrys-settings') importConfig(obj);
-      else { loadProject(obj, f.name); currentProjectHandle = (handle && handle.kind === 'file') ? handle : null; }
-    } catch (err) { toast(t('t.badFile')); }
-  } else if (/\.(xlsx|xlsm)$/i.test(f.name)) {
-    importXlsx(f);
-  } else if (f.type.startsWith('image/')) {
-    insertImageURL(await fileToDataURL(f));
-  }
+  (async () => {
+    if (/\.(pdraw|json|prodrys)$/i.test(f.name)) {
+      try {
+        const obj = JSON.parse(await f.text());
+        if (obj.app === 'prodrys-config' || obj.app === 'prodrys-settings') importConfig(obj);
+        else {
+          const handle = await handleP;
+          loadProject(obj, f.name); currentProjectHandle = (handle && handle.kind === 'file') ? handle : null;
+        }
+      } catch (err) { toast(t('t.badFile')); }
+    } else if (/\.(xlsx|xlsm)$/i.test(f.name)) {
+      importXlsx(f);
+    } else if (f.type.startsWith('image/')) {
+      insertImageURL(await fileToDataURL(f));
+    }
+  })();
 });
 
 document.addEventListener('keydown', e => {
