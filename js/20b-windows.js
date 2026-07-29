@@ -11,7 +11,7 @@
    dokowalnymi panelami.
 
    Treść okien renderują te same funkcje co wcześniej (renderProps/
-   renderLib/renderVars/renderObjects/renderSettings/renderHelp) — piszą
+   renderLib/renderVars/renderLayers/renderSettings/renderHelp) — piszą
    do tych samych #tab-* divów, teraz zagnieżdżonych w .winBody zamiast
    w .tabBody, więc żadna z nich nie wymagała zmian. ===================================================================== */
 const WIN_IDS = ['props', 'lib', 'vars', 'layers', 'settings', 'help'];

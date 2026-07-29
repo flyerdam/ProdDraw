@@ -583,8 +583,10 @@ function applySelectedSheets() {
     name: prim.name,
     shapes: prim.shapes.map(normalizeShape),
     vars: { cols: [], rows: [] },
-    page: { mode: 'off' }
+    page: { mode: 'off' },
+    layers: null
   };
+  ensureLayers();
   if ($('#projName')) $('#projName').value = state.name;
   sel.clear(); previewRow = -1; clearHistory();
   syncPageUI(); fitPage(); render(); renderProps(); renderVars();

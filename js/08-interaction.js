@@ -17,11 +17,12 @@ function setSelection(ids) {
   sel = new Set(ids); render(); renderProps();
 }
 /* ---------- blokada kształtów ---------- */
-/* granularna blokada: ruch / rozmiar+obrót / wygląd / tekst (legacy locked = wszystko) */
-function isMoveLocked(s) { return !!(s && (s.locked || s.lockMove)); }
-function isSizeLocked(s) { return !!(s && (s.locked || s.lockSize)); }
-function isStyleLocked(s) { return !!(s && (s.locked || s.lockStyle)); }
-function isTextLocked(s) { return !!(s && (s.locked || s.lockText)); }
+/* granularna blokada: ruch / rozmiar+obrót / wygląd / tekst (legacy locked = wszystko);
+   blokada WARSTWY (patrz js/01-state.js) blokuje wszystko dla każdego jej kształtu */
+function isMoveLocked(s) { return !!(s && (s.locked || s.lockMove || isShapeLayerLocked(s))); }
+function isSizeLocked(s) { return !!(s && (s.locked || s.lockSize || isShapeLayerLocked(s))); }
+function isStyleLocked(s) { return !!(s && (s.locked || s.lockStyle || isShapeLayerLocked(s))); }
+function isTextLocked(s) { return !!(s && (s.locked || s.lockText || isShapeLayerLocked(s))); }
 function isLockedShape(s) { return isMoveLocked(s) || isSizeLocked(s) || isStyleLocked(s) || isTextLocked(s); }
 function hasLockedSelection(shapes = selShapes()) { return shapes.some(isLockedShape); }
 function hasMoveLock(shapes = selShapes()) { return shapes.some(isMoveLocked); }

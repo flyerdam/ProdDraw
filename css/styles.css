@@ -128,6 +128,14 @@ input[type=checkbox]{accent-color:var(--acc);}
 .objRow.objDragging{opacity:.5;}
 .objRenameInput{flex:1;background:var(--panel);border:1px solid var(--acc);color:var(--txt);
   font-size:12.5px;border-radius:3px;padding:1px 4px;min-width:0;}
+/* warstwy (sekcje w zakładce Warstwy) */
+.layerSection{margin-bottom:8px;border:1px solid var(--line);border-radius:5px;overflow:hidden;}
+.layerHead{display:flex;align-items:center;gap:4px;padding:5px 6px;background:var(--panel2);}
+.layerName{flex:1;font-size:12px;font-weight:600;color:var(--txt);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;cursor:default;}
+.layerArrow{font-size:8px;}
+.layerBody{padding:4px;min-height:8px;}
+.layerEmpty{color:var(--txt2);font-size:11.5px;padding:6px 8px;text-align:center;}
 /* library */
 .libItem{border:1px solid var(--line);border-radius:4px;margin-bottom:8px;background:var(--panel2);overflow:hidden;}
 .libThumb{background:#fff;height:64px;display:flex;align-items:center;justify-content:center;cursor:pointer;}

@@ -2,7 +2,7 @@
 function projectJSON() {
   return JSON.stringify({ app: 'prodrys', version: 2,
     name: $('#projName').value, shapes: state.shapes, vars: state.vars,
-    page: state.page, lib }, null, 1);
+    page: state.page, layers: state.layers, lib }, null, 1);
 }
 /* File System Access API — zapis w miejscu (do tego samego pliku), bez pobierania */
 function hasNativeFS() {
@@ -79,6 +79,8 @@ function loadProject(obj, fileName) {
   state.shapes = obj.shapes.map(normalizeShape);
   state.vars = obj.vars && obj.vars.cols ? obj.vars : { cols: [], rows: [] };
   state.page = obj.page && obj.page.mode ? obj.page : { mode: 'off' };
+  state.layers = Array.isArray(obj.layers) && obj.layers.length ? obj.layers : null;
+  ensureLayers();
   syncPageUI(); fitPage();
   /* scal bibliotekę z projektu (bez duplikatów nazw) */
   if (Array.isArray(obj.lib)) {

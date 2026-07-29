@@ -135,6 +135,14 @@ input[type=checkbox]{accent-color:var(--acc);}
 .objRow.objDragging{opacity:.5;}
 .objRenameInput{flex:1;background:var(--panel);border:1px solid var(--acc);color:var(--txt);
   font-size:12.5px;border-radius:3px;padding:1px 4px;min-width:0;}
+/* warstwy (sekcje w zakładce Warstwy) */
+.layerSection{margin-bottom:8px;border:1px solid var(--line);border-radius:5px;overflow:hidden;}
+.layerHead{display:flex;align-items:center;gap:4px;padding:5px 6px;background:var(--panel2);}
+.layerName{flex:1;font-size:12px;font-weight:600;color:var(--txt);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;cursor:default;}
+.layerArrow{font-size:8px;}
+.layerBody{padding:4px;min-height:8px;}
+.layerEmpty{color:var(--txt2);font-size:11.5px;padding:6px 8px;text-align:center;}
 /* library */
 .libItem{border:1px solid var(--line);border-radius:4px;margin-bottom:8px;background:var(--panel2);overflow:hidden;}
 .libThumb{background:#fff;height:64px;display:flex;align-items:center;justify-content:center;cursor:pointer;}
@@ -495,10 +503,46 @@ const cv = $('#cv'), cwrap = $('#cwrap'), txtEd = $('#txtEd');
 /* ---------- stan ---------- */
 let state = {
   name: 'Instrukcja_01',
-  shapes: [],                    // kolejność = z-order (0 = spód)
+  shapes: [],                    // wewnątrz warstwy: kolejność = z-order (0 = spód); między warstwami decyduje state.layers
   vars: { cols: [], rows: [] },  // warianty
   page: { mode: 'a4l', w: 1123, h: 794 }, // format kanwy; mode 'off' = nieskończona
+  layers: [{ id: 'L1', name: 'Warstwa 1', visible: true, locked: false }],   // patrz ensureLayers()
 };
+/* ---------- warstwy ----------
+   Warstwa = kontener obiektów z własną widocznością/blokadą, do którego
+   należy każdy kształt (shape.layer = id warstwy). Kolejność state.layers
+   to z-order MIĘDZY warstwami (indeks 0 = najniżej); w obrębie jednej
+   warstwy o kolejności nadal decyduje względna pozycja w state.shapes
+   (patrz layeredShapes() w js/06-svg.js). Domyślnie wszystko ląduje w
+   jednej warstwie — stare projekty (bez pola layers) i tak przez to
+   przechodzą bez zauważalnej zmiany.
+   Wywoływane po KAŻDYM wczytaniu/utworzeniu state (patrz PS_loadInto,
+   loadProject, projectFromTemplate, applySelectedSheets) — jeden punkt
+   prawdy dla migracji, żeby nie duplikować tej logiki w każdym miejscu. */
+function ensureLayers(st) {
+  st = st || state;
+  if (!Array.isArray(st.layers) || !st.layers.length) {
+    st.layers = [{ id: 'L1', name: (typeof t === 'function' ? t('layers.default') : 'Warstwa 1'), visible: true, locked: false }];
+  }
+  const validIds = new Set(st.layers.map(l => l.id));
+  const fallback = st.layers[0].id;
+  for (const s of st.shapes) if (!s.layer || !validIds.has(s.layer)) s.layer = fallback;
+  return st;
+}
+/* kształty w kolejności RYSOWANIA (spód -> wierzch): grupowane wg pozycji
+   ich warstwy w state.layers, a w obrębie tej samej warstwy — wg względnej
+   pozycji w state.shapes (sort stabilny, więc to tylko przegrupowanie
+   między warstwami, nie zmienia kolejności wewnątrz jednej warstwy) */
+function sortByLayer(shapes) {
+  const order = new Map(state.layers.map((l, i) => [l.id, i]));
+  return shapes.map((s, i) => ({ s, i }))
+    .sort((a, b) => (order.get(a.s.layer) ?? 0) - (order.get(b.s.layer) ?? 0) || a.i - b.i)
+    .map(x => x.s);
+}
+function layeredShapes() { return sortByLayer(state.shapes); }
+function layerOf(s) { return state.layers.find(l => l.id === s.layer) || state.layers[0]; }
+function isShapeEffectivelyHidden(s) { const l = layerOf(s); return !!s.hidden || !l || l.visible === false; }
+function isShapeLayerLocked(s) { const l = layerOf(s); return !!(l && l.locked); }
 const PAGES = {
   a4l: { w: 1123, h: 794 }, a4p: { w: 794, h: 1123 },
   hd: { w: 1600, h: 900 }, custom: {}, off: {}
@@ -668,8 +712,10 @@ function PS_loadInto(slot) {
     name: obj.name || PS_projectName(slot),
     shapes: obj.shapes.map(normalizeShape),
     vars: (obj.vars && obj.vars.cols) ? obj.vars : { cols: [], rows: [] },
-    page: (obj.page && obj.page.mode) ? obj.page : { mode: 'off' }
+    page: (obj.page && obj.page.mode) ? obj.page : { mode: 'off' },
+    layers: (Array.isArray(obj.layers) && obj.layers.length) ? obj.layers : null
   };
+  ensureLayers();
   if ($('#projName')) $('#projName').value = state.name;
   sel.clear(); previewRow = -1; clearHistory();
   syncPageUI(); fitPage(); render(); renderProps(); renderVars();
@@ -859,7 +905,11 @@ const I18N = {
     'tt.tool.line':'Linia (L)','tt.tool.arrow':'Strzałka (A)','tt.tool.text':'Tekst (T)',
     'tt.tool.image':'Wstaw obraz PNG/JPG (I)','tt.tool.eyedrop':'Pipeta — pobierz kolor z ekranu (K)',
     'tab.props':'Właściwości','tab.lib':'Biblioteka','tab.vars':'Warianty','tab.layers':'Warstwy','tab.settings':'Ustawienia','tab.help':'Pomoc',
-    'obj.empty':'Brak obiektów na kanwie.','obj.locked':'zablokowany','obj.group':'grupa','obj.shapes':'{n} obiektów',
+    'layers.default':'Warstwa 1','layers.new':'Warstwa {n}','layers.add':'+ Warstwa','layers.delete':'Usuń warstwę',
+    'layers.deleteConfirm':'Usunąć warstwę „{n}"? Jej obiekty przejdą do warstwy poniżej.','layers.cantDeleteLast':'Nie można usunąć jedynej warstwy.',
+    'layers.moveUp':'Warstwa wyżej','layers.moveDown':'Warstwa niżej','layers.visToggle':'Pokaż/ukryj warstwę',
+    'layers.lockToggle':'Zablokuj/odblokuj warstwę','layers.rename':'2×klik, aby zmienić nazwę','layers.empty':'(pusta warstwa)',
+    'obj.locked':'zablokowany','obj.group':'grupa',
     'help.more':'Pomoc ›',
     'obj.tRect':'Prostokąt','obj.tRoundRect':'Prostokąt zaokr.','obj.tEllipse':'Elipsa','obj.tPoly':'Wielokąt',
     'obj.tLine':'Linia','obj.tText':'Tekst','obj.tImage':'Obraz',
@@ -948,7 +998,11 @@ const I18N = {
     'tt.tool.line':'Line (L)','tt.tool.arrow':'Arrow (A)','tt.tool.text':'Text (T)',
     'tt.tool.image':'Insert PNG/JPG image (I)','tt.tool.eyedrop':'Eyedropper — pick a color from screen (K)',
     'tab.props':'Properties','tab.lib':'Library','tab.vars':'Variants','tab.layers':'Layers','tab.settings':'Settings','tab.help':'Help',
-    'obj.empty':'No objects on the canvas.','obj.locked':'locked','obj.group':'group','obj.shapes':'{n} objects',
+    'layers.default':'Layer 1','layers.new':'Layer {n}','layers.add':'+ Layer','layers.delete':'Delete layer',
+    'layers.deleteConfirm':'Delete layer "{n}"? Its objects move to the layer below.','layers.cantDeleteLast':'Can\'t delete the only layer.',
+    'layers.moveUp':'Move layer up','layers.moveDown':'Move layer down','layers.visToggle':'Show/hide layer',
+    'layers.lockToggle':'Lock/unlock layer','layers.rename':'Double-click to rename','layers.empty':'(empty layer)',
+    'obj.locked':'locked','obj.group':'group',
     'help.more':'Help ›',
     'obj.tRect':'Rectangle','obj.tRoundRect':'Rounded rect.','obj.tEllipse':'Ellipse','obj.tPoly':'Polygon',
     'obj.tLine':'Line','obj.tText':'Text','obj.tImage':'Image',
@@ -1037,7 +1091,11 @@ const I18N = {
     'tt.tool.line':'Linie (L)','tt.tool.arrow':'Pfeil (A)','tt.tool.text':'Text (T)',
     'tt.tool.image':'PNG/JPG-Bild einfügen (I)','tt.tool.eyedrop':'Pipette — Farbe vom Bildschirm wählen (K)',
     'tab.props':'Eigenschaften','tab.lib':'Bibliothek','tab.vars':'Varianten','tab.layers':'Ebenen','tab.settings':'Einstellungen','tab.help':'Hilfe',
-    'obj.empty':'Keine Objekte auf der Kanvas.','obj.locked':'gesperrt','obj.group':'Gruppe','obj.shapes':'{n} Objekte',
+    'layers.default':'Ebene 1','layers.new':'Ebene {n}','layers.add':'+ Ebene','layers.delete':'Ebene löschen',
+    'layers.deleteConfirm':'Ebene „{n}" löschen? Ihre Objekte wandern in die Ebene darunter.','layers.cantDeleteLast':'Die einzige Ebene kann nicht gelöscht werden.',
+    'layers.moveUp':'Ebene nach oben','layers.moveDown':'Ebene nach unten','layers.visToggle':'Ebene ein-/ausblenden',
+    'layers.lockToggle':'Ebene sperren/entsperren','layers.rename':'Doppelklick zum Umbenennen','layers.empty':'(leere Ebene)',
+    'obj.locked':'gesperrt','obj.group':'Gruppe',
     'help.more':'Hilfe ›',
     'obj.tRect':'Rechteck','obj.tRoundRect':'Rechteck (rund)','obj.tEllipse':'Ellipse','obj.tPoly':'Vieleck',
     'obj.tLine':'Linie','obj.tText':'Text','obj.tImage':'Bild',
@@ -2108,7 +2166,7 @@ function render() {
     html += `<rect x="-50000" y="-50000" width="100000" height="100000" fill="url(#gp5)"/>`;
   }
   html += `<g id="shapes">`;
-  for (const s of state.shapes) { if (!s.hidden) html += shapeSVG(s, vals, true); }
+  for (const s of layeredShapes()) { if (!isShapeEffectivelyHidden(s)) html += shapeSVG(s, vals, true); }
   html += '</g><g id="ovl">' + overlaySVG() + '</g></g>';
   cv.innerHTML = html;
   $('#zoomLbl').textContent = Math.round(z * 100) + '%';
@@ -2158,7 +2216,7 @@ function overlaySVG() {
   if (xlsxCropActive) return xlsxCropOverlaySVG();
   const z = view.z; let out = '';
   const hw = 4 / z, hs = `width="${hw * 2}" height="${hw * 2}" fill="#fff" stroke="var(--sel)" stroke-width="${1.2 / z}"`;
-  const ss = selShapes().filter(s => !s.hidden);
+  const ss = selShapes().filter(s => !isShapeEffectivelyHidden(s));
   const lockedSel = hasLockedSelection(ss);
   const sizeLock = hasSizeLock(ss);
   /* kontury zaznaczenia */
@@ -2233,7 +2291,7 @@ function overlaySVG() {
 
 /* SVG samodzielny (eksport / miniatury) */
 function buildSVG(shapes, vals, pad = 16, region = null) {
-  shapes = shapes.filter(s => !s.hidden);
+  shapes = sortByLayer(shapes.filter(s => !isShapeEffectivelyHidden(s)));
   let vb;
   if (region) {
     vb = { x: region.x, y: region.y, w: region.w, h: region.h };
@@ -2358,11 +2416,12 @@ function setSelection(ids) {
   sel = new Set(ids); render(); renderProps();
 }
 /* ---------- blokada kształtów ---------- */
-/* granularna blokada: ruch / rozmiar+obrót / wygląd / tekst (legacy locked = wszystko) */
-function isMoveLocked(s) { return !!(s && (s.locked || s.lockMove)); }
-function isSizeLocked(s) { return !!(s && (s.locked || s.lockSize)); }
-function isStyleLocked(s) { return !!(s && (s.locked || s.lockStyle)); }
-function isTextLocked(s) { return !!(s && (s.locked || s.lockText)); }
+/* granularna blokada: ruch / rozmiar+obrót / wygląd / tekst (legacy locked = wszystko);
+   blokada WARSTWY (patrz js/01-state.js) blokuje wszystko dla każdego jej kształtu */
+function isMoveLocked(s) { return !!(s && (s.locked || s.lockMove || isShapeLayerLocked(s))); }
+function isSizeLocked(s) { return !!(s && (s.locked || s.lockSize || isShapeLayerLocked(s))); }
+function isStyleLocked(s) { return !!(s && (s.locked || s.lockStyle || isShapeLayerLocked(s))); }
+function isTextLocked(s) { return !!(s && (s.locked || s.lockText || isShapeLayerLocked(s))); }
 function isLockedShape(s) { return isMoveLocked(s) || isSizeLocked(s) || isStyleLocked(s) || isTextLocked(s); }
 function hasLockedSelection(shapes = selShapes()) { return shapes.some(isLockedShape); }
 function hasMoveLock(shapes = selShapes()) { return shapes.some(isMoveLocked); }
@@ -2808,15 +2867,19 @@ function applyOnShapes(shapes, pred, fn) {
   if (!u.length) return lockToast();
   pushUndo(); u.forEach(fn); render(); autosave();
 }
-/* ---------- lista obiektów (zakładka "Obiekty") ----------
-   Płaski wykaz wszystkich kształtów, od wierzchu (ostatnio narysowany,
-   czyli na wierzchu z-ordera) do spodu — klik zaznacza (grupę w całości,
-   jak klik na kanwie), żeby łatwo trafić w mały/zasłonięty obiekt bez
-   szukania go na kanwie. */
+/* ---------- warstwy (zakładka "Warstwy") ----------
+   Każda warstwa to kontener kształtów z własną widocznością/blokadą
+   (state.layers, patrz js/01-state.js). Sekcje warstw od wierzchu (ostatnia
+   w state.layers) do spodu; w środku każdej — jej kształty, też od wierzchu
+   do spodu. Klik na kształt zaznacza (grupę w całości, jak klik na kanwie).
+   Przeciąganie uchwytem: w obrębie warstwy zmienia kolejność, upuszczone na
+   INNĄ warstwę — przenosi tam kształt. */
 const OBJ_TYPE_LABEL = { rect: 'obj.tRect', roundRect: 'obj.tRoundRect', ellipse: 'obj.tEllipse',
   poly: 'obj.tPoly', line: 'obj.tLine', text: 'obj.tText', image: 'obj.tImage' };
 const OBJ_EYE_ON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="2.8"/></svg>';
 const OBJ_EYE_OFF = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l18 18M10.6 10.6a2.8 2.8 0 0 0 3.9 3.9M6.6 6.7C4 8.3 2 12 2 12s3.5 7 10 7c1.7 0 3.2-.4 4.4-1M9.9 5.2A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a15.6 15.6 0 0 1-2.3 3.3"/></svg>';
+const OBJ_LOCK_ON = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+const OBJ_LOCK_OFF = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V7a4 4 0 0 1 7.4-2"/></svg>';
 function objEsc(str) { return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function objRowLabel(s) {
   if (s.name) return s.name;
@@ -2824,22 +2887,39 @@ function objRowLabel(s) {
   if (txt) return txt.length > 34 ? txt.slice(0, 34) + '…' : txt;
   return t(OBJ_TYPE_LABEL[s.type] || 'obj.tRect');
 }
-function renderObjects() {
+function newLayerId() { return 'L' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function objRowHTML(s) {
+  const swatch = s.type === 'line' ? (s.stroke || '#000') : (s.noFill ? 'transparent' : (s.fill || '#fff'));
+  const locked = isMoveLocked(s) || isSizeLocked(s) || isStyleLocked(s) || isTextLocked(s);
+  return `<div class="objRow${sel.has(s.id) ? ' on' : ''}${s.hidden ? ' objHidden' : ''}" data-id="${s.id}">
+    <span class="objHandle" title="${t('obj.drag')}">&#8942;&#8942;</span>
+    <button class="objEye" data-eye="${s.id}" title="${t('obj.toggleVis')}">${s.hidden ? OBJ_EYE_OFF : OBJ_EYE_ON}</button>
+    <span class="objSwatch" style="background:${swatch}"></span>
+    <span class="objLbl" data-lbl="${s.id}">${objEsc(objRowLabel(s))}</span>
+    ${s.g ? `<span class="objTag">${t('obj.group')}</span>` : ''}
+    ${locked ? `<span class="objLockIcon" title="${t('obj.locked')}">&#128274;</span>` : ''}
+  </div>`;
+}
+function renderLayers() {
   const el = $('#tab-objects'); if (!el) return;
-  if (!state.shapes.length) { el.innerHTML = `<div class="empty">${t('obj.empty')}</div>`; return; }
-  const rows = state.shapes.map((s, i) => ({ s, i })).reverse();
-  el.innerHTML = '<div class="grp">' + rows.map(({ s }) => {
-    const swatch = s.type === 'line' ? (s.stroke || '#000') : (s.noFill ? 'transparent' : (s.fill || '#fff'));
-    const locked = isMoveLocked(s) || isSizeLocked(s) || isStyleLocked(s) || isTextLocked(s);
-    return `<div class="objRow${sel.has(s.id) ? ' on' : ''}${s.hidden ? ' objHidden' : ''}" data-id="${s.id}">
-      <span class="objHandle" title="${t('obj.drag')}">&#8942;&#8942;</span>
-      <button class="objEye" data-eye="${s.id}" title="${t('obj.toggleVis')}">${s.hidden ? OBJ_EYE_OFF : OBJ_EYE_ON}</button>
-      <span class="objSwatch" style="background:${swatch}"></span>
-      <span class="objLbl" data-lbl="${s.id}">${objEsc(objRowLabel(s))}</span>
-      ${s.g ? `<span class="objTag">${t('obj.group')}</span>` : ''}
-      ${locked ? `<span class="objLockIcon" title="${t('obj.locked')}">&#128274;</span>` : ''}
+  ensureLayers();
+  const byLayer = new Map(state.layers.map(l => [l.id, []]));
+  for (const s of state.shapes) (byLayer.get(s.layer) || byLayer.get(state.layers[0].id)).push(s);
+  const sections = [...state.layers].reverse().map(l => {
+    const shapes = (byLayer.get(l.id) || []).slice().reverse();   // wierzch warstwy pierwszy
+    return `<div class="layerSection" data-layer="${l.id}">
+      <div class="layerHead">
+        <button class="objEye" data-layer-eye="${l.id}" title="${t('layers.visToggle')}">${l.visible === false ? OBJ_EYE_OFF : OBJ_EYE_ON}</button>
+        <button class="objEye" data-layer-lock="${l.id}" title="${t('layers.lockToggle')}">${l.locked ? OBJ_LOCK_ON : OBJ_LOCK_OFF}</button>
+        <span class="layerName" data-layer-name="${l.id}" title="${t('layers.rename')}">${objEsc(l.name)}</span>
+        <button class="miniBtn layerArrow" data-layer-up="${l.id}" title="${t('layers.moveUp')}">&#9650;</button>
+        <button class="miniBtn layerArrow" data-layer-down="${l.id}" title="${t('layers.moveDown')}">&#9660;</button>
+        <button class="miniBtn" data-layer-del="${l.id}" title="${t('layers.delete')}">&times;</button>
+      </div>
+      <div class="layerBody" data-layer-body="${l.id}">${shapes.length ? shapes.map(objRowHTML).join('') : `<div class="layerEmpty">${t('layers.empty')}</div>`}</div>
     </div>`;
-  }).join('') + '</div>';
+  }).join('');
+  el.innerHTML = `<div class="row" style="margin-bottom:8px"><button class="btn" id="layerAddBtn">${t('layers.add')}</button></div>` + sections;
   $$('#tab-objects .objRow').forEach(r => {
     r.addEventListener('click', e => { if (!e.target.closest('[data-eye]')) setSelection(expandGroup(r.dataset.id)); });
     r.addEventListener('dblclick', e => { if (!e.target.closest('[data-eye]')) objStartRename(r.dataset.id); });
@@ -2848,11 +2928,18 @@ function renderObjects() {
     e.stopPropagation();
     const shp = state.shapes.find(x => x.id === b.dataset.eye);
     if (!shp) return;
-    pushUndo(); shp.hidden = !shp.hidden; render(); autosave(); renderObjects();
+    pushUndo(); shp.hidden = !shp.hidden; render(); autosave(); renderLayers();
   }));
+  $('#layerAddBtn').addEventListener('click', layerAdd);
+  $$('#tab-objects [data-layer-eye]').forEach(b => b.addEventListener('click', () => layerToggleVis(b.dataset.layerEye)));
+  $$('#tab-objects [data-layer-lock]').forEach(b => b.addEventListener('click', () => layerToggleLock(b.dataset.layerLock)));
+  $$('#tab-objects [data-layer-up]').forEach(b => b.addEventListener('click', () => layerMove(b.dataset.layerUp, 1)));
+  $$('#tab-objects [data-layer-down]').forEach(b => b.addEventListener('click', () => layerMove(b.dataset.layerDown, -1)));
+  $$('#tab-objects [data-layer-del]').forEach(b => b.addEventListener('click', () => layerDelete(b.dataset.layerDel)));
+  $$('#tab-objects [data-layer-name]').forEach(n => n.addEventListener('dblclick', () => layerStartRename(n.dataset.layerName)));
   objInitDrag();
 }
-/* zmiana nazwy warstwy wprost na liście (2×klik etykiety) */
+/* zmiana nazwy kształtu wprost na liście (2×klik etykiety) */
 function objStartRename(id) {
   const shp = state.shapes.find(s => s.id === id);
   const lbl = document.querySelector('#tab-objects [data-lbl="' + id + '"]');
@@ -2862,32 +2949,79 @@ function objStartRename(id) {
   inp.className = 'objRenameInput'; inp.value = cur;
   lbl.replaceWith(inp);
   inp.focus(); inp.select();
-  const commit = () => { pushUndo(); shp.name = inp.value.trim() || undefined; autosave(); renderObjects(); };
+  const commit = () => { pushUndo(); shp.name = inp.value.trim() || undefined; autosave(); renderLayers(); };
   inp.addEventListener('blur', commit);
   inp.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
     else if (e.key === 'Escape') { e.preventDefault(); inp.value = cur; inp.blur(); }
   });
 }
-/* przeciągnij za uchwyt, aby zmienić kolejność (z-order) — lista jest od
-   wierzchu do spodu, więc kolejność wierszy po puszczeniu odwraca się z
-   powrotem na kolejność state.shapes (pierwszy w state = na spodzie) */
+/* ---------- CRUD warstw ---------- */
+function layerAdd() {
+  pushUndo();
+  state.layers.push({ id: newLayerId(), name: t('layers.new', { n: state.layers.length + 1 }), visible: true, locked: false });
+  autosave(); renderLayers();
+}
+function layerDelete(id) {
+  if (state.layers.length <= 1) return toast(t('layers.cantDeleteLast'));
+  const l = state.layers.find(x => x.id === id); if (!l) return;
+  if (!confirm(t('layers.deleteConfirm', { n: l.name }))) return;
+  pushUndo();
+  const idx = state.layers.findIndex(x => x.id === id);
+  state.layers.splice(idx, 1);
+  const fallback = state.layers[Math.max(0, idx - 1)].id;
+  state.shapes.forEach(s => { if (s.layer === id) s.layer = fallback; });
+  render(); autosave(); renderLayers();
+}
+function layerMove(id, dir) {
+  const idx = state.layers.findIndex(x => x.id === id);
+  const j = idx + dir;
+  if (j < 0 || j >= state.layers.length) return;
+  pushUndo();
+  [state.layers[idx], state.layers[j]] = [state.layers[j], state.layers[idx]];
+  render(); autosave(); renderLayers();
+}
+function layerToggleVis(id) {
+  const l = state.layers.find(x => x.id === id); if (!l) return;
+  pushUndo(); l.visible = l.visible === false ? true : false; render(); autosave(); renderLayers();
+}
+function layerToggleLock(id) {
+  const l = state.layers.find(x => x.id === id); if (!l) return;
+  pushUndo(); l.locked = !l.locked; autosave(); renderLayers();
+}
+function layerStartRename(id) {
+  const l = state.layers.find(x => x.id === id);
+  const lbl = document.querySelector('#tab-objects [data-layer-name="' + id + '"]');
+  if (!l || !lbl) return;
+  const cur = l.name;
+  const inp = document.createElement('input');
+  inp.className = 'objRenameInput'; inp.value = cur;
+  lbl.replaceWith(inp);
+  inp.focus(); inp.select();
+  const commit = () => { pushUndo(); l.name = inp.value.trim() || cur; autosave(); renderLayers(); };
+  inp.addEventListener('blur', commit);
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+    else if (e.key === 'Escape') { e.preventDefault(); inp.value = cur; inp.blur(); }
+  });
+}
+/* przeciągnij za uchwyt: w obrębie tej samej warstwy zmienia kolejność,
+   upuszczone nad INNĄ warstwą — przenosi tam kształt (na jej wierzch) */
 function objInitDrag() {
-  const list = document.querySelector('#tab-objects .grp');
-  if (!list) return;
   $$('#tab-objects .objHandle').forEach(handle => {
     handle.addEventListener('pointerdown', e => {
       e.preventDefault();
       const row = handle.closest('.objRow');
-      const rows = [...list.children];
       row.classList.add('objDragging');
       const onMove = me => {
-        const after = rows.find(r => {
-          if (r === row) return false;
-          const rect = r.getBoundingClientRect();
+        const bodies = $$('#tab-objects .layerBody');
+        const body = bodies.find(b => { const r = b.getBoundingClientRect(); return me.clientY >= r.top - 6 && me.clientY <= r.bottom + 6; });
+        if (!body) return;
+        const after = [...body.children].filter(c => c !== row).find(r2 => {
+          const rect = r2.getBoundingClientRect();
           return me.clientY < rect.top + rect.height / 2;
         });
-        if (after) list.insertBefore(row, after); else list.appendChild(row);
+        if (after) body.insertBefore(row, after); else body.appendChild(row);
       };
       const onUp = () => {
         window.removeEventListener('pointermove', onMove);
@@ -2901,14 +3035,23 @@ function objInitDrag() {
   });
 }
 function objCommitReorder() {
-  const ids = $$('#tab-objects .objRow').map(r => r.dataset.id).reverse();   // z powrotem do kolejności state.shapes
   const byId = new Map(state.shapes.map(s => [s.id, s]));
-  const reordered = ids.map(id => byId.get(id)).filter(Boolean);
-  if (reordered.length !== state.shapes.length) return renderObjects();   // coś nie pasuje — bez ryzyka, po prostu odśwież
-  pushUndo(); state.shapes = reordered; render(); autosave(); renderObjects();
+  const assignments = [];
+  const sections = [...document.querySelectorAll('#tab-objects .layerSection')].reverse();   // z powrotem do kolejności state.layers (spód -> wierzch)
+  for (const sec of sections) {
+    const layerId = sec.dataset.layer;
+    const body = sec.querySelector('.layerBody');
+    const rowsInLayer = [...body.querySelectorAll(':scope > .objRow')].reverse();   // z powrotem: wierzch warstwy na końcu
+    for (const r of rowsInLayer) { const shp = byId.get(r.dataset.id); if (shp) assignments.push({ shp, layerId }); }
+  }
+  if (assignments.length !== state.shapes.length) return renderLayers();   // coś nie pasuje — bez ryzyka, po prostu odśwież
+  pushUndo();
+  assignments.forEach(({ shp, layerId }) => { shp.layer = layerId; });
+  state.shapes = assignments.map(a => a.shp);
+  render(); autosave(); renderLayers();
 }
 function renderProps() {
-  if (typeof renderObjects === 'function') renderObjects();
+  if (typeof renderLayers === 'function') renderLayers();
   const el = $('#tab-props');
   const ss = selShapes();
   if (!ss.length) {
@@ -3204,23 +3347,34 @@ function gridArrange(resize) {
 /* ---------- kolejność (z-order) ---------- */
 function zOrder(kind) {
   pushUndo();
-  const selected = state.shapes.filter(s => sel.has(s.id));
-  const rest = state.shapes.filter(s => !sel.has(s.id));
-  if (kind === 'top') state.shapes = [...rest, ...selected];
-  else if (kind === 'bot') state.shapes = [...selected, ...rest];
-  else {
+  if (kind === 'top' || kind === 'bot') {
+    /* przenieś na sam skrót surowej tablicy — po sortowaniu wg warstwy
+       (patrz layeredShapes()) i tak wyląduje na wierzchu/spodzie WŁASNEJ
+       warstwy, niezależnie od pozostałych warstw */
+    const selected = state.shapes.filter(s => sel.has(s.id));
+    const rest = state.shapes.filter(s => !sel.has(s.id));
+    state.shapes = kind === 'top' ? [...rest, ...selected] : [...selected, ...rest];
+  } else {
+    /* "wyżej/niżej" zamienia miejscami z najbliższym sąsiadem z TEJ SAMEJ
+       warstwy, pomijając po drodze kształty z innych warstw — inaczej
+       sąsiad z innej warstwy w surowej tablicy dawałby martwy klik (zamiana
+       nic by wizualnie nie zmieniała, bo kolejność międzywarstwowa i tak
+       zależy tylko od state.layers, nie od surowej pozycji). */
     const arr = state.shapes;
     const idxs = arr.map((s, i) => sel.has(s.id) ? i : -1).filter(i => i >= 0);
     if (kind === 'up') {
       for (let k = idxs.length - 1; k >= 0; k--) {
         const i = idxs[k];
-        if (i < arr.length - 1 && !sel.has(arr[i + 1].id))
-          [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]];
+        let j = i + 1;
+        while (j < arr.length && arr[j].layer !== arr[i].layer) j++;
+        if (j < arr.length && !sel.has(arr[j].id)) [arr[i], arr[j]] = [arr[j], arr[i]];
       }
     } else {
-      for (const i of idxs)
-        if (i > 0 && !sel.has(arr[i - 1].id))
-          [arr[i], arr[i - 1]] = [arr[i - 1], arr[i]];
+      for (const i of idxs) {
+        let j = i - 1;
+        while (j >= 0 && arr[j].layer !== arr[i].layer) j--;
+        if (j >= 0 && !sel.has(arr[j].id)) [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
     }
   }
   render(); autosave();
@@ -3548,7 +3702,7 @@ async function generateVariants() {
 function projectJSON() {
   return JSON.stringify({ app: 'prodrys', version: 2,
     name: $('#projName').value, shapes: state.shapes, vars: state.vars,
-    page: state.page, lib }, null, 1);
+    page: state.page, layers: state.layers, lib }, null, 1);
 }
 /* File System Access API — zapis w miejscu (do tego samego pliku), bez pobierania */
 function hasNativeFS() {
@@ -3625,6 +3779,8 @@ function loadProject(obj, fileName) {
   state.shapes = obj.shapes.map(normalizeShape);
   state.vars = obj.vars && obj.vars.cols ? obj.vars : { cols: [], rows: [] };
   state.page = obj.page && obj.page.mode ? obj.page : { mode: 'off' };
+  state.layers = Array.isArray(obj.layers) && obj.layers.length ? obj.layers : null;
+  ensureLayers();
   syncPageUI(); fitPage();
   /* scal bibliotekę z projektu (bez duplikatów nazw) */
   if (Array.isArray(obj.lib)) {
@@ -4298,8 +4454,10 @@ function applySelectedSheets() {
     name: prim.name,
     shapes: prim.shapes.map(normalizeShape),
     vars: { cols: [], rows: [] },
-    page: { mode: 'off' }
+    page: { mode: 'off' },
+    layers: null
   };
+  ensureLayers();
   if ($('#projName')) $('#projName').value = state.name;
   sel.clear(); previewRow = -1; clearHistory();
   syncPageUI(); fitPage(); render(); renderProps(); renderVars();
@@ -4521,15 +4679,17 @@ function templateShapes(W, H) {
 function projectFromTemplate(tmpl) {
   currentProjectHandle = null;   /* nowy projekt = brak powiązanego pliku */
   state = { name: 'Instrukcja_01', shapes: [], vars: { cols: [], rows: [] },
-    page: { mode: 'a4l', w: PAGES.a4l.w, h: PAGES.a4l.h } };
+    page: { mode: 'a4l', w: PAGES.a4l.w, h: PAGES.a4l.h }, layers: null };
   if (tmpl === 'builtin') {
     state.shapes = templateShapes(state.page.w, state.page.h);
   } else if (tmpl && Array.isArray(tmpl.shapes)) {
     state.shapes = JSON.parse(JSON.stringify(tmpl.shapes)).map(normalizeShape);
     state.vars = tmpl.vars && tmpl.vars.cols ? JSON.parse(JSON.stringify(tmpl.vars)) : { cols: [], rows: [] };
     state.page = tmpl.page && tmpl.page.mode ? JSON.parse(JSON.stringify(tmpl.page)) : { mode: 'a4l', w: PAGES.a4l.w, h: PAGES.a4l.h };
-    state.shapes.forEach(s => { s.id = uid(); });   /* świeże ID = niezależny projekt */
+    state.layers = Array.isArray(tmpl.layers) && tmpl.layers.length ? JSON.parse(JSON.stringify(tmpl.layers)) : null;
+    state.shapes.forEach(s => { s.id = uid(); });   /* świeże ID = niezależny projekt (layer id zostaje — to nie shape id) */
   }
+  ensureLayers();
   $('#projName').value = state.name;
   sel.clear(); previewRow = -1;
   clearHistory();
@@ -4571,7 +4731,8 @@ async function saveAsTemplate() {
   const tmpl = { name,
     shapes: JSON.parse(JSON.stringify(state.shapes)),
     vars: JSON.parse(JSON.stringify(state.vars)),
-    page: JSON.parse(JSON.stringify(state.page)) };
+    page: JSON.parse(JSON.stringify(state.page)),
+    layers: JSON.parse(JSON.stringify(state.layers || [])) };
   const i = templates.findIndex(x => x.name.toLowerCase() === name.toLowerCase());
   if (i >= 0) {
     if (!confirm(t('c.tmplOverwrite', { n: templates[i].name }))) return;
@@ -5147,7 +5308,7 @@ document.addEventListener('keyup', e => {
    dokowalnymi panelami.
 
    Treść okien renderują te same funkcje co wcześniej (renderProps/
-   renderLib/renderVars/renderObjects/renderSettings/renderHelp) — piszą
+   renderLib/renderVars/renderLayers/renderSettings/renderHelp) — piszą
    do tych samych #tab-* divów, teraz zagnieżdżonych w .winBody zamiast
    w .tabBody, więc żadna z nich nie wymagała zmian. ===================================================================== */
 const WIN_IDS = ['props', 'lib', 'vars', 'layers', 'settings', 'help'];

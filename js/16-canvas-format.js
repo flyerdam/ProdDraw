@@ -33,15 +33,17 @@ function templateShapes(W, H) {
 function projectFromTemplate(tmpl) {
   currentProjectHandle = null;   /* nowy projekt = brak powiązanego pliku */
   state = { name: 'Instrukcja_01', shapes: [], vars: { cols: [], rows: [] },
-    page: { mode: 'a4l', w: PAGES.a4l.w, h: PAGES.a4l.h } };
+    page: { mode: 'a4l', w: PAGES.a4l.w, h: PAGES.a4l.h }, layers: null };
   if (tmpl === 'builtin') {
     state.shapes = templateShapes(state.page.w, state.page.h);
   } else if (tmpl && Array.isArray(tmpl.shapes)) {
     state.shapes = JSON.parse(JSON.stringify(tmpl.shapes)).map(normalizeShape);
     state.vars = tmpl.vars && tmpl.vars.cols ? JSON.parse(JSON.stringify(tmpl.vars)) : { cols: [], rows: [] };
     state.page = tmpl.page && tmpl.page.mode ? JSON.parse(JSON.stringify(tmpl.page)) : { mode: 'a4l', w: PAGES.a4l.w, h: PAGES.a4l.h };
-    state.shapes.forEach(s => { s.id = uid(); });   /* świeże ID = niezależny projekt */
+    state.layers = Array.isArray(tmpl.layers) && tmpl.layers.length ? JSON.parse(JSON.stringify(tmpl.layers)) : null;
+    state.shapes.forEach(s => { s.id = uid(); });   /* świeże ID = niezależny projekt (layer id zostaje — to nie shape id) */
   }
+  ensureLayers();
   $('#projName').value = state.name;
   sel.clear(); previewRow = -1;
   clearHistory();
@@ -83,7 +85,8 @@ async function saveAsTemplate() {
   const tmpl = { name,
     shapes: JSON.parse(JSON.stringify(state.shapes)),
     vars: JSON.parse(JSON.stringify(state.vars)),
-    page: JSON.parse(JSON.stringify(state.page)) };
+    page: JSON.parse(JSON.stringify(state.page)),
+    layers: JSON.parse(JSON.stringify(state.layers || [])) };
   const i = templates.findIndex(x => x.name.toLowerCase() === name.toLowerCase());
   if (i >= 0) {
     if (!confirm(t('c.tmplOverwrite', { n: templates[i].name }))) return;

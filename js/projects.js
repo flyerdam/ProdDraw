@@ -137,8 +137,10 @@ function PS_loadInto(slot) {
     name: obj.name || PS_projectName(slot),
     shapes: obj.shapes.map(normalizeShape),
     vars: (obj.vars && obj.vars.cols) ? obj.vars : { cols: [], rows: [] },
-    page: (obj.page && obj.page.mode) ? obj.page : { mode: 'off' }
+    page: (obj.page && obj.page.mode) ? obj.page : { mode: 'off' },
+    layers: (Array.isArray(obj.layers) && obj.layers.length) ? obj.layers : null
   };
+  ensureLayers();
   if ($('#projName')) $('#projName').value = state.name;
   sel.clear(); previewRow = -1; clearHistory();
   syncPageUI(); fitPage(); render(); renderProps(); renderVars();

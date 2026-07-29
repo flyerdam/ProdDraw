@@ -9,10 +9,46 @@ const cv = $('#cv'), cwrap = $('#cwrap'), txtEd = $('#txtEd');
 /* ---------- stan ---------- */
 let state = {
   name: 'Instrukcja_01',
-  shapes: [],                    // kolejność = z-order (0 = spód)
+  shapes: [],                    // wewnątrz warstwy: kolejność = z-order (0 = spód); między warstwami decyduje state.layers
   vars: { cols: [], rows: [] },  // warianty
   page: { mode: 'a4l', w: 1123, h: 794 }, // format kanwy; mode 'off' = nieskończona
+  layers: [{ id: 'L1', name: 'Warstwa 1', visible: true, locked: false }],   // patrz ensureLayers()
 };
+/* ---------- warstwy ----------
+   Warstwa = kontener obiektów z własną widocznością/blokadą, do którego
+   należy każdy kształt (shape.layer = id warstwy). Kolejność state.layers
+   to z-order MIĘDZY warstwami (indeks 0 = najniżej); w obrębie jednej
+   warstwy o kolejności nadal decyduje względna pozycja w state.shapes
+   (patrz layeredShapes() w js/06-svg.js). Domyślnie wszystko ląduje w
+   jednej warstwie — stare projekty (bez pola layers) i tak przez to
+   przechodzą bez zauważalnej zmiany.
+   Wywoływane po KAŻDYM wczytaniu/utworzeniu state (patrz PS_loadInto,
+   loadProject, projectFromTemplate, applySelectedSheets) — jeden punkt
+   prawdy dla migracji, żeby nie duplikować tej logiki w każdym miejscu. */
+function ensureLayers(st) {
+  st = st || state;
+  if (!Array.isArray(st.layers) || !st.layers.length) {
+    st.layers = [{ id: 'L1', name: (typeof t === 'function' ? t('layers.default') : 'Warstwa 1'), visible: true, locked: false }];
+  }
+  const validIds = new Set(st.layers.map(l => l.id));
+  const fallback = st.layers[0].id;
+  for (const s of st.shapes) if (!s.layer || !validIds.has(s.layer)) s.layer = fallback;
+  return st;
+}
+/* kształty w kolejności RYSOWANIA (spód -> wierzch): grupowane wg pozycji
+   ich warstwy w state.layers, a w obrębie tej samej warstwy — wg względnej
+   pozycji w state.shapes (sort stabilny, więc to tylko przegrupowanie
+   między warstwami, nie zmienia kolejności wewnątrz jednej warstwy) */
+function sortByLayer(shapes) {
+  const order = new Map(state.layers.map((l, i) => [l.id, i]));
+  return shapes.map((s, i) => ({ s, i }))
+    .sort((a, b) => (order.get(a.s.layer) ?? 0) - (order.get(b.s.layer) ?? 0) || a.i - b.i)
+    .map(x => x.s);
+}
+function layeredShapes() { return sortByLayer(state.shapes); }
+function layerOf(s) { return state.layers.find(l => l.id === s.layer) || state.layers[0]; }
+function isShapeEffectivelyHidden(s) { const l = layerOf(s); return !!s.hidden || !l || l.visible === false; }
+function isShapeLayerLocked(s) { const l = layerOf(s); return !!(l && l.locked); }
 const PAGES = {
   a4l: { w: 1123, h: 794 }, a4p: { w: 794, h: 1123 },
   hd: { w: 1600, h: 900 }, custom: {}, off: {}

@@ -227,7 +227,7 @@ function render() {
     html += `<rect x="-50000" y="-50000" width="100000" height="100000" fill="url(#gp5)"/>`;
   }
   html += `<g id="shapes">`;
-  for (const s of state.shapes) { if (!s.hidden) html += shapeSVG(s, vals, true); }
+  for (const s of layeredShapes()) { if (!isShapeEffectivelyHidden(s)) html += shapeSVG(s, vals, true); }
   html += '</g><g id="ovl">' + overlaySVG() + '</g></g>';
   cv.innerHTML = html;
   $('#zoomLbl').textContent = Math.round(z * 100) + '%';
@@ -277,7 +277,7 @@ function overlaySVG() {
   if (xlsxCropActive) return xlsxCropOverlaySVG();
   const z = view.z; let out = '';
   const hw = 4 / z, hs = `width="${hw * 2}" height="${hw * 2}" fill="#fff" stroke="var(--sel)" stroke-width="${1.2 / z}"`;
-  const ss = selShapes().filter(s => !s.hidden);
+  const ss = selShapes().filter(s => !isShapeEffectivelyHidden(s));
   const lockedSel = hasLockedSelection(ss);
   const sizeLock = hasSizeLock(ss);
   /* kontury zaznaczenia */
@@ -352,7 +352,7 @@ function overlaySVG() {
 
 /* SVG samodzielny (eksport / miniatury) */
 function buildSVG(shapes, vals, pad = 16, region = null) {
-  shapes = shapes.filter(s => !s.hidden);
+  shapes = sortByLayer(shapes.filter(s => !isShapeEffectivelyHidden(s)));
   let vb;
   if (region) {
     vb = { x: region.x, y: region.y, w: region.w, h: region.h };
