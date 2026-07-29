@@ -106,8 +106,15 @@ function autosave() {
      ten wyścig całkowicie — timer tylko opóźnia zapis, nie odczyt. */
   const key = PS_autoKey();
   const json = projectJSON();
+  const slotAtSchedule = PS_active;
   if (typeof PS_memCache !== 'undefined') PS_memCache.set(PS_active, json);   /* pamięć od razu — dysk to tylko trwałość */
   autosaveTm = setTimeout(() => {
+    /* gniazdo mogło zostać w międzyczasie zamknięte (PS_deleteProject usuwa je
+       trwale) — bez tej sprawdzki opóźniony zapis wskrzeszałby dane właśnie
+       skasowanego projektu jako osierocony klucz w localStorage, którego już
+       nic nie czyta ani nie widzi (rejestr go nie zna) — cichy wyciek miejsca,
+       który rośnie z każdym „edytuj i szybko zamknij kartę". */
+    if (typeof PS_registry === 'function' && !PS_registry().some(p => p.slot === slotAtSchedule)) return;
     if (typeof PS_safeSetItem === 'function') PS_safeSetItem(key, json);
     else try { localStorage.setItem(key, json); } catch (e) {}
   }, 400);

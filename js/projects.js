@@ -252,6 +252,24 @@ function PS_deleteProject(slot) {
 function PS_heartbeat() { const l = PS_readLive(), now = Date.now(); for (const s of PS_openSlots()) l[s] = now; PS_writeLive(l); }
 function PS_releaseAll() { const l = PS_readLive(); for (const s of PS_openSlots()) delete l[s]; PS_writeLive(l); }
 
+/* ---------- sprzątanie osieroconych danych (naprawa starych wycieków) ----------
+   Przed poprawką w autosave() (patrz js/14-project.js) opóźniony 400ms zapis
+   mógł odpalić się PO trwałym usunięciu projektu (PS_deleteProject), wskrzeszając
+   jego dane jako klucz w localStorage, którego rejestr już nie zna — niewidoczny,
+   nigdy nieczytany, zajmujący miejsce w na ogół już i tak ciasnym limicie
+   przeglądarki. Uruchamiane raz przy starcie, żeby posprzątać to, co już się
+   nazbierało w tej przeglądarce z wcześniejszych sesji. */
+function PS_gcOrphans() {
+  try {
+    const known = new Set(PS_registry().map(p => 'prodrys_auto:' + p.slot));
+    const orphans = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf('prodrys_auto:') === 0 && !known.has(k)) orphans.push(k);
+    }
+    for (const k of orphans) localStorage.removeItem(k);
+  } catch (e) {}
+}
 /* ---------- migracja starego pojedynczego autozapisu ---------- */
 function PS_migrateLegacy() {
   try {
@@ -272,6 +290,7 @@ function PS_migrateLegacy() {
    żeby dwa okna nie edytowały tego samego projektu naraz. */
 function PS_init() {
   PS_migrateLegacy();
+  PS_gcOrphans();
   const regSlots = PS_registry().map(p => p.slot);
   const sess = PS_session();
   let open = sess.open.filter(s => regSlots.includes(s) && !PS_isLiveElsewhere(s));
