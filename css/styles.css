@@ -118,6 +118,16 @@ input[type=checkbox]{accent-color:var(--acc);}
 .objLbl{flex:1;font-size:12.5px;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .objTag{font-size:10px;color:var(--txt2);border:1px solid var(--line);border-radius:3px;padding:1px 5px;flex-shrink:0;}
 .objLockIcon{font-size:11px;flex-shrink:0;opacity:.8;}
+.objHandle{cursor:grab;color:var(--txt2);font-size:11px;line-height:1;flex-shrink:0;letter-spacing:-2px;
+  padding:2px 1px;touch-action:none;}
+.objHandle:hover{color:var(--txt);}
+.objEye{width:22px;height:22px;flex-shrink:0;border:none;background:none;color:var(--txt2);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;border-radius:3px;}
+.objEye:hover{color:var(--txt);background:var(--panel);}
+.objRow.objHidden .objLbl, .objRow.objHidden .objSwatch{opacity:.4;}
+.objRow.objDragging{opacity:.5;}
+.objRenameInput{flex:1;background:var(--panel);border:1px solid var(--acc);color:var(--txt);
+  font-size:12.5px;border-radius:3px;padding:1px 4px;min-width:0;}
 /* library */
 .libItem{border:1px solid var(--line);border-radius:4px;margin-bottom:8px;background:var(--panel2);overflow:hidden;}
 .libThumb{background:#fff;height:64px;display:flex;align-items:center;justify-content:center;cursor:pointer;}

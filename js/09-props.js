@@ -31,8 +31,11 @@ function applyOnShapes(shapes, pred, fn) {
    szukania go na kanwie. */
 const OBJ_TYPE_LABEL = { rect: 'obj.tRect', roundRect: 'obj.tRoundRect', ellipse: 'obj.tEllipse',
   poly: 'obj.tPoly', line: 'obj.tLine', text: 'obj.tText', image: 'obj.tImage' };
+const OBJ_EYE_ON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="2.8"/></svg>';
+const OBJ_EYE_OFF = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l18 18M10.6 10.6a2.8 2.8 0 0 0 3.9 3.9M6.6 6.7C4 8.3 2 12 2 12s3.5 7 10 7c1.7 0 3.2-.4 4.4-1M9.9 5.2A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a15.6 15.6 0 0 1-2.3 3.3"/></svg>';
 function objEsc(str) { return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function objRowLabel(s) {
+  if (s.name) return s.name;
   const txt = (s.text || '').replace(/\n+/g, ' ').trim();
   if (txt) return txt.length > 34 ? txt.slice(0, 34) + '…' : txt;
   return t(OBJ_TYPE_LABEL[s.type] || 'obj.tRect');
@@ -44,14 +47,81 @@ function renderObjects() {
   el.innerHTML = '<div class="grp">' + rows.map(({ s }) => {
     const swatch = s.type === 'line' ? (s.stroke || '#000') : (s.noFill ? 'transparent' : (s.fill || '#fff'));
     const locked = isMoveLocked(s) || isSizeLocked(s) || isStyleLocked(s) || isTextLocked(s);
-    return `<div class="objRow${sel.has(s.id) ? ' on' : ''}" data-id="${s.id}">
+    return `<div class="objRow${sel.has(s.id) ? ' on' : ''}${s.hidden ? ' objHidden' : ''}" data-id="${s.id}">
+      <span class="objHandle" title="${t('obj.drag')}">&#8942;&#8942;</span>
+      <button class="objEye" data-eye="${s.id}" title="${t('obj.toggleVis')}">${s.hidden ? OBJ_EYE_OFF : OBJ_EYE_ON}</button>
       <span class="objSwatch" style="background:${swatch}"></span>
-      <span class="objLbl">${objEsc(objRowLabel(s))}</span>
+      <span class="objLbl" data-lbl="${s.id}">${objEsc(objRowLabel(s))}</span>
       ${s.g ? `<span class="objTag">${t('obj.group')}</span>` : ''}
       ${locked ? `<span class="objLockIcon" title="${t('obj.locked')}">&#128274;</span>` : ''}
     </div>`;
   }).join('') + '</div>';
-  $$('#tab-objects .objRow').forEach(r => r.addEventListener('click', () => setSelection(expandGroup(r.dataset.id))));
+  $$('#tab-objects .objRow').forEach(r => {
+    r.addEventListener('click', e => { if (!e.target.closest('[data-eye]')) setSelection(expandGroup(r.dataset.id)); });
+    r.addEventListener('dblclick', e => { if (!e.target.closest('[data-eye]')) objStartRename(r.dataset.id); });
+  });
+  $$('#tab-objects [data-eye]').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    const shp = state.shapes.find(x => x.id === b.dataset.eye);
+    if (!shp) return;
+    pushUndo(); shp.hidden = !shp.hidden; render(); autosave(); renderObjects();
+  }));
+  objInitDrag();
+}
+/* zmiana nazwy warstwy wprost na liście (2×klik etykiety) */
+function objStartRename(id) {
+  const shp = state.shapes.find(s => s.id === id);
+  const lbl = document.querySelector('#tab-objects [data-lbl="' + id + '"]');
+  if (!shp || !lbl) return;
+  const cur = shp.name || '';
+  const inp = document.createElement('input');
+  inp.className = 'objRenameInput'; inp.value = cur;
+  lbl.replaceWith(inp);
+  inp.focus(); inp.select();
+  const commit = () => { pushUndo(); shp.name = inp.value.trim() || undefined; autosave(); renderObjects(); };
+  inp.addEventListener('blur', commit);
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+    else if (e.key === 'Escape') { e.preventDefault(); inp.value = cur; inp.blur(); }
+  });
+}
+/* przeciągnij za uchwyt, aby zmienić kolejność (z-order) — lista jest od
+   wierzchu do spodu, więc kolejność wierszy po puszczeniu odwraca się z
+   powrotem na kolejność state.shapes (pierwszy w state = na spodzie) */
+function objInitDrag() {
+  const list = document.querySelector('#tab-objects .grp');
+  if (!list) return;
+  $$('#tab-objects .objHandle').forEach(handle => {
+    handle.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      const row = handle.closest('.objRow');
+      const rows = [...list.children];
+      row.classList.add('objDragging');
+      const onMove = me => {
+        const after = rows.find(r => {
+          if (r === row) return false;
+          const rect = r.getBoundingClientRect();
+          return me.clientY < rect.top + rect.height / 2;
+        });
+        if (after) list.insertBefore(row, after); else list.appendChild(row);
+      };
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        row.classList.remove('objDragging');
+        objCommitReorder();
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
+  });
+}
+function objCommitReorder() {
+  const ids = $$('#tab-objects .objRow').map(r => r.dataset.id).reverse();   // z powrotem do kolejności state.shapes
+  const byId = new Map(state.shapes.map(s => [s.id, s]));
+  const reordered = ids.map(id => byId.get(id)).filter(Boolean);
+  if (reordered.length !== state.shapes.length) return renderObjects();   // coś nie pasuje — bez ryzyka, po prostu odśwież
+  pushUndo(); state.shapes = reordered; render(); autosave(); renderObjects();
 }
 function renderProps() {
   if (typeof renderObjects === 'function') renderObjects();
