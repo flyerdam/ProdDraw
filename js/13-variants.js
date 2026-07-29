@@ -23,7 +23,7 @@ function renderVars() {
     `</select></div>`;
   h += `<div class="grp"><h4>${t('vars.nameGrp')}</h4>
     <input class="in wide" id="vNamePat" placeholder="${escXml(t('vars.namePh'))}" value="${escXml(V.namePattern || '')}">
-    <div class="hint" style="margin-top:4px">${t('vars.nameHint')}</div></div>`;
+    <div class="hint" style="margin-top:4px">${helpLink('variants')}</div></div>`;
   h += `<button class="btn primary" id="vGen" style="width:100%" ${!V.rows.length ? 'disabled' : ''}>${t('vars.gen')}</button>`;
   el.innerHTML = h;
 

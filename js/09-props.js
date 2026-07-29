@@ -57,7 +57,7 @@ function renderProps() {
   const el = $('#tab-props');
   const ss = selShapes();
   if (!ss.length) {
-    el.innerHTML = `<div class="empty">${t('props.none')}<br><br>${t('props.noneHint')}</div>`;
+    el.innerHTML = `<div class="empty">${t('props.none')}<br><br>${helpLink('draw')}</div>`;
     return;
   }
   const s = ss[0];
@@ -128,7 +128,7 @@ function renderProps() {
         <label style="min-width:0"><input type="checkbox" id="pNoFill" ${s.noFill ? 'checked' : ''}> ${t('props.none2')}</label></div></div>`;
   }
   if (hasText) {
-    h += `<div class="grp"><h4>${t('props.text')} <span style="text-transform:none;font-weight:400">${t('props.textHint')}</span></h4>
+    h += `<div class="grp"><h4>${t('props.text')} <span style="text-transform:none;font-weight:400">${helpLink('text')}</span></h4>
       <div class="row"><label>${t('props.font')}</label><select class="in" id="pFont" style="width:130px">
         ${['Calibri','Arial','Helvetica','Times New Roman','Georgia','Verdana','Courier New','Trebuchet MS','Impact'].map(f => `<option value="${f}" ${(s.font || 'Calibri') === f ? 'selected' : ''}>${f}</option>`).join('')}
       </select></div>
@@ -165,7 +165,7 @@ function renderProps() {
     <button class="btn" id="pGroup" ${ss.length < 2 ? 'disabled' : ''}>${t('props.doGroup')}</button>
     <button class="btn" id="pUngroup" ${!grouped ? 'disabled' : ''}>${t('props.ungroup')}</button>
     <button class="btn" id="pToLib">${t('props.toLib')}</button></div>
-    ${grouped ? `<div class="hint" style="margin-top:6px">${t('props.altHint')}</div>` : ''}</div>`;
+    ${grouped ? `<div class="hint" style="margin-top:6px">${helpLink('groups')}</div>` : ''}</div>`;
   h += `<div class="grp"><div class="row">
     <button class="btn" id="pDup">${t('props.dup')}</button>
     <button class="btn" id="pDel" style="color:#ff7070">${t('props.del')}</button></div></div>`;

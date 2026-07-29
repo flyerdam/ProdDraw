@@ -50,7 +50,7 @@ function renderLib() {
   };
   const idxByFolder = f => lib.map((it, i) => ({ it, i })).filter(o => (o.it.folder || '') === f).map(o => o.i);
   const grid = ids => ids.length ? `<div class="libGrid">${ids.map(tile).join('')}</div>` : `<div class="empty" style="padding:8px">${t('lib.emptyFolder')}</div>`;
-  let h = `<div class="hint" style="margin-bottom:8px">${t('lib.hint')}<br>${t('lib.dragHint')}</div>`;
+  let h = `<div class="hint" style="margin-bottom:8px">${t('lib.hint')} ${helpLink('library')}</div>`;
   h += `<div class="row" style="margin-bottom:8px"><button class="btn" id="libAddFolder">${t('lib.newFolder')}</button></div>`;
   if (!lib.length) h += `<div class="empty">${t('lib.empty')}</div>`;
   /* korzeń (też cel upuszczenia) */

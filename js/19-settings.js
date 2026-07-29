@@ -56,7 +56,7 @@ function renderSettings() {
       </select></div></div>
     <div class="grp"><h4>${t('set.zoom')}</h4>
       <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setMx" ${settings.mxMaster ? 'checked' : ''}> ${t('set.mxMaster')}</label></div>
-      <div class="hint" style="margin-bottom:8px">${t('set.mxMasterHint')}</div>
+      <div class="hint" style="margin-bottom:8px">${helpLink('settings')}</div>
       <div class="row"><label>${t('set.zoomDiv')}</label><input class="in" type="number" id="setZoomDiv" min="1" max="20" step="1" value="${settings.zoomDiv}"></div>
     </div>
     <div class="grp"><h4>${t('set.panel')}</h4>
@@ -64,15 +64,15 @@ function renderSettings() {
     </div>
     <div class="grp"><h4>${t('set.autosave')}</h4>
       <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setAutosave" ${settings.autosave !== false ? 'checked' : ''}> ${t('set.autosave')}</label></div>
-      <div class="hint">${t('set.autosaveHint')}</div>
+      <div class="hint">${helpLink('settings')}</div>
     </div>
     <div class="grp"><h4>${t('set.canvas')}</h4>
       <div class="row"><label>${t('set.infMargin')}</label><input class="in" type="number" id="setInfMargin" min="0" max="500" step="1" value="${settings.infiniteCanvasMargin ?? 16}"></div>
-      <div class="hint">${t('set.infMarginHint')}</div>
+      <div class="hint">${helpLink('settings')}</div>
     </div>
     <div class="grp"><h4>${t('set.xlsxImport')}</h4>
       <div class="setRow"><label style="min-width:0"><input type="checkbox" id="setXlsxAutoCrop" ${settings.xlsxAutoCrop !== false ? 'checked' : ''}> ${t('set.xlsxAutoCrop')}</label></div>
-      <div class="hint">${t('set.xlsxAutoCropHint')}</div>
+      <div class="hint">${helpLink('settings')}</div>
     </div>
     <div class="grp"><h4>${t('set.defaults')}</h4>
       <div class="row"><label>${t('props.font')}</label><select class="in" id="dFont" style="width:130px">

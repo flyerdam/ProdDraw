@@ -1,4 +1,24 @@
 "use strict";
+/* ---------- odnośniki "?" z innych zakładek do konkretnej sekcji Pomocy ----------
+   Kontekstowe podpowiedzi (Ustawienia/Właściwości/Biblioteka/Warianty) miały kiedyś
+   pełny tekst wprost przy polu — teraz jest tam tylko krótki link, a treść mieszka
+   w jednym miejscu (tu, w Pomocy), więc się nie rozjeżdża między zakładkami. */
+function goHelp(anchor) {
+  const helpBtn = document.querySelector('.tab[data-tab="help"]');
+  if (helpBtn) helpBtn.click();
+  requestAnimationFrame(() => {
+    const target = document.getElementById('help-' + anchor);
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    target.classList.add('helpFlash');
+    setTimeout(() => target.classList.remove('helpFlash'), 1500);
+  });
+}
+document.addEventListener('click', e => {
+  const a = e.target.closest('[data-help]');
+  if (a) { e.preventDefault(); goHelp(a.dataset.help); }
+});
+function helpLink(anchor) { return `<a class="hintLink" data-help="${anchor}">${t('help.more')}</a>`; }
 /* ---------- zakładka Pomoc: instrukcje + skróty ---------- */
 const HELP_HTML = {
   pl: `<div class="grp"><h4>Do czego to jest</h4><div class="hint">
@@ -13,19 +33,20 @@ const HELP_HTML = {
     Ctrl+S — zapisz · Ctrl+O — otwórz · Delete — usuń<br>
     strzałki — przesuń o 1 px (Shift = 10 px)<br>+ / − — zoom · Spacja lub środkowy przycisk — przesuń płótno · kółko — zoom<br>
     Shift przy rysowaniu = kwadrat/koło; przy linii = co 45°.</div></div>
-    <div class="grp"><h4>Rysowanie i rozmiar</h4><div class="hint">
+    <div class="grp" id="help-draw"><h4>Rysowanie i rozmiar</h4><div class="hint">
     Wybierz narzędzie i przeciągnij po płótnie. Zaznaczony kształt ma uchwyty do skalowania.
-    Przeciąganie ze snapem: „Przyciągaj do siatki" i „do obiektów" (dół ekranu). Podwójny klik = edycja tekstu.</div></div>
-    <div class="grp"><h4>Tekst i czcionki</h4><div class="hint">
+    Przeciąganie ze snapem: „Przyciągaj do siatki" i „do obiektów" (dół ekranu). Podwójny klik = edycja tekstu.
+    Bez rysowania od zera: wklej zrzut ekranu (Ctrl+V) albo zaimportuj obraz/kształty z pliku XLSX.</div></div>
+    <div class="grp" id="help-text"><h4>Tekst i czcionki</h4><div class="hint">
     2×klik na kształcie (prostokąt/elipsa/tekst/wielokąt) wpisuje tekst w środku. We Właściwościach: czcionka,
     rozmiar, kolor, <b>pogrubienie</b> i <i>kursywa</i>, pole „Treść".</div></div>
     <div class="grp"><h4>Obracanie i odbicie</h4><div class="hint">
     Złap pomarańczowy uchwyt nad kształtem. „skok 10°" (domyślnie wł.) obraca skokowo, Shift = co 15°.
     Kąt wpiszesz też ręcznie. Odbicie lustrzane: guziki ↔ / ↕ w sekcji Pozycja.</div></div>
-    <div class="grp"><h4>Przycinanie zdjęć</h4><div class="hint">
+    <div class="grp" id="help-crop"><h4>Przycinanie zdjęć</h4><div class="hint">
     Zaznacz obraz → „Przytnij" → przeciągnij uchwyty ramki. Proporcje obrazu NIE zmieniają się.
     Esc lub „Gotowe" kończy, „Resetuj" przywraca cały obraz.</div></div>
-    <div class="grp"><h4>Grupy</h4><div class="hint">
+    <div class="grp" id="help-groups"><h4>Grupy</h4><div class="hint">
     Zwykły klik zaznacza całą grupę (przesuwanie/blokada). <b>Alt+klik</b> = pojedynczy obiekt w grupie,
     by zmienić jego kolor/tekst. Ctrl+G grupuje, Ctrl+Shift+G rozgrupowuje.</div></div>
     <div class="grp"><h4>Blokady (Właściwości)</h4><div class="hint">
@@ -34,20 +55,27 @@ const HELP_HTML = {
     <div class="grp"><h4>Wyrównanie i macierz</h4><div class="hint">
     Zaznacz 2+ kształty → guziki wyrównania (do lewej/środka/…). 3+ → rozłożenie równomierne.
     „Macierz" układa w tabelę; „Macierz + rozmiar" dodatkowo ujednolica komórki. „Odstęp siatki" ustawia luz.</div></div>
-    <div class="grp"><h4>Warianty (zakładka Warianty)</h4><div class="hint">
+    <div class="grp" id="help-variants"><h4>Warianty (zakładka Warianty)</h4><div class="hint">
     W tekstach użyj <b>{A}</b>, <b>{B}</b>… Dodaj zmienne i wiersze. Każdy wiersz = jeden rysunek z podstawionymi
     wartościami. „Podgląd" pokazuje wybrany wariant na płótnie. „Generuj" tworzy ZIP z PNG.<br>
     <b>Nazwa pliku:</b> puste = wartości złączone „_" (np. <i>10_20</i>). Wzór np. <b>{A}x{B}</b> → <i>10x20</i>.</div></div>
-    <div class="grp"><h4>Biblioteka i foldery</h4><div class="hint">
+    <div class="grp" id="help-library"><h4>Biblioteka i foldery</h4><div class="hint">
     Zaznacz kształty → „Do biblioteki". Kliknij kafelek, aby wstawić. „+ Folder" tworzy folder, kafelek
     <b>przeciągnij</b> do folderu, klik nagłówka zwija folder.</div></div>
     <div class="grp"><h4>Szablony</h4><div class="hint">
     „Nowy" otwiera wybór szablonu (miniatury). Ustawienia → „Zapisz jako szablon" zapisuje bieżący rysunek;
     ta sama nazwa = pytanie o nadpisanie. Domyślny szablon też można nadpisać/usunąć.</div></div>
-    <div class="grp"><h4>Ustawienia</h4><div class="hint">
-    Język (PL/EN/DE), wolniejszy zoom (dla myszy z szybkim kółkiem), szerokość panelu, domyślne nowych
-    kształtów (czcionka, rozmiar, grubość, kolory) oraz zapis/wczytanie konfiguracji.</div></div>
-    <div class="grp"><h4>Import XLSX/XLSM</h4><div class="hint">
+    <div class="grp" id="help-settings"><h4>Ustawienia</h4><div class="hint">
+    Język (PL/EN/DE), szerokość panelu, domyślne nowych kształtów (czcionka, rozmiar, grubość, kolory),
+    zestaw kolorów aplikacji (zakładka „Motyw") oraz zapis/wczytanie konfiguracji.<br>
+    <b>Wolniejszy zoom:</b> włącz, jeśli kółko myszy przewija zoom za szybko — wyższy dzielnik = wolniejszy zoom.<br>
+    <b>Autozapis:</b> wyłączenie oznacza, że zmiany nie są zapisywane automatycznie — przełączenie/zamknięcie
+    karty lub programu odrzuci niezapisane zmiany (ręczne „Zapisz" Ctrl+S do pliku działa bez zmian).<br>
+    <b>Margines przy eksporcie:</b> odstęp wokół kształtów przy eksporcie/wariantach, gdy strona to „∞ nieskończona"
+    (bez znaczenia przy ustalonym formacie strony).<br>
+    <b>Auto-kreator kadru po imporcie XLSX:</b> wyłączenie sprawia, że import trafia od razu na kanwę bez pytania
+    o obszar roboczy (jak kliknięcie „Nie przycinaj").</div></div>
+    <div class="grp" id="help-xlsx"><h4>Import XLSX/XLSM</h4><div class="hint">
     Wczytuje kształty i obrazy z Excela (pozycje zachowane). Wybierasz co wstawić. Formaty EMF/WMF są
     pomijane — w Excelu wklejaj zrzuty jako bitmapę.</div></div>
     <div class="grp"><h4>Zapis i eksport</h4><div class="hint">
@@ -65,19 +93,20 @@ const HELP_HTML = {
     Ctrl+S — save · Ctrl+O — open · Delete — delete<br>
     arrows — nudge 1 px (Shift = 10 px)<br>+ / − — zoom · Space or middle button — pan · wheel — zoom<br>
     Shift while drawing = square/circle; on a line = 45° steps.</div></div>
-    <div class="grp"><h4>Drawing & sizing</h4><div class="hint">
+    <div class="grp" id="help-draw"><h4>Drawing & sizing</h4><div class="hint">
     Pick a tool and drag on the canvas. A selected shape has resize handles. Snapping: “Snap to grid" and
-    “to objects" (bottom bar). Double-click = edit text.</div></div>
-    <div class="grp"><h4>Text & fonts</h4><div class="hint">
+    “to objects" (bottom bar). Double-click = edit text.
+    No need to draw from scratch: paste a screenshot (Ctrl+V) or import an image/shapes from an XLSX file.</div></div>
+    <div class="grp" id="help-text"><h4>Text & fonts</h4><div class="hint">
     Double-click a shape (rect/ellipse/text/polygon) to type text inside. In Properties: font, size, color,
     <b>bold</b> and <i>italic</i>, plus a “Content" field.</div></div>
     <div class="grp"><h4>Rotate & flip</h4><div class="hint">
     Grab the orange handle above a shape. “step 10°" (on by default) rotates in steps, Shift = 15°.
     You can type the angle too. Mirror: ↔ / ↕ buttons in the Position section.</div></div>
-    <div class="grp"><h4>Cropping images</h4><div class="hint">
+    <div class="grp" id="help-crop"><h4>Cropping images</h4><div class="hint">
     Select an image → “Crop" → drag the frame handles. Image proportions do NOT change.
     Esc or “Done" finishes, “Reset" restores the full image.</div></div>
-    <div class="grp"><h4>Groups</h4><div class="hint">
+    <div class="grp" id="help-groups"><h4>Groups</h4><div class="hint">
     A normal click selects the whole group (move/lock). <b>Alt+click</b> = a single object inside the group,
     to change its color/text. Ctrl+G groups, Ctrl+Shift+G ungroups.</div></div>
     <div class="grp"><h4>Locks (Properties)</h4><div class="hint">
@@ -86,20 +115,27 @@ const HELP_HTML = {
     <div class="grp"><h4>Align & matrix</h4><div class="hint">
     Select 2+ shapes → align buttons (left/center/…). 3+ → even distribution. “Matrix" lays out a table;
     “Matrix + resize" also equalizes cells. “Grid gap" sets the spacing.</div></div>
-    <div class="grp"><h4>Variants (Variants tab)</h4><div class="hint">
+    <div class="grp" id="help-variants"><h4>Variants (Variants tab)</h4><div class="hint">
     In texts use <b>{A}</b>, <b>{B}</b>… Add variables and rows. Each row = one drawing with values substituted.
     “Preview" shows the chosen variant. “Generate" builds a ZIP of PNGs.<br>
     <b>File name:</b> empty = values joined with “_" (e.g. <i>10_20</i>). Pattern like <b>{A}x{B}</b> → <i>10x20</i>.</div></div>
-    <div class="grp"><h4>Library & folders</h4><div class="hint">
+    <div class="grp" id="help-library"><h4>Library & folders</h4><div class="hint">
     Select shapes → “To library". Click a tile to insert. “+ Folder" creates a folder, <b>drag</b> a tile into
     a folder, click a header to collapse.</div></div>
     <div class="grp"><h4>Templates</h4><div class="hint">
     “New" opens a template picker (thumbnails). Settings → “Save as template" stores the current drawing;
     same name = overwrite prompt. The default template can be overwritten/deleted too.</div></div>
-    <div class="grp"><h4>Settings</h4><div class="hint">
-    Language (PL/EN/DE), slower zoom (for fast wheels), panel width, defaults for new shapes (font, size,
-    line width, colors), and save/load configuration.</div></div>
-    <div class="grp"><h4>XLSX/XLSM import</h4><div class="hint">
+    <div class="grp" id="help-settings"><h4>Settings</h4><div class="hint">
+    Language (PL/EN/DE), panel width, defaults for new shapes (font, size, line width, colors), the app's
+    color scheme ("Theme" tab), and save/load configuration.<br>
+    <b>Slower zoom:</b> enable if your mouse wheel zooms too fast — a higher divider means slower zoom.<br>
+    <b>Autosave:</b> when off, changes aren't saved automatically — switching/closing a tab or the app
+    discards unsaved changes (manual "Save", Ctrl+S, to a file is unaffected).<br>
+    <b>Export margin:</b> padding around shapes when exporting/generating variants while the page format is
+    "∞ infinite" (no effect with a fixed page format).<br>
+    <b>Auto-open crop wizard after XLSX import:</b> turning this off drops the import straight onto the
+    canvas without asking for a work area (same as clicking "Don't crop").</div></div>
+    <div class="grp" id="help-xlsx"><h4>XLSX/XLSM import</h4><div class="hint">
     Imports shapes and images from Excel (positions kept). You pick what to insert. EMF/WMF are skipped —
     in Excel paste screenshots as bitmaps.</div></div>
     <div class="grp"><h4>Save & export</h4><div class="hint">
@@ -117,19 +153,20 @@ const HELP_HTML = {
     Strg+S — speichern · Strg+O — öffnen · Entf — löschen<br>
     Pfeile — 1 px (Umschalt = 10 px)<br>+ / − — Zoom · Leertaste/Mitteltaste — schieben · Rad — Zoom<br>
     Umschalt beim Zeichnen = Quadrat/Kreis; bei Linie = 45°-Schritte.</div></div>
-    <div class="grp"><h4>Zeichnen & Größe</h4><div class="hint">
+    <div class="grp" id="help-draw"><h4>Zeichnen & Größe</h4><div class="hint">
     Werkzeug wählen und auf der Fläche ziehen. Gewählte Form hat Griffe. Einrasten: „Am Raster" und
-    „An Objekten" (untere Leiste). Doppelklick = Text bearbeiten.</div></div>
-    <div class="grp"><h4>Text & Schriften</h4><div class="hint">
+    „An Objekten" (untere Leiste). Doppelklick = Text bearbeiten.
+    Nicht bei Null anfangen: Screenshot einfügen (Strg+V) oder Bild/Formen aus einer XLSX-Datei importieren.</div></div>
+    <div class="grp" id="help-text"><h4>Text & Schriften</h4><div class="hint">
     Form doppelklicken (Rechteck/Ellipse/Text/Polygon) für Text in der Mitte. In Eigenschaften: Schrift,
     Größe, Farbe, <b>fett</b> und <i>kursiv</i>, Feld „Inhalt".</div></div>
     <div class="grp"><h4>Drehen & Spiegeln</h4><div class="hint">
     Orangefarbenen Griff über der Form fassen. „Schritt 10°" (standard an), Umschalt = 15°. Winkel auch
     eintippbar. Spiegeln: ↔ / ↕ im Bereich Position.</div></div>
-    <div class="grp"><h4>Bilder zuschneiden</h4><div class="hint">
+    <div class="grp" id="help-crop"><h4>Bilder zuschneiden</h4><div class="hint">
     Bild wählen → „Zuschneiden" → Rahmengriffe ziehen. Proportionen ändern sich NICHT.
     Esc oder „Fertig" beendet, „Zurücksetzen" stellt das ganze Bild wieder her.</div></div>
-    <div class="grp"><h4>Gruppen</h4><div class="hint">
+    <div class="grp" id="help-groups"><h4>Gruppen</h4><div class="hint">
     Normaler Klick wählt die ganze Gruppe (Verschieben/Sperren). <b>Alt+Klick</b> = einzelnes Objekt in der
     Gruppe, um Farbe/Text zu ändern. Strg+G gruppiert, Strg+Umschalt+G hebt auf.</div></div>
     <div class="grp"><h4>Sperren (Eigenschaften)</h4><div class="hint">
@@ -138,20 +175,28 @@ const HELP_HTML = {
     <div class="grp"><h4>Ausrichten & Matrix</h4><div class="hint">
     2+ Formen wählen → Ausrichtbuttons. 3+ → gleichmäßig verteilen. „Matrix" ordnet als Tabelle;
     „Matrix + Größe" vereinheitlicht Zellen. „Rasterabstand" setzt den Abstand.</div></div>
-    <div class="grp"><h4>Varianten (Reiter Varianten)</h4><div class="hint">
+    <div class="grp" id="help-variants"><h4>Varianten (Reiter Varianten)</h4><div class="hint">
     In Texten <b>{A}</b>, <b>{B}</b>… verwenden. Variablen und Zeilen hinzufügen. Jede Zeile = eine Zeichnung mit
     eingesetzten Werten. „Vorschau" zeigt die Variante. „Generieren" baut ein ZIP mit PNGs.<br>
     <b>Dateiname:</b> leer = Werte mit „_" (z. B. <i>10_20</i>). Muster wie <b>{A}x{B}</b> → <i>10x20</i>.</div></div>
-    <div class="grp"><h4>Bibliothek & Ordner</h4><div class="hint">
+    <div class="grp" id="help-library"><h4>Bibliothek & Ordner</h4><div class="hint">
     Formen wählen → „In Bibliothek". Kachel klicken zum Einfügen. „+ Ordner" erstellt einen Ordner, Kachel in
     einen Ordner <b>ziehen</b>, Kopf klicken zum Einklappen.</div></div>
     <div class="grp"><h4>Vorlagen</h4><div class="hint">
     „Neu" öffnet die Vorlagenauswahl (Miniaturen). Einstellungen → „Als Vorlage speichern"; gleicher Name =
     Überschreiben-Abfrage. Standardvorlage ist ebenfalls überschreib-/löschbar.</div></div>
-    <div class="grp"><h4>Einstellungen</h4><div class="hint">
-    Sprache (PL/EN/DE), langsamerer Zoom, Panelbreite, Vorgaben für neue Formen (Schrift, Größe, Stärke,
-    Farben) und Konfiguration speichern/laden.</div></div>
-    <div class="grp"><h4>XLSX/XLSM-Import</h4><div class="hint">
+    <div class="grp" id="help-settings"><h4>Einstellungen</h4><div class="hint">
+    Sprache (PL/EN/DE), Panelbreite, Vorgaben für neue Formen (Schrift, Größe, Stärke, Farben), das Farbschema
+    der App (Reiter „Design") und Konfiguration speichern/laden.<br>
+    <b>Langsamerer Zoom:</b> aktivieren, wenn das Mausrad zu schnell zoomt — höherer Teiler = langsamerer Zoom.<br>
+    <b>Automatisches Speichern:</b> deaktiviert heißt, Änderungen werden nicht automatisch gespeichert —
+    Tab-/Programmwechsel oder Schließen verwirft ungespeicherte Änderungen (manuelles „Speichern", Strg+S,
+    bleibt unverändert).<br>
+    <b>Rand beim Export:</b> Abstand um die Formen beim Export/Varianten-Export, wenn das Seitenformat
+    „∞ unendlich" ist (ohne Wirkung bei festem Seitenformat).<br>
+    <b>Zuschnitt-Assistent nach XLSX-Import automatisch öffnen:</b> deaktiviert landet der Import sofort auf
+    der Kanvas, ohne nach einem Arbeitsbereich zu fragen (wie „Nicht zuschneiden").</div></div>
+    <div class="grp" id="help-xlsx"><h4>XLSX/XLSM-Import</h4><div class="hint">
     Importiert Formen und Bilder aus Excel (Positionen erhalten). Auswahl, was eingefügt wird. EMF/WMF werden
     übersprungen — in Excel Screenshots als Bitmap einfügen.</div></div>
     <div class="grp"><h4>Speichern & Export</h4><div class="hint">
