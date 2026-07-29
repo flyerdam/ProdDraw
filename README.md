@@ -1,6 +1,17 @@
 # ProdDraw
 
-Jednoplikowy edytor wektorowy do instrukcji produkcyjnych — działa w całości w przeglądarce, bez serwera.
+Edytor wektorowy do instrukcji produkcyjnych — działa w całości w przeglądarce (lub na desktopie via Electron), bez serwera.
+
+---
+
+## Struktura projektu i architektura
+
+Projekt został refaktoryzowany z jednoplikowego HTML na modularną strukturę:
+
+- **`index.html`** — główny punkt wejścia; otwórz ten plik podczas tworzenia.
+- **`css/styles.css`** — wszystkie style aplikacji.
+- **`js/*.js`** — logika aplikacji podzielona na moduły (01-state.js, projects.js, 02-i18n.js, ... 21-init.js). Są to zwykłe skrypty (classic scripts) ładowane w określonej kolejności; współdzielą globalny scope. Brak kroku budowania — wystarczy otworzyć `index.html` lub serwować folder.
+- **`ProdDraw.html`** — WYGENEROWANY plik jednoplikowy (bundle) stworzony z powyższych źródeł. Utrzymywany dla łatwego wdrożenia na Netlify. **NIE edytuj tego ręcznie** — zamiast tego przebuduj go za pomocą `node build-single.js`.
 
 ---
 
@@ -10,12 +21,49 @@ Wszystko jest trzymane **lokalnie w przeglądarce** (localStorage), czyli oddzie
 
 | Klucz localStorage | Zawartość |
 |--------------------|-----------|
-| `prodrys_auto` | Autozapis bieżącego projektu (kształty + warianty + format strony); odtwarzany przy następnym otwarciu |
+| `prodrys_projects` | Rejestr kartek projektów — lista aktywnych projektów i ich slotów. |
+| `prodrys_auto:<n>` | Autozapis projektu w danej karcie (kształty + warianty + format strony); każda karta ma własny slot (n = 1, 2, 3, ...). Odtwarzany przy następnym otwarciu. |
+| `prodrys_live` | Rejestr aktywnych kart (heartbeat); śledzi które sloty są w użyciu. |
 | `prodrys_lib` | Biblioteka grup — elementy zapisane przyciskiem „Do biblioteki" |
 | `prodrys_template` | Domyślny szablon nowego projektu (zapisany przyciskiem **Szablon ↓**); jeśli brak, używany jest wbudowany szablon A4 |
 
 ### Wbudowane elementy biblioteki
 Domyślne elementy biblioteki (`Linia wymiarowa`, `Balon nr części`) są zdefiniowane w funkcji `defaultLibItems()` w kodzie źródłowym i odświeżane przy każdym uruchomieniu.
+
+---
+
+## Wiele projektów — autosave z wieloma kartami
+
+Wcześniej wszystkie karty przeglądarki dzieliły jedno pole autosave (`prodrys_auto`), co powodowało, że otwieranie aplikacji w kilka kartach unieważniało dane z poprzednich kart. 
+
+**Teraz każda karta otrzymuje własny slot autosave** (`prodrys_auto:1`, `prodrys_auto:2`, ...), dzięki czemu możesz pracować nad różnymi projektami jednocześnie w kilka kartach/okienach — nie będą się już nawzajem zmieniać. Sloty są śledzone poprzez rejestr `prodrys_live` w localStorage; zamknięcie karty powoduje zwolnienie slotu do ponownego wykorzystania.
+
+**Migracja**: stare dane `prodrys_auto` są automatycznie przenoszone do slotu 1 przy pierwszym uruchomieniu.
+
+### Paski kart projektów
+
+Aplikacja wyświetla **pasek kart na górze** — każda karta to oddzielny projekt z własnym autosave:
+
+- **Otwieranie nowego projektu**: kliknij przycisk **+** aby dodać nową kartę (otrzyma nowy slot autosave).
+- **Zamykanie projektu**: kliknij **×** obok nazwy karty.
+- **Automatyczne zachowywanie**: każdy projekt na każdej karcie jest automatycznie zapisywany w swoim slecie localStorage (`prodrys_auto:1`, `prodrys_auto:2`, itd.).
+- **Trwałość**: wszystkie karty (ich nazwy i sloty) są przechowywane w `prodrys_projects` i przywracane przy ponownym otwarciu aplikacji.
+
+---
+
+## Import / eksport XLSX (ExcelJS)
+
+Import i eksport arkuszy Excela opiera się na bibliotece **ExcelJS** (`js/vendor/exceljs.min.js`, wbudowana w bundle).
+
+**Import (`Plik → Import XLSX/XLSM`)**
+
+- ExcelJS rozpakowuje plik i udostępnia czysty model: komórki i style (czcionka, wypełnienie, obramowania, wyrównanie, format liczb), szerokości kolumn i wysokości wierszy (także **ukryte** → 0 px) oraz **obrazy z dokładnymi kotwicami** (`twoCellAnchor` from/to).
+- Kształty **wektorowe** (strzałki, wielokąty, łączniki) ExcelJS pomija — te dalej czytamy z `drawingN.xml` (patrz `parseDrawingShapes` w `js/05-zip.js`), mapując rysunek na arkusz po nazwie.
+- **Wiele arkuszy**: pojawia się okno wyboru — zaznacz, które arkusze otworzyć, i wskaż arkusz **główny** (aktywny po imporcie). **Każdy zaznaczony arkusz otwiera się jako osobny projekt (karta)**, a jego strona jest automatycznie dopasowywana do zawartości.
+
+**Eksport (`Eksport → Eksportuj XLSX`)**
+
+- Aktywny projekt zapisywany jest jako jeden arkusz `.xlsx`. Rysunek jest renderowany do PNG i osadzany jako obraz zakotwiczony w A1 (grafika wektorowa nie daje się wiarygodnie odtworzyć jako komórki).
 
 ---
 
@@ -41,6 +89,56 @@ Szablon jest przechowywany w `prodrys_template` w localStorage. Przeniesiesz go 
 
 ---
 
+## Aplikacja desktopowa (Electron)
+
+Projekt zawiera konfigurację Electron do uruchamiania na pulpicie. Aplikacja ma **natywny pasek menu** (Plik / Edycja / Widok) z skrótami klawiszowymi:
+
+- **Plik** → Nowy, Otwórz, Zapisz, Eksportuj
+- **Edycja** → Cofnij, Ponów
+- **Widok** → Zoom (In, Out, Reset)
+
+### Uruchomienie
+
+1. **Jedna jedyna instalacja**:
+   ```bash
+   npm install
+   ```
+
+2. **Uruchom aplikację desktopową**:
+   ```bash
+   npm start
+   ```
+   Spowoduje otwarcie okna Electron z aplikacją.
+
+### Budowanie instalatora
+
+- **Windows — pełny instalator NSIS**:
+  ```bash
+  npm run dist:win
+  ```
+  Generuje instalator w folderze `dist-electron/`. Wymaga zainstalowania na komputerze użytkownika.
+
+- **Windows — przenośny plik .exe** (NOWY):
+  ```bash
+  npm run dist:portable
+  ```
+  Generuje plik `ProdDraw-portable-<wersja>.exe` w folderze `dist-electron/`. **Bez instalacji** — wystarczy dwuklik, można kopiować na pendrive. Wymaga jednokrotnej budowy na maszynie z zainstalowanym Node.js (`npm install` najpierw). Idealny do przenoszenia na pendrive lub do szybkiego testowania na innym komputerze.
+
+### Porównanie sposobów dystrybuacji
+
+| Metoda | Opis | Użycie |
+|--------|------|-------|
+| **ProdDraw.html** | Jednoplikowy bundle (przeglądarka) | Zero instalacji, zero zależności — otwórz w dowolnej przeglądarce |
+| **Przenośny .exe** | `npm run dist:portable` → `ProdDraw-portable-<wersja>.exe` | Duplikuj na pendrive, brak instalacji, szybkie testowanie |
+| **Instalator Windows** | `npm run dist:win` → NSIS installer | Pełna instalacja dla użytkowników końcowych |
+
+### Pliki Electrona
+
+- **`electron/main.js`** — proces główny Electrona.
+- **`electron/preload.js`** — skrypt preload do komunikacji między contextami.
+
+---
+
 ## Układ macierzowy — odstęp i zmiana rozmiaru
 
 W panelu Właściwości (przy zaznaczeniu ≥ 2 kształtów):
@@ -55,17 +153,36 @@ W panelu Właściwości (przy zaznaczeniu ≥ 2 kształtów):
 
 ---
 
+## Budowanie bundla jednoplikowego
+
+Aby przebudować `ProdDraw.html` z modularnych źródeł:
+
+```bash
+node build-single.js
+```
+
+lub
+
+```bash
+npm run build:single
+```
+
+Spowoduje wygenerowanie `ProdDraw.html` z zawartością `index.html`, `css/` i `js/`. Skrypt łączy wszystkie moduły w jeden plik gotowy do wdrożenia.
+
+---
+
 ## Wdrożenie (Netlify i inne)
 
-Aplikacja to jeden plik HTML — wdrożenie jest trywialne.
+Aplikacja może być wdrażana jako modułowa struktura folderów lub jako jednoplikowy bundle (`ProdDraw.html`).
 
 ### Netlify (zalecane)
 
 1. Utwórz konto na [netlify.com](https://netlify.com).
-2. Przeciągnij i upuść folder projektu na stronę [app.netlify.com/drop](https://app.netlify.com/drop).
-3. Gotowe — plik `netlify.toml` w repozytorium skieruje ruch z `/` na `ProdDraw.html`.
+2. Najpierw przebuduj bundle jednoplikowy: `node build-single.js`
+3. Przeciągnij i upuść folder projektu na stronę [app.netlify.com/drop](https://app.netlify.com/drop).
+4. Gotowe — plik `netlify.toml` w repozytorium skieruje ruch z `/` na `ProdDraw.html`.
 
-Alternatywnie: połącz repozytorium GitHub z Netlify (Sites → Add new site → Import from Git).
+Alternatywnie: połącz repozytorium GitHub z Netlify (Sites → Add new site → Import from Git). GitHub Actions mogą automatycznie budować bundle przy każdym push'u.
 
 ### GitHub Pages
 
