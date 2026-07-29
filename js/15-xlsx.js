@@ -663,33 +663,188 @@ async function importXlsx(file) {
 }
 
 /* =====================================================================
-   EKSPORT do .xlsx (ExcelJS) — aktywny projekt jako jeden arkusz.
-   Rysunek renderujemy do PNG i osadzamy jako obraz zakotwiczony w A1
-   (grafika wektorowa nie daje się wiarygodnie odtworzyć jako komórki).
-   ===================================================================== */
+   EKSPORT do .xlsx (ExcelJS + własny drawing1.xml) — aktywny projekt jako
+   jeden arkusz z PRAWDZIWYMI, edytowalnymi obiektami (prostokąty/elipsy/
+   linie/tekst jako <xdr:sp>/<xdr:cxnSp>, obrazy jako <xdr:pic>), nie jednym
+   płaskim obrazkiem PNG wklejonym w A1. ExcelJS umie zapisać tylko obrazy —
+   kształty wektorowe dopisujemy sami, dokładnie odwrotnością tego, co
+   czytamy przy imporcie (patrz parseShapeNode/parseConnectorNode w
+   js/05-zip.js): budujemy bazowy skoroszyt przez ExcelJS, rozpakowujemy go
+   naszym readZipAll, doklejamy xl/drawings/drawing1.xml (+ rels + media +
+   wpis w [Content_Types].xml + <drawing r:id> w arkuszu) i pakujemy
+   z powrotem przez makeZip. Grupy (shape.g) eksportują się jako osobne,
+   niezgrupowane kształty — Excel nie zobaczy ich jako jednej grupy, ale
+   każdy z osobna jest w pełni edytowalny. ===================================================================== */
 function sanitizeSheetName(name) {
   let n = String(name || 'Arkusz').replace(/[\[\]\*\?\/\\:]/g, ' ').trim();
   if (!n) n = 'Arkusz';
   return n.slice(0, 31);
 }
+const XLSX_OUT_EPX = 9525;   // px -> EMU (96 dpi)
+const XLSX_OUT_PRESET = { triangle: 'triangle', rtTriangle: 'rtTriangle', diamond: 'diamond', pentagon: 'pentagon',
+  hexagon: 'hexagon', heptagon: 'heptagon', octagon: 'octagon', star4: 'star4', star5: 'star5', star6: 'star6',
+  cross: 'plus', rightArrow: 'rightArrow', leftArrow: 'leftArrow', parallelogram: 'parallelogram', trapezoid: 'trapezoid', chevron: 'chevron' };
+const XLSX_OUT_DASH = { solid: 'solid', dash: 'dash', dot: 'dot', dashdot: 'dashDot', longdash: 'lgDash' };
+function xlsxOutEmu(px) { return Math.max(0, Math.round(px * XLSX_OUT_EPX)); }
+function xlsxOutHex(hex) { return (hex || '#000000').replace('#', '').toUpperCase(); }
+function xlsxOutFillLn(s) {
+  const hasFill = !s.noFill && s.fill;
+  const fill = hasFill ? `<a:solidFill><a:srgbClr val="${xlsxOutHex(s.fill)}"/></a:solidFill>` : '<a:noFill/>';
+  const hasStroke = !s.noStroke && s.stroke;
+  const ln = hasStroke
+    ? `<a:ln w="${Math.max(1, Math.round((s.sw || 1) * 12700))}"><a:solidFill><a:srgbClr val="${xlsxOutHex(s.stroke)}"/></a:solidFill><a:prstDash val="${XLSX_OUT_DASH[s.dash] || 'solid'}"/></a:ln>`
+    : '<a:ln><a:noFill/></a:ln>';
+  return fill + ln;
+}
+function xlsxOutTextBody(s) {
+  const raw = subst(s.text || '', currentVals());
+  const lines = raw ? raw.split('\n') : [''];
+  const paras = lines.map(line => {
+    if (!line) return '<a:p><a:endParaRPr lang="en-US"/></a:p>';
+    const sz = Math.max(100, Math.round((s.fs || 14) * 100 * 72 / 96));
+    const rPr = `sz="${sz}"${s.bold ? ' b="1"' : ''}${s.italic ? ' i="1"' : ''}`;
+    return `<a:p><a:pPr algn="ctr"/><a:r><a:rPr ${rPr}><a:solidFill><a:srgbClr val="${xlsxOutHex(s.tc)}"/></a:solidFill>` +
+      `<a:latin typeface="${escXml(s.font || 'Calibri')}"/></a:rPr><a:t>${escXml(line)}</a:t></a:r></a:p>`;
+  }).join('');
+  return `<xdr:txBody><a:bodyPr wrap="square" anchor="ctr" lIns="0" tIns="0" rIns="0" bIns="0"/><a:lstStyle/>${paras}</xdr:txBody>`;
+}
+let _xlsxOutId = 1;
+/* siatka domyślna (bez jawnie ustawionych szerokości/wysokości) używana przez
+   ExcelJS/nasz import przy braku formatowania kolumn/wierszy — patrz
+   ejsSheetGeom(): defColCh=8.43 -> round(8.43*7+5)=64px, defRowPt=15pt ->
+   round(15*96/72)=20px. Kotwiczymy piksele do TEJ SAMEJ siatki, żeby
+   ponowny import (przez naszą applySelectedSheets) odtworzył dokładną
+   pozycję/rozmiar. */
+const XLSX_OUT_COL_PX = 64, XLSX_OUT_ROW_PX = 20;
+function xlsxOutCellRef(px, cellPx) {
+  const idx = Math.max(0, Math.floor(px / cellPx));
+  const off = Math.max(0, Math.round((px - idx * cellPx) * XLSX_OUT_EPX));
+  return { idx, off };
+}
+/* owija zawartość kształtu w <xdr:twoCellAnchor editAs="absolute">. Świadomie NIE
+   używamy <xdr:absoluteAnchor> — ExcelJS (i realny Excel/LibreOffice/Sheets) czyta
+   obrazy z drawingu tylko przez oneCell/twoCellAnchor; z absoluteAnchor obrazy
+   eksportu znikały przy ponownym imporcie (ws.getImages() ich nie widziało). */
+function xlsxOutAnchorTag(x, y, w, h, innerXml) {
+  const c1 = xlsxOutCellRef(x, XLSX_OUT_COL_PX), r1 = xlsxOutCellRef(y, XLSX_OUT_ROW_PX);
+  const c2 = xlsxOutCellRef(x + Math.max(w, 1), XLSX_OUT_COL_PX), r2 = xlsxOutCellRef(y + Math.max(h, 1), XLSX_OUT_ROW_PX);
+  return `<xdr:twoCellAnchor editAs="absolute">` +
+    `<xdr:from><xdr:col>${c1.idx}</xdr:col><xdr:colOff>${c1.off}</xdr:colOff><xdr:row>${r1.idx}</xdr:row><xdr:rowOff>${r1.off}</xdr:rowOff></xdr:from>` +
+    `<xdr:to><xdr:col>${c2.idx}</xdr:col><xdr:colOff>${c2.off}</xdr:colOff><xdr:row>${r2.idx}</xdr:row><xdr:rowOff>${r2.off}</xdr:rowOff></xdr:to>` +
+    innerXml + `<xdr:clientData/></xdr:twoCellAnchor>`;
+}
+/* kształt ProdDraw -> XML <xdr:twoCellAnchor>...</xdr:twoCellAnchor>. mediaRel = rId obrazu (tylko dla type image) */
+function xlsxOutShapeXml(s, mediaRel) {
+  const id = ++_xlsxOutId;
+  if (s.type === 'image') {
+    const c = s.crop;
+    const srcRect = c ? `<a:srcRect l="${Math.round((c.l || 0) * 100000)}" t="${Math.round((c.t || 0) * 100000)}" r="${Math.round((c.r || 0) * 100000)}" b="${Math.round((c.b || 0) * 100000)}"/>` : '';
+    const rot = s.rot ? ` rot="${Math.round((((s.rot % 360) + 360) % 360) * 60000)}"` : '';
+    const flip = `${s.flipH ? ' flipH="1"' : ''}${s.flipV ? ' flipV="1"' : ''}`;
+    const border = (!s.noStroke && s.stroke) ? `<a:ln w="${Math.max(1, Math.round((s.sw || 1) * 12700))}"><a:solidFill><a:srgbClr val="${xlsxOutHex(s.stroke)}"/></a:solidFill></a:ln>` : '';
+    if (!mediaRel) return '';   // brak danych obrazu (nie powinno się zdarzyć, ale nie eksportuj złamanego odwołania)
+    const inner = `<xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${id}" name="Obraz ${id}"/><xdr:cNvPicPr/></xdr:nvPicPr>` +
+      `<xdr:blipFill><a:blip r:embed="${mediaRel}"/>${srcRect}<a:stretch><a:fillRect/></a:stretch></xdr:blipFill>` +
+      `<xdr:spPr><a:xfrm${rot}${flip}><a:off x="${xlsxOutEmu(s.x)}" y="${xlsxOutEmu(s.y)}"/><a:ext cx="${xlsxOutEmu(s.w)}" cy="${xlsxOutEmu(s.h)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${border}</xdr:spPr>` +
+      `</xdr:pic>`;
+    return xlsxOutAnchorTag(s.x, s.y, s.w, s.h, inner);
+  }
+  if (s.type === 'line') {
+    const x = Math.min(s.x1, s.x2), y = Math.min(s.y1, s.y2);
+    const w = Math.abs(s.x2 - s.x1), h = Math.abs(s.y2 - s.y1);
+    const flipH = s.x2 < s.x1 ? ' flipH="1"' : '', flipV = s.y2 < s.y1 ? ' flipV="1"' : '';
+    const arrow = end => `<a:${end}End type="triangle"/>`;
+    const ln = `<a:ln w="${Math.max(1, Math.round((s.sw || 1) * 12700))}"><a:solidFill><a:srgbClr val="${xlsxOutHex(s.stroke || '#000000')}"/></a:solidFill>` +
+      `<a:prstDash val="${XLSX_OUT_DASH[s.dash] || 'solid'}"/>${s.as ? arrow('head') : ''}${s.ae ? arrow('tail') : ''}</a:ln>`;
+    const inner = `<xdr:cxnSp><xdr:nvCxnSpPr><xdr:cNvPr id="${id}" name="Łącznik ${id}"/><xdr:cNvCxnSpPr/></xdr:nvCxnSpPr>` +
+      `<xdr:spPr><a:xfrm${flipH}${flipV}><a:off x="${xlsxOutEmu(x)}" y="${xlsxOutEmu(y)}"/><a:ext cx="${xlsxOutEmu(w) || 1}" cy="${xlsxOutEmu(h) || 1}"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom>${ln}</xdr:spPr>` +
+      `</xdr:cxnSp>`;
+    return xlsxOutAnchorTag(x, y, w, h, inner);
+  }
+  /* rect / roundRect / ellipse / poly / text — wszystkie jako <xdr:sp>, pozycja z bboxOf (tekst bez własnych w/h liczy się z treści) */
+  const b = bboxOf(s);
+  const rot = s.rot ? ` rot="${Math.round((((s.rot % 360) + 360) % 360) * 60000)}"` : '';
+  const flip = `${s.flipH ? ' flipH="1"' : ''}${s.flipV ? ' flipV="1"' : ''}`;
+  const prst = s.type === 'ellipse' ? 'ellipse' : s.type === 'roundRect' ? 'roundRect' : s.type === 'poly' ? (XLSX_OUT_PRESET[s.preset] || 'rect') : 'rect';
+  const avLst = prst === 'roundRect' ? `<a:gd name="adj" fmla="val ${Math.round(((s.rx || 8) / Math.max(1, Math.min(b.w, b.h))) * 100000)}"/>` : '';
+  const inner = `<xdr:sp macro="" textlink=""><xdr:nvSpPr><xdr:cNvPr id="${id}" name="Kształt ${id}"/><xdr:cNvSpPr/></xdr:nvSpPr>` +
+    `<xdr:spPr><a:xfrm${rot}${flip}><a:off x="${xlsxOutEmu(b.x)}" y="${xlsxOutEmu(b.y)}"/><a:ext cx="${xlsxOutEmu(b.w) || 1}" cy="${xlsxOutEmu(b.h) || 1}"/></a:xfrm><a:prstGeom prst="${prst}"><a:avLst>${avLst}</a:avLst></a:prstGeom>${xlsxOutFillLn(s)}</xdr:spPr>` +
+    xlsxOutTextBody(s) +
+    `</xdr:sp>`;
+  return xlsxOutAnchorTag(b.x, b.y, b.w, b.h, inner);
+}
+/* data: URL obrazu -> {bytes, ext} do zapisu jako plik w xl/media */
+function xlsxOutImageBytes(href) {
+  const m = /^data:image\/([a-zA-Z0-9.+-]+);base64,(.*)$/.exec(href || '');
+  if (!m) return null;
+  let ext = m[1].toLowerCase(); if (ext === 'svg+xml') ext = 'svg'; if (ext === 'jpg') ext = 'jpeg';
+  const bin = atob(m[2]);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return { bytes, ext };
+}
 async function exportXlsx() {
   try {
     if (typeof ExcelJS === 'undefined') return toast(t('t.importErr') + 'ExcelJS');
-    const region = pageRegion();
-    if (!state.shapes.length && !region) return toast(t('t.emptyCanvas'));
+    const shapes = state.shapes;
+    if (!shapes.length) return toast(t('t.emptyCanvas'));
     toast(t('t.reading'));
-    const pad = (settings.infiniteCanvasMargin != null) ? settings.infiniteCanvasMargin : 16;
-    const b = buildSVG(state.shapes, currentVals(), pad, region);
-    const blob = await svgToPngBlob(b.svg, b.w, b.h, 2, 'image/png');
-    const arr = new Uint8Array(await blob.arrayBuffer());
+    _xlsxOutId = 1;
+    /* 1) bazowy skoroszyt przez ExcelJS (arkusz, ustawienia, style — to ExcelJS robi dobrze) */
     const wb = new ExcelJS.Workbook();
     wb.creator = 'ProdDraw';
-    const ws = wb.addWorksheet(sanitizeSheetName($('#projName').value || state.name));
-    const id = wb.addImage({ buffer: arr, extension: 'png' });
-    ws.addImage(id, { tl: { col: 0, row: 0 }, ext: { width: b.w, height: b.h } });
-    const out = await wb.xlsx.writeBuffer();
+    wb.addWorksheet(sanitizeSheetName($('#projName').value || state.name));
+    const base = await wb.xlsx.writeBuffer();
+    const baseAb = base.buffer ? base.buffer.slice(base.byteOffset, base.byteOffset + base.byteLength) : base;
+    const parts = await readZipAll(baseAb);
+    /* 2) media (obrazy) + relacje drawing1.xml.rels */
+    const mediaFiles = [];
+    let drawingRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">';
+    let relN = 0;
+    const mediaRelFor = s => {
+      const img = xlsxOutImageBytes(s.href);
+      if (!img) return null;
+      relN++;
+      const name = `image${relN}.${img.ext}`;
+      mediaFiles.push({ name: 'xl/media/' + name, data: img.bytes });
+      drawingRels += `<Relationship Id="rId${relN}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${name}"/>`;
+      return 'rId' + relN;
+    };
+    /* 3) drawing1.xml — jeden <xdr:absoluteAnchor> na kształt, w kolejności z-order (patrz layeredShapes()) */
+    let drawingBody = '';
+    for (const s of layeredShapes()) {
+      if (isShapeEffectivelyHidden(s)) continue;
+      drawingBody += xlsxOutShapeXml(s, s.type === 'image' ? mediaRelFor(s) : null);
+    }
+    drawingRels += '</Relationships>';
+    const drawingXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      drawingBody + '</xdr:wsDr>';
+    /* 4) dopnij drawing1.xml do arkusza: rels arkusza + <drawing r:id> w sheet1.xml + wpisy w [Content_Types].xml */
+    const enc = new TextEncoder(), td = new TextDecoder();
+    const sheetPart = parts.find(p => p.name === 'xl/worksheets/sheet1.xml');
+    let sheetXml = td.decode(sheetPart.data);
+    sheetXml = sheetXml.replace('</worksheet>', '<drawing r:id="rId1"/></worksheet>');
+    sheetPart.data = enc.encode(sheetXml);
+    const sheetRelsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>';
+    const ctPart = parts.find(p => p.name === '[Content_Types].xml');
+    let ctXml = td.decode(ctPart.data);
+    const extras = ['<Default Extension="png" ContentType="image/png"/>', '<Default Extension="jpeg" ContentType="image/jpeg"/>',
+      '<Default Extension="gif" ContentType="image/gif"/>', '<Default Extension="bmp" ContentType="image/bmp"/>',
+      '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>']
+      .filter(tag => !ctXml.includes(tag.match(/Extension="([^"]+)"|PartName="([^"]+)"/)[0]));
+    ctXml = ctXml.replace('</Types>', extras.join('') + '</Types>');
+    ctPart.data = enc.encode(ctXml);
+    /* 5) spakuj z powrotem: pliki istniejące (bez katalogów-atrap) + nowe */
+    const outFiles = parts.filter(p => !p.name.endsWith('/')).map(p => ({ name: p.name, data: p.data }));
+    outFiles.push({ name: 'xl/drawings/drawing1.xml', data: enc.encode(drawingXml) });
+    outFiles.push({ name: 'xl/drawings/_rels/drawing1.xml.rels', data: enc.encode(drawingRels) });
+    outFiles.push({ name: 'xl/worksheets/_rels/sheet1.xml.rels', data: enc.encode(sheetRelsXml) });
+    outFiles.push(...mediaFiles);
+    const blob = makeZip(outFiles);
     const name = (stripExt(sanitizeFile($('#projName').value)) || 'ProdDraw') + '.xlsx';
-    downloadBlob(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), name);
+    downloadBlob(new Blob([blob], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), name);
     toast(t('t.xlsxExported') + name, 6000);
   } catch (err) { toast(t('t.saveErr')); }
 }
