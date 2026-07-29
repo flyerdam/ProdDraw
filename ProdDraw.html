@@ -61,9 +61,11 @@ body{
 /* ---------- side panel ---------- */
 .side{grid-area:side;background:var(--panel);border-left:1px solid var(--line);
   display:flex;flex-direction:column;min-height:0;}
-.tabbar{display:flex;border-bottom:1px solid var(--line);}
-.tab{flex:1;padding:8px 0;text-align:center;cursor:pointer;color:var(--txt2);
-  font-size:12.5px;border-bottom:2px solid transparent;background:none;border-top:none;border-left:none;border-right:none;}
+.tabbar{display:flex;flex-wrap:wrap;border-bottom:1px solid var(--line);}
+.tab{flex:1 1 auto;min-width:fit-content;padding:8px 9px;text-align:center;cursor:pointer;color:var(--txt2);
+  font-size:12.5px;border-bottom:2px solid transparent;background:none;border-top:none;border-right:none;
+  border-left:1px solid var(--line);white-space:nowrap;}
+.tab:first-child{border-left:none;}
 .tab.on{color:var(--acc);border-bottom-color:var(--acc);}
 .tabBody{flex:1;overflow-y:auto;padding:10px;display:none;min-height:0;}
 .tabBody.on{display:block;}
@@ -90,7 +92,22 @@ input[type=checkbox]{accent-color:var(--acc);}
 .miniBtn:hover{border-color:var(--acc);color:#fff;}
 .miniBtn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;}
 .hint{font-size:11.5px;color:var(--txt2);line-height:1.45;}
+/* pod-zakładki wewnątrz zakładki (np. Ustawienia: Ogólne/Motyw) */
+.subtabbar{display:flex;gap:4px;margin-bottom:12px;border-bottom:1px solid var(--line);}
+.subtab{padding:5px 10px;font-size:11.5px;color:var(--txt2);background:none;cursor:pointer;
+  border:none;border-bottom:2px solid transparent;}
+.subtab.on{color:var(--acc);border-bottom-color:var(--acc);}
+#themePresetRow{flex-wrap:wrap;}
 .empty{color:var(--txt2);font-size:12.5px;text-align:center;padding:24px 8px;line-height:1.5;}
+/* lista obiektów (zakładka Obiekty) */
+.objRow{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:3px;cursor:pointer;
+  border:1px solid transparent;margin-bottom:2px;}
+.objRow:hover{background:var(--panel2);}
+.objRow.on{background:var(--panel2);border-color:var(--acc);}
+.objSwatch{width:14px;height:14px;border-radius:3px;border:1px solid var(--line);flex-shrink:0;}
+.objLbl{flex:1;font-size:12.5px;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.objTag{font-size:10px;color:var(--txt2);border:1px solid var(--line);border-radius:3px;padding:1px 5px;flex-shrink:0;}
+.objLockIcon{font-size:11px;flex-shrink:0;opacity:.8;}
 /* library */
 .libItem{border:1px solid var(--line);border-radius:4px;margin-bottom:8px;background:var(--panel2);overflow:hidden;}
 .libThumb{background:#fff;height:64px;display:flex;align-items:center;justify-content:center;cursor:pointer;}
@@ -289,12 +306,14 @@ body.desktop-mode #mExport { display: none; }
     <button class="tab on" data-tab="props" data-i18n="tab.props">Właściwości</button>
     <button class="tab" data-tab="lib" data-i18n="tab.lib">Biblioteka</button>
     <button class="tab" data-tab="vars" data-i18n="tab.vars">Warianty</button>
+    <button class="tab" data-tab="objects" data-i18n="tab.objects">Obiekty</button>
     <button class="tab" data-tab="settings" data-i18n="tab.settings">Ustawienia</button>
     <button class="tab" data-tab="help" data-i18n="tab.help">Pomoc</button>
   </div>
   <div class="tabBody on" id="tab-props"></div>
   <div class="tabBody" id="tab-lib"></div>
   <div class="tabBody" id="tab-vars"></div>
+  <div class="tabBody" id="tab-objects"></div>
   <div class="tabBody" id="tab-settings"></div>
   <div class="tabBody" id="tab-help"></div>
 </div>
@@ -456,7 +475,8 @@ let currentProjectHandle = null;  // uchwyt pliku (zapis w miejscu, File System 
 
 /* ---------- ustawienia aplikacji + szablony ---------- */
 let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, sideW: 272, autosave: true, infiniteCanvasMargin: 16, xlsxAutoCrop: true,
-  defaults: { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' } };
+  defaults: { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' },
+  theme: { preset: 'dark', custom: {} } };   // preset = jedno z THEME_PRESETS (js/19-settings.js); custom = nadpisania per-zmienna CSS
 let templates = [];         // [{name, shapes, vars, page}]
 let imgCascade = 0;         // przesunięcie kolejnych wstawianych obrazów
 
@@ -771,7 +791,10 @@ const I18N = {
     'tt.tool.select':'Zaznaczanie (V)','tt.tool.rect':'Prostokąt (R)','tt.tool.ellipse':'Elipsa / koło (C)',
     'tt.tool.line':'Linia (L)','tt.tool.arrow':'Strzałka (A)','tt.tool.text':'Tekst (T)',
     'tt.tool.image':'Wstaw obraz PNG/JPG (I)','tt.tool.eyedrop':'Pipeta — pobierz kolor z ekranu (K)',
-    'tab.props':'Właściwości','tab.lib':'Biblioteka','tab.vars':'Warianty','tab.settings':'Ustawienia','tab.help':'Pomoc',
+    'tab.props':'Właściwości','tab.lib':'Biblioteka','tab.vars':'Warianty','tab.objects':'Obiekty','tab.settings':'Ustawienia','tab.help':'Pomoc',
+    'obj.empty':'Brak obiektów na kanwie.','obj.locked':'zablokowany','obj.group':'grupa','obj.shapes':'{n} obiektów',
+    'obj.tRect':'Prostokąt','obj.tRoundRect':'Prostokąt zaokr.','obj.tEllipse':'Elipsa','obj.tPoly':'Wielokąt',
+    'obj.tLine':'Linia','obj.tText':'Tekst','obj.tImage':'Obraz',
     'status.format':'Format','status.snapGrid':'Przyciągaj do siatki','status.grid':'Siatka',
     'status.snapObj':'Przyciągaj do obiektów',
     'status.hint':'Kółko = zoom  |  Spacja/środkowy = przesuwanie  |  2×klik = tekst',
@@ -792,6 +815,11 @@ const I18N = {
     'set.xlsxImport':'Import XLSX','set.xlsxAutoCrop':'Automatycznie otwórz kreator kadru po imporcie',
     'set.xlsxAutoCropHint':'Wyłączenie: import trafia od razu na kanwę, bez pytania o obszar roboczy (jak kliknięcie „Nie przycinaj”).',
     'set.defaults':'Domyślne nowych kształtów','set.config':'Konfiguracja',
+    'set.general':'Ogólne','set.theme':'Motyw','set.themePreset':'Zestaw kolorów','set.themeCustom':'Dostosuj kolory','set.themeReset':'Przywróć domyślne',
+    'theme.preset_dark':'Ciemny (domyślny)','theme.preset_light':'Jasny','theme.preset_midnight':'Nocny błękit','theme.preset_forest':'Leśna zieleń',
+    'theme.bg':'Tło aplikacji','theme.panel':'Panel boczny','theme.panel2':'Panel boczny (jaśniejszy)','theme.line':'Linie i obramowania',
+    'theme.txt':'Tekst','theme.txt2':'Tekst (przygaszony)','theme.acc':'Akcent','theme.acc2':'Akcent (najechanie)',
+    'theme.canvas':'Tło kanwy','theme.grid':'Siatka','theme.sel':'Zaznaczenie','theme.guide':'Linie pomocnicze',
     'set.colStroke':'Kolor obrysu','set.colText':'Kolor tekstu','set.colFill':'Kolor wypełnienia',
     'props.flip':'Odbicie','props.flipH':'Odbij w poziomie','props.flipV':'Odbij w pionie',
     'props.crop':'Przycięcie','props.cropStart':'Przytnij','props.cropDone':'Gotowe','props.cropReset':'Resetuj',
@@ -858,7 +886,10 @@ const I18N = {
     'tt.tool.select':'Select (V)','tt.tool.rect':'Rectangle (R)','tt.tool.ellipse':'Ellipse / circle (C)',
     'tt.tool.line':'Line (L)','tt.tool.arrow':'Arrow (A)','tt.tool.text':'Text (T)',
     'tt.tool.image':'Insert PNG/JPG image (I)','tt.tool.eyedrop':'Eyedropper — pick a color from screen (K)',
-    'tab.props':'Properties','tab.lib':'Library','tab.vars':'Variants','tab.settings':'Settings','tab.help':'Help',
+    'tab.props':'Properties','tab.lib':'Library','tab.vars':'Variants','tab.objects':'Objects','tab.settings':'Settings','tab.help':'Help',
+    'obj.empty':'No objects on the canvas.','obj.locked':'locked','obj.group':'group','obj.shapes':'{n} objects',
+    'obj.tRect':'Rectangle','obj.tRoundRect':'Rounded rect.','obj.tEllipse':'Ellipse','obj.tPoly':'Polygon',
+    'obj.tLine':'Line','obj.tText':'Text','obj.tImage':'Image',
     'status.format':'Format','status.snapGrid':'Snap to grid','status.grid':'Grid',
     'status.snapObj':'Snap to objects',
     'status.hint':'Wheel = zoom  |  Space/middle = pan  |  double-click = text',
@@ -869,6 +900,11 @@ const I18N = {
     'set.language':'Language','set.zoom':'Zoom control','set.mxMaster':'Slower zoom',
     'set.mxMasterHint':'Enable if the mouse wheel zooms too fast. Higher divider = slower zoom.',
     'set.defaults':'Defaults for new shapes','set.config':'Configuration',
+    'set.general':'General','set.theme':'Theme','set.themePreset':'Color preset','set.themeCustom':'Customize colors','set.themeReset':'Reset to default',
+    'theme.preset_dark':'Dark (default)','theme.preset_light':'Light','theme.preset_midnight':'Midnight blue','theme.preset_forest':'Forest green',
+    'theme.bg':'App background','theme.panel':'Side panel','theme.panel2':'Side panel (lighter)','theme.line':'Lines and borders',
+    'theme.txt':'Text','theme.txt2':'Text (dimmed)','theme.acc':'Accent','theme.acc2':'Accent (hover)',
+    'theme.canvas':'Canvas background','theme.grid':'Grid','theme.sel':'Selection','theme.guide':'Guide lines',
     'set.colStroke':'Stroke color','set.colText':'Text color','set.colFill':'Fill color',
     'props.flip':'Flip','props.flipH':'Flip horizontally','props.flipV':'Flip vertically',
     'props.crop':'Crop','props.cropStart':'Crop','props.cropDone':'Done','props.cropReset':'Reset',
@@ -945,7 +981,10 @@ const I18N = {
     'tt.tool.select':'Auswahl (V)','tt.tool.rect':'Rechteck (R)','tt.tool.ellipse':'Ellipse / Kreis (C)',
     'tt.tool.line':'Linie (L)','tt.tool.arrow':'Pfeil (A)','tt.tool.text':'Text (T)',
     'tt.tool.image':'PNG/JPG-Bild einfügen (I)','tt.tool.eyedrop':'Pipette — Farbe vom Bildschirm wählen (K)',
-    'tab.props':'Eigenschaften','tab.lib':'Bibliothek','tab.vars':'Varianten','tab.settings':'Einstellungen','tab.help':'Hilfe',
+    'tab.props':'Eigenschaften','tab.lib':'Bibliothek','tab.vars':'Varianten','tab.objects':'Objekte','tab.settings':'Einstellungen','tab.help':'Hilfe',
+    'obj.empty':'Keine Objekte auf der Kanvas.','obj.locked':'gesperrt','obj.group':'Gruppe','obj.shapes':'{n} Objekte',
+    'obj.tRect':'Rechteck','obj.tRoundRect':'Rechteck (rund)','obj.tEllipse':'Ellipse','obj.tPoly':'Vieleck',
+    'obj.tLine':'Linie','obj.tText':'Text','obj.tImage':'Bild',
     'status.format':'Format','status.snapGrid':'Am Raster ausrichten','status.grid':'Raster',
     'status.snapObj':'An Objekten ausrichten',
     'status.hint':'Rad = Zoom  |  Leertaste/Mitte = verschieben  |  Doppelklick = Text',
@@ -956,6 +995,11 @@ const I18N = {
     'set.language':'Sprache','set.zoom':'Zoom-Steuerung','set.mxMaster':'Langsamerer Zoom',
     'set.mxMasterHint':'Aktivieren, wenn das Mausrad zu schnell zoomt. Höherer Teiler = langsamerer Zoom.',
     'set.defaults':'Vorgaben für neue Formen','set.config':'Konfiguration',
+    'set.general':'Allgemein','set.theme':'Design','set.themePreset':'Farbschema','set.themeCustom':'Farben anpassen','set.themeReset':'Auf Standard zurücksetzen',
+    'theme.preset_dark':'Dunkel (Standard)','theme.preset_light':'Hell','theme.preset_midnight':'Mitternachtsblau','theme.preset_forest':'Waldgrün',
+    'theme.bg':'App-Hintergrund','theme.panel':'Seitenpanel','theme.panel2':'Seitenpanel (heller)','theme.line':'Linien und Rahmen',
+    'theme.txt':'Text','theme.txt2':'Text (gedimmt)','theme.acc':'Akzent','theme.acc2':'Akzent (Hover)',
+    'theme.canvas':'Kanvas-Hintergrund','theme.grid':'Raster','theme.sel':'Auswahl','theme.guide':'Hilfslinien',
     'set.colStroke':'Konturfarbe','set.colText':'Textfarbe','set.colFill':'Füllfarbe',
     'props.flip':'Spiegeln','props.flipH':'Horizontal spiegeln','props.flipV':'Vertikal spiegeln',
     'props.crop':'Zuschnitt','props.cropStart':'Zuschneiden','props.cropDone':'Fertig','props.cropReset':'Zurücksetzen',
@@ -2713,7 +2757,37 @@ const applyMoveAll = fn => applyFiltered(isMoveLocked, fn);   /* pozycja */
 const applySizeAll = fn => applyFiltered(isSizeLocked, fn);   /* rozmiar / obrót / geometria */
 const applyStyleAll = fn => applyFiltered(isStyleLocked, fn); /* kolory / obrys / czcionka */
 const applyUnlockedAll = applyMoveAll;                        /* zgodność wstecz */
+/* ---------- lista obiektów (zakładka "Obiekty") ----------
+   Płaski wykaz wszystkich kształtów, od wierzchu (ostatnio narysowany,
+   czyli na wierzchu z-ordera) do spodu — klik zaznacza (grupę w całości,
+   jak klik na kanwie), żeby łatwo trafić w mały/zasłonięty obiekt bez
+   szukania go na kanwie. */
+const OBJ_TYPE_LABEL = { rect: 'obj.tRect', roundRect: 'obj.tRoundRect', ellipse: 'obj.tEllipse',
+  poly: 'obj.tPoly', line: 'obj.tLine', text: 'obj.tText', image: 'obj.tImage' };
+function objEsc(str) { return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function objRowLabel(s) {
+  const txt = (s.text || '').replace(/\n+/g, ' ').trim();
+  if (txt) return txt.length > 34 ? txt.slice(0, 34) + '…' : txt;
+  return t(OBJ_TYPE_LABEL[s.type] || 'obj.tRect');
+}
+function renderObjects() {
+  const el = $('#tab-objects'); if (!el) return;
+  if (!state.shapes.length) { el.innerHTML = `<div class="empty">${t('obj.empty')}</div>`; return; }
+  const rows = state.shapes.map((s, i) => ({ s, i })).reverse();
+  el.innerHTML = '<div class="grp">' + rows.map(({ s }) => {
+    const swatch = s.type === 'line' ? (s.stroke || '#000') : (s.noFill ? 'transparent' : (s.fill || '#fff'));
+    const locked = isMoveLocked(s) || isSizeLocked(s) || isStyleLocked(s) || isTextLocked(s);
+    return `<div class="objRow${sel.has(s.id) ? ' on' : ''}" data-id="${s.id}">
+      <span class="objSwatch" style="background:${swatch}"></span>
+      <span class="objLbl">${objEsc(objRowLabel(s))}</span>
+      ${s.g ? `<span class="objTag">${t('obj.group')}</span>` : ''}
+      ${locked ? `<span class="objLockIcon" title="${t('obj.locked')}">&#128274;</span>` : ''}
+    </div>`;
+  }).join('') + '</div>';
+  $$('#tab-objects .objRow').forEach(r => r.addEventListener('click', () => setSelection(expandGroup(r.dataset.id))));
+}
 function renderProps() {
+  if (typeof renderObjects === 'function') renderObjects();
   const el = $('#tab-props');
   const ss = selShapes();
   if (!ss.length) {
@@ -4417,6 +4491,7 @@ function importConfig(obj) {
 /* zastosuj ustawienia do UI (język, szerokość panelu) i odśwież */
 function applySettings() {
   document.documentElement.style.setProperty('--sideW', settings.sideW + 'px');
+  applyTheme();
   applyI18n();
   render(); renderProps(); renderVars(); renderLib(); renderSettings(); renderHelp();
 }
@@ -4587,11 +4662,51 @@ function renderHelp() {
   const el = $('#tab-help'); if (!el) return;
   el.innerHTML = HELP_HTML[settings.lang] || HELP_HTML.pl;
 }
+/* ---------- motyw (kolory UI aplikacji) ----------
+   Zmienne CSS w :root (patrz css/styles.css) — jeden punkt prawdy dla
+   wszystkich kolorów chromu aplikacji. Zestaw (preset) daje bazę, custom
+   nadpisuje pojedyncze zmienne — trzymane w settings.theme, więc podróżuje
+   przez export/import konfiguracji (js/17-config.js) razem z resztą. */
+const THEME_VARS = [
+  { k: 'bg', css: '--bg', label: 'theme.bg' }, { k: 'panel', css: '--panel', label: 'theme.panel' },
+  { k: 'panel2', css: '--panel2', label: 'theme.panel2' }, { k: 'line', css: '--line', label: 'theme.line' },
+  { k: 'txt', css: '--txt', label: 'theme.txt' }, { k: 'txt2', css: '--txt2', label: 'theme.txt2' },
+  { k: 'acc', css: '--acc', label: 'theme.acc' }, { k: 'acc2', css: '--acc2', label: 'theme.acc2' },
+  { k: 'canvas', css: '--canvas', label: 'theme.canvas' }, { k: 'grid', css: '--grid', label: 'theme.grid' },
+  { k: 'sel', css: '--sel', label: 'theme.sel' }, { k: 'guide', css: '--guide', label: 'theme.guide' }
+];
+const THEME_PRESETS = {
+  dark: { bg: '#1b1e23', panel: '#22262c', panel2: '#282d34', line: '#343a43', txt: '#d8dce2', txt2: '#8b93a0',
+    acc: '#ffb020', acc2: '#e09000', canvas: '#eef0f3', grid: '#dde1e7', sel: '#1d7fd4', guide: '#e6007e' },
+  light: { bg: '#eef0f3', panel: '#ffffff', panel2: '#f4f5f7', line: '#d7dbe1', txt: '#20242b', txt2: '#6b7280',
+    acc: '#c97a00', acc2: '#a86400', canvas: '#ffffff', grid: '#e2e5ea', sel: '#1d7fd4', guide: '#c4006a' },
+  midnight: { bg: '#12151d', panel: '#191d28', panel2: '#1f2432', line: '#2c3345', txt: '#dbe2ee', txt2: '#7c8aa3',
+    acc: '#4c9dff', acc2: '#2f7fe0', canvas: '#eef0f3', grid: '#dde1e7', sel: '#4c9dff', guide: '#e6007e' },
+  forest: { bg: '#161d18', panel: '#1c251e', panel2: '#212c22', line: '#31402f', txt: '#dbe6dc', txt2: '#84a086',
+    acc: '#4fcf7a', acc2: '#2fa85a', canvas: '#eef0f3', grid: '#dde1e7', sel: '#2fa85a', guide: '#e6007e' }
+};
+function themeState() { return settings.theme || (settings.theme = { preset: 'dark', custom: {} }); }
+function themeEffective() {
+  const th = themeState();
+  return Object.assign({}, THEME_PRESETS[th.preset] || THEME_PRESETS.dark, th.custom || {});
+}
+function applyTheme() {
+  const eff = themeEffective();
+  for (const v of THEME_VARS) document.documentElement.style.setProperty(v.css, eff[v.k]);
+}
+let _setSubtab = 'general';   // która pod-zakładka Ustawień jest widoczna (nie zapisywane — wraca do "Ogólne" po przeładowaniu)
 function renderSettings() {
   const el = $('#tab-settings');
   const D = settings.defaults || (settings.defaults = { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' });
   const fonts = ['Calibri', 'Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact'];
+  const th = themeState(), eff = themeEffective();
+  const onGen = _setSubtab !== 'theme';
   el.innerHTML = `
+    <div class="subtabbar">
+      <button class="subtab ${onGen ? 'on' : ''}" data-sub="general">${t('set.general')}</button>
+      <button class="subtab ${!onGen ? 'on' : ''}" data-sub="theme">${t('set.theme')}</button>
+    </div>
+    <div class="subtabBody" id="setSubGeneral" style="display:${onGen ? '' : 'none'}">
     <div class="grp"><h4>${t('set.language')}</h4>
       <div class="setRow"><select class="in wide" id="setLang">
         <option value="pl" ${settings.lang === 'pl' ? 'selected' : ''}>Polski</option>
@@ -4630,27 +4745,55 @@ function renderSettings() {
       <div class="row"><button class="btn" id="setTmpl">${t('config.saveTmpl')}</button></div>
       <div class="row"><button class="btn" id="setExpCfg">${t('config.save')}</button>
         <button class="btn" id="setImpCfg">${t('config.load')}</button></div></div>
-    <div class="grp"><div class="hint">${t('set.about')}</div></div>`;
+    <div class="grp"><div class="hint">${t('set.about')}</div></div>
+    </div>
+    <div class="subtabBody" id="setSubTheme" style="display:${onGen ? 'none' : ''}">
+    <div class="grp"><h4>${t('set.themePreset')}</h4>
+      <div class="row" id="themePresetRow">${Object.keys(THEME_PRESETS).map(id =>
+        `<button class="btn themePresetBtn ${th.preset === id ? 'primary' : ''}" data-preset="${id}">${t('theme.preset_' + id)}</button>`).join('')}</div>
+    </div>
+    <div class="grp"><h4>${t('set.themeCustom')}</h4>
+      ${THEME_VARS.map(v => `<div class="row"><label>${t(v.label)}</label><input class="in" type="color" id="thm_${v.k}" value="${eff[v.k]}"></div>`).join('')}
+      <div class="row"><button class="btn" id="themeResetBtn">${t('set.themeReset')}</button></div>
+    </div>
+    </div>`;
+  /* 'input' ORAZ 'change' — pole tekstowe/liczbowe/kolor stosuje się dopiero
+     na 'change' (blur/zamknięcie pickera); jeśli coś w międzyczasie odśwież
+     DOM zakładki (np. puszczenie chwytaka szerokości panelu — patrz
+     js/20-menus-dnd.js — albo zmiana języka), edycja bez 'change' ginie bez
+     śladu. Z 'input' zmiana jest w stanie natychmiast, zanim cokolwiek
+     zdąży przerysować zakładkę — więc kliknięcie gdziekolwiek indziej
+     (kanwa, inna zakładka) już niczego nie gubi. */
+  const on2 = (id, fn) => { const elx = $('#' + id); ['input', 'change'].forEach(ev => elx.addEventListener(ev, fn)); };
   $('#setLang').addEventListener('change', e => { settings.lang = e.target.value; saveSettingsLS(); applySettings(); });
   $('#setMx').addEventListener('change', e => { settings.mxMaster = e.target.checked; saveSettingsLS(); });
   $('#setAutosave').addEventListener('change', e => { settings.autosave = e.target.checked; saveSettingsLS(); if (settings.autosave) autosave(); });
-  $('#setInfMargin').addEventListener('change', e => { settings.infiniteCanvasMargin = clamp(parseInt(e.target.value) || 0, 0, 500); saveSettingsLS(); });
+  on2('setInfMargin', e => { settings.infiniteCanvasMargin = clamp(parseInt(e.target.value) || 0, 0, 500); saveSettingsLS(); });
   $('#setXlsxAutoCrop').addEventListener('change', e => { settings.xlsxAutoCrop = e.target.checked; saveSettingsLS(); });
-  $('#setZoomDiv').addEventListener('change', e => { settings.zoomDiv = clamp(parseFloat(e.target.value) || 4, 1, 20); saveSettingsLS(); });
-  $('#setSideW').addEventListener('change', e => {
+  on2('setZoomDiv', e => { settings.zoomDiv = clamp(parseFloat(e.target.value) || 4, 1, 20); saveSettingsLS(); });
+  on2('setSideW', e => {
     settings.sideW = clamp(parseInt(e.target.value) || 272, 200, 640); saveSettingsLS();
     document.documentElement.style.setProperty('--sideW', settings.sideW + 'px'); render();
   });
   const dSave = () => saveSettingsLS();
   $('#dFont').addEventListener('change', e => { D.font = e.target.value; dSave(); });
-  $('#dFs').addEventListener('change', e => { D.fs = Math.max(4, parseFloat(e.target.value) || 14); dSave(); });
-  $('#dSw').addEventListener('change', e => { D.sw = Math.max(0.5, parseFloat(e.target.value) || 2); dSave(); });
-  $('#dStroke').addEventListener('change', e => { D.stroke = e.target.value; dSave(); });
-  $('#dTc').addEventListener('change', e => { D.tc = e.target.value; dSave(); });
-  $('#dFill').addEventListener('change', e => { D.fill = e.target.value; dSave(); });
+  on2('dFs', e => { D.fs = Math.max(4, parseFloat(e.target.value) || 14); dSave(); });
+  on2('dSw', e => { D.sw = Math.max(0.5, parseFloat(e.target.value) || 2); dSave(); });
+  on2('dStroke', e => { D.stroke = e.target.value; dSave(); });
+  on2('dTc', e => { D.tc = e.target.value; dSave(); });
+  on2('dFill', e => { D.fill = e.target.value; dSave(); });
   $('#setTmpl').addEventListener('click', saveAsTemplate);
   $('#setExpCfg').addEventListener('click', exportConfig);
   $('#setImpCfg').addEventListener('click', () => $('#fSettings').click());
+  $$('#tab-settings .subtab').forEach(b => b.addEventListener('click', () => { _setSubtab = b.dataset.sub; renderSettings(); }));
+  $$('#tab-settings .themePresetBtn').forEach(b => b.addEventListener('click', () => {
+    th.preset = b.dataset.preset; th.custom = {}; saveSettingsLS(); applyTheme(); renderSettings();
+  }));
+  THEME_VARS.forEach(v => {
+    const inp = $('#thm_' + v.k);
+    ['input', 'change'].forEach(ev => inp.addEventListener(ev, e => { th.custom[v.k] = e.target.value; saveSettingsLS(); applyTheme(); }));
+  });
+  $('#themeResetBtn').addEventListener('click', () => { th.custom = {}; saveSettingsLS(); applyTheme(); renderSettings(); });
 }
 $('#pageSel').addEventListener('change', () => {
   const m = $('#pageSel').value;
@@ -4901,6 +5044,7 @@ function Tabs_new() {
     if (st) settings = Object.assign(settings, JSON.parse(st)); } catch (e) {}
   if (!I18N[settings.lang]) settings.lang = 'pl';
   document.documentElement.style.setProperty('--sideW', settings.sideW + 'px');
+  applyTheme();
   applyI18n();
   /* biblioteka */
   try { const l = localStorage.getItem('prodrys_lib');

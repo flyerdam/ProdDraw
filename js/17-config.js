@@ -42,6 +42,7 @@ function importConfig(obj) {
 /* zastosuj ustawienia do UI (język, szerokość panelu) i odśwież */
 function applySettings() {
   document.documentElement.style.setProperty('--sideW', settings.sideW + 'px');
+  applyTheme();
   applyI18n();
   render(); renderProps(); renderVars(); renderLib(); renderSettings(); renderHelp();
 }

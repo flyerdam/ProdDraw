@@ -23,7 +23,37 @@ const applyMoveAll = fn => applyFiltered(isMoveLocked, fn);   /* pozycja */
 const applySizeAll = fn => applyFiltered(isSizeLocked, fn);   /* rozmiar / obrót / geometria */
 const applyStyleAll = fn => applyFiltered(isStyleLocked, fn); /* kolory / obrys / czcionka */
 const applyUnlockedAll = applyMoveAll;                        /* zgodność wstecz */
+/* ---------- lista obiektów (zakładka "Obiekty") ----------
+   Płaski wykaz wszystkich kształtów, od wierzchu (ostatnio narysowany,
+   czyli na wierzchu z-ordera) do spodu — klik zaznacza (grupę w całości,
+   jak klik na kanwie), żeby łatwo trafić w mały/zasłonięty obiekt bez
+   szukania go na kanwie. */
+const OBJ_TYPE_LABEL = { rect: 'obj.tRect', roundRect: 'obj.tRoundRect', ellipse: 'obj.tEllipse',
+  poly: 'obj.tPoly', line: 'obj.tLine', text: 'obj.tText', image: 'obj.tImage' };
+function objEsc(str) { return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function objRowLabel(s) {
+  const txt = (s.text || '').replace(/\n+/g, ' ').trim();
+  if (txt) return txt.length > 34 ? txt.slice(0, 34) + '…' : txt;
+  return t(OBJ_TYPE_LABEL[s.type] || 'obj.tRect');
+}
+function renderObjects() {
+  const el = $('#tab-objects'); if (!el) return;
+  if (!state.shapes.length) { el.innerHTML = `<div class="empty">${t('obj.empty')}</div>`; return; }
+  const rows = state.shapes.map((s, i) => ({ s, i })).reverse();
+  el.innerHTML = '<div class="grp">' + rows.map(({ s }) => {
+    const swatch = s.type === 'line' ? (s.stroke || '#000') : (s.noFill ? 'transparent' : (s.fill || '#fff'));
+    const locked = isMoveLocked(s) || isSizeLocked(s) || isStyleLocked(s) || isTextLocked(s);
+    return `<div class="objRow${sel.has(s.id) ? ' on' : ''}" data-id="${s.id}">
+      <span class="objSwatch" style="background:${swatch}"></span>
+      <span class="objLbl">${objEsc(objRowLabel(s))}</span>
+      ${s.g ? `<span class="objTag">${t('obj.group')}</span>` : ''}
+      ${locked ? `<span class="objLockIcon" title="${t('obj.locked')}">&#128274;</span>` : ''}
+    </div>`;
+  }).join('') + '</div>';
+  $$('#tab-objects .objRow').forEach(r => r.addEventListener('click', () => setSelection(expandGroup(r.dataset.id))));
+}
 function renderProps() {
+  if (typeof renderObjects === 'function') renderObjects();
   const el = $('#tab-props');
   const ss = selShapes();
   if (!ss.length) {

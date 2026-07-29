@@ -37,7 +37,8 @@ let currentProjectHandle = null;  // uchwyt pliku (zapis w miejscu, File System 
 
 /* ---------- ustawienia aplikacji + szablony ---------- */
 let settings = { lang: 'pl', mxMaster: false, zoomDiv: 4, sideW: 272, autosave: true, infiniteCanvasMargin: 16, xlsxAutoCrop: true,
-  defaults: { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' } };
+  defaults: { font: 'Calibri', fs: 14, sw: 2, stroke: '#000000', fill: '#ffffff', tc: '#000000' },
+  theme: { preset: 'dark', custom: {} } };   // preset = jedno z THEME_PRESETS (js/19-settings.js); custom = nadpisania per-zmienna CSS
 let templates = [];         // [{name, shapes, vars, page}]
 let imgCascade = 0;         // przesunięcie kolejnych wstawianych obrazów
 
